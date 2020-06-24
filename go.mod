@@ -18,6 +18,7 @@ require (
 	github.com/urfave/cli v1.22.2
 	golang.org/x/tools v0.0.0-20191017205301-920acffc3e65 // indirect
 	google.golang.org/appengine v1.6.1 // indirect
+	k8s.io/apiextensions-apiserver v0.18.0
 	k8s.io/apimachinery v0.18.0
 	k8s.io/client-go v0.18.0
 )
