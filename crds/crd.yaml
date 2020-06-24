@@ -1,0 +1,58 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: backups.backupper.cattle.io
+spec:
+  group: backupper.cattle.io
+  names:
+    kind: Backup
+    plural: backups
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            backupEncryptionSecretAlgorithm:
+              type: string
+            backupEncryptionSecretName:
+              type: string
+            backupStorageLocation:
+              properties:
+                local:
+                  type: string
+                objectStore:
+                  type: string
+              type: object
+          type: object
+        status:
+          properties:
+            conditions:
+              items:
+                properties:
+                  lastTransitionTime:
+                    type: string
+                  lastUpdateTime:
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                type: object
+              nullable: true
+              type: array
+            summary:
+              type: string
+          type: object
+      type: object
+  version: v1
+  versions:
+  - name: v1
+    served: true
+    storage: true

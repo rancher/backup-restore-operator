@@ -1,9 +1,10 @@
 package main
 
 import (
+	"github.com/mrajashree/backup/pkg/crds"
 	"os"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/some.api.group/v1"
+	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
 	controllergen "github.com/rancher/wrangler/pkg/controller-gen"
 	"github.com/rancher/wrangler/pkg/controller-gen/args"
 )
@@ -14,12 +15,16 @@ func main() {
 		OutputPackage: "github.com/mrajashree/backup/pkg/generated",
 		Boilerplate:   "scripts/boilerplate.go.txt",
 		Groups: map[string]args.Group{
-			"some.api.group": {
+			"backupper.cattle.io": {
 				Types: []interface{}{
-					v1.Foo{},
+					v1.Backup{},
 				},
 				GenerateTypes: true,
 			},
 		},
 	})
+	err := crds.WriteCRD()
+	if err != nil {
+		panic(err)
+	}
 }
