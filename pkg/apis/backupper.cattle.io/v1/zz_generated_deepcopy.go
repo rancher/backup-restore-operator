@@ -30,7 +30,7 @@ func (in *Backup) DeepCopyInto(out *Backup) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
-	out.Spec = in.Spec
+	in.Spec.DeepCopyInto(&out.Spec)
 	in.Status.DeepCopyInto(&out.Status)
 	return
 }
@@ -106,6 +106,11 @@ func (in *BackupObjectStore) DeepCopy() *BackupObjectStore {
 func (in *BackupSpec) DeepCopyInto(out *BackupSpec) {
 	*out = *in
 	out.BackupStorageLocation = in.BackupStorageLocation
+	if in.GroupVersions != nil {
+		in, out := &in.GroupVersions, &out.GroupVersions
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

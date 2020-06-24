@@ -8,13 +8,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	//"github.com/rancher/go-skel/backup/pkg/generated/controllers/some.api.group"
+	"github.com/mrajashree/backup/pkg/controllers/backup"
+	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/client-go/dynamic"
 	"os"
 
-	//"github.com/mrajashree/backup/pkg/foo"
-	//"github.com/mrajashree/backup/pkg/generated/controllers/some.api.group"
-	//"github.com/rancher/wrangler/pkg/kubeconfig"
+	"github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io"
+	"github.com/rancher/wrangler/pkg/kubeconfig"
 	"github.com/rancher/wrangler/pkg/signals"
+	"github.com/rancher/wrangler/pkg/start"
 	//"github.com/rancher/wrangler/pkg/start"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -51,21 +53,31 @@ func run(c *cli.Context) {
 	logrus.Info("Starting controller")
 	ctx := signals.SetupSignalHandler(context.Background())
 
-	//kubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
-	//if err != nil {
-	//	logrus.Fatalf("failed to find kubeconfig: %v", err)
-	//}
-	//
-	//foos, err := some.NewFactoryFromConfig(kubeConfig)
-	//if err != nil {
-	//	logrus.Fatalf("Error building sample controllers: %s", err.Error())
-	//}
-	//
-	//foo.Register(ctx, foos.Some().V1().Foo())
-	//
-	//if err := start.All(ctx, 2, foos); err != nil {
-	//	logrus.Fatalf("Error starting: %s", err.Error())
-	//}
+	kubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
+	if err != nil {
+		logrus.Fatalf("failed to find kubeconfig: %v", err)
+	}
+
+	backups, err := backupper.NewFactoryFromConfig(kubeConfig)
+	if err != nil {
+		logrus.Fatalf("Error building sample controllers: %s", err.Error())
+	}
+
+	clientSet, err := clientset.NewForConfig(kubeConfig)
+	if err != nil {
+		logrus.Fatalf("Error getting clientSet: %s", err.Error())
+	}
+
+	dynamicInterace, err := dynamic.NewForConfig(kubeConfig)
+	if err != nil {
+		logrus.Fatalf("Error generating dynamic client: %s", err.Error())
+	}
+
+	backup.Register(ctx, backups.Backupper().V1().Backup(), clientSet, dynamicInterace)
+
+	if err := start.All(ctx, 2, backups); err != nil {
+		logrus.Fatalf("Error starting: %s", err.Error())
+	}
 
 	<-ctx.Done()
 }
