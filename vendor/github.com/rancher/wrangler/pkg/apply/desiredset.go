@@ -2,7 +2,6 @@ package apply
 
 import (
 	"context"
-
 	"github.com/rancher/wrangler/pkg/apply/injectors"
 	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/rancher/wrangler/pkg/merr"
