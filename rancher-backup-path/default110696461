@@ -1,0 +1,1 @@
+{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"creationTimestamp":"2020-06-25T21:37:26Z","labels":{"backupper.cattle.io/old-uid":"c1777928-5055-45fc-99fc-11460420252e"},"name":"default","namespace":"default","resourceVersion":"330","selfLink":"/api/v1/namespaces/default/serviceaccounts/default"},"secrets":[{"name":"default-token-jvv92"}]}

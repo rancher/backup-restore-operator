@@ -28,7 +28,8 @@ import (
 )
 
 var (
-	BackupResourceName = "backups"
+	BackupResourceName  = "backups"
+	RestoreResourceName = "restores"
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -54,6 +55,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&Backup{},
 		&BackupList{},
+		&Restore{},
+		&RestoreList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

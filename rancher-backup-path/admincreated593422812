@@ -1,0 +1,1 @@
+{"apiVersion":"v1","kind":"ConfigMap","metadata":{"creationTimestamp":"2020-06-25T21:39:27Z","labels":{"backupper.cattle.io/old-uid":"42bcb7ef-8b40-49b1-a92b-499ea1f61c84"},"name":"admincreated","namespace":"cattle-system","resourceVersion":"1205","selfLink":"/api/v1/namespaces/cattle-system/configmaps/admincreated"}}

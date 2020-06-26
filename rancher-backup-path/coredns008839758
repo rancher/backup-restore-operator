@@ -1,0 +1,1 @@
+{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"creationTimestamp":"2020-06-25T21:37:19Z","labels":{"backupper.cattle.io/old-uid":"abd6ce78-f688-44f8-877d-dd8d17c83cdd"},"name":"coredns","namespace":"kube-system","resourceVersion":"199","selfLink":"/api/v1/namespaces/kube-system/serviceaccounts/coredns"},"secrets":[{"name":"coredns-token-n4pl4"}]}

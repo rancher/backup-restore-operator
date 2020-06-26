@@ -1,0 +1,1 @@
+{"apiVersion":"management.cattle.io/v3","kind":"AuthConfig","metadata":{"creationTimestamp":"2020-06-25T21:39:27Z","generation":1,"labels":{"backupper.cattle.io/old-uid":"21195871-5db5-4024-84e2-3f2e27cd496a","cattle.io/creator":"norman"},"name":"okta","resourceVersion":"1233","selfLink":"/apis/management.cattle.io/v3/authconfigs/okta"},"type":"oktaConfig"}

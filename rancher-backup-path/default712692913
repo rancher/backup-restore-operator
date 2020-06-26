@@ -1,0 +1,1 @@
+{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"creationTimestamp":"2020-06-25T21:39:27Z","labels":{"backupper.cattle.io/old-uid":"fd59cc6e-d887-4884-b790-495ee1efbc51"},"name":"default","namespace":"p-vdz4j","resourceVersion":"1239","selfLink":"/api/v1/namespaces/p-vdz4j/serviceaccounts/default"},"secrets":[{"name":"default-token-wds5j"}]}

@@ -35,3 +35,17 @@ type BackupStorageLocation struct {
 
 type BackupObjectStore struct {
 }
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type Restore struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec RestoreSpec `json:"spec"`
+}
+
+type RestoreSpec struct {
+	BackupName string `json:"backupName"`
+}

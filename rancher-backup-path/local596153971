@@ -1,0 +1,1 @@
+{"apiVersion":"management.cattle.io/v3","enabled":true,"kind":"AuthConfig","metadata":{"creationTimestamp":"2020-06-25T21:39:27Z","generation":1,"labels":{"backupper.cattle.io/old-uid":"fcc54927-3834-4e3a-b9d2-5e253ff026ff","cattle.io/creator":"norman"},"name":"local","resourceVersion":"1250","selfLink":"/apis/management.cattle.io/v3/authconfigs/local"},"type":"localConfig"}

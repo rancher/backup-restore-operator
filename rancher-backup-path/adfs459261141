@@ -1,0 +1,1 @@
+{"apiVersion":"management.cattle.io/v3","kind":"AuthConfig","metadata":{"creationTimestamp":"2020-06-25T21:39:27Z","generation":1,"labels":{"backupper.cattle.io/old-uid":"ae3baf02-38e2-472d-bca8-f9c0dcbae10f","cattle.io/creator":"norman"},"name":"adfs","resourceVersion":"1229","selfLink":"/apis/management.cattle.io/v3/authconfigs/adfs"},"type":"adfsConfig"}

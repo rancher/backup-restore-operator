@@ -1,0 +1,1 @@
+{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"creationTimestamp":"2020-06-26T02:17:25Z","labels":{"backupper.cattle.io/old-uid":"639d7c89-65f5-4242-8f21-9c70d53df24e"},"name":"default","namespace":"u-pdpqk","resourceVersion":"38987","selfLink":"/api/v1/namespaces/u-pdpqk/serviceaccounts/default"},"secrets":[{"name":"default-token-d2kdv"}]}

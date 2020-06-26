@@ -1,0 +1,1 @@
+{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"creationTimestamp":"2020-06-25T21:37:26Z","labels":{"backupper.cattle.io/old-uid":"c067befd-25f7-4e97-a158-a9fe48820a07"},"name":"default","namespace":"kube-system","resourceVersion":"339","selfLink":"/api/v1/namespaces/kube-system/serviceaccounts/default"},"secrets":[{"name":"default-token-bw7dw"}]}

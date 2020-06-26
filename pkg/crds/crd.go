@@ -1,12 +1,14 @@
 package crds
 
 import (
+	"fmt"
 	backupper "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
 	_ "github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io"
 	"github.com/rancher/wrangler/pkg/crd"
 	"github.com/rancher/wrangler/pkg/yaml"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"strings"
 )
 
 func WriteCRD() error {
@@ -20,7 +22,8 @@ func WriteCRD() error {
 			return err
 		}
 
-		err = ioutil.WriteFile("./crds/crd.yaml", yamlBytes, 0644)
+		filename := fmt.Sprintf("./crds/%s.yaml", strings.ToLower(bCrd.Spec.Names.Kind))
+		err = ioutil.WriteFile(filename, yamlBytes, 0644)
 		if err != nil {
 			return err
 		}
@@ -31,6 +34,9 @@ func WriteCRD() error {
 func List() []crd.CRD {
 	return []crd.CRD{
 		newCRD(&backupper.Backup{}, func(c crd.CRD) crd.CRD {
+			return c
+		}),
+		newCRD(&backupper.Restore{}, func(c crd.CRD) crd.CRD {
 			return c
 		}),
 	}

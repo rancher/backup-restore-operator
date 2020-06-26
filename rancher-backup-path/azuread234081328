@@ -1,0 +1,1 @@
+{"apiVersion":"management.cattle.io/v3","kind":"AuthConfig","metadata":{"creationTimestamp":"2020-06-25T21:39:27Z","generation":1,"labels":{"backupper.cattle.io/old-uid":"ab2d6d38-24e1-48bd-b425-0bf4d534c68c","cattle.io/creator":"norman"},"name":"azuread","resourceVersion":"1219","selfLink":"/apis/management.cattle.io/v3/authconfigs/azuread"},"type":"azureADConfig"}
