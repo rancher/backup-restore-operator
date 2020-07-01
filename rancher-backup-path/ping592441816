@@ -1,1 +1,0 @@
-{"apiVersion":"management.cattle.io/v3","kind":"AuthConfig","metadata":{"creationTimestamp":"2020-06-25T21:39:27Z","generation":1,"labels":{"backupper.cattle.io/old-uid":"723f09c6-a019-4c54-8d9c-e0f0952e4f6e","cattle.io/creator":"norman"},"name":"ping","resourceVersion":"1227","selfLink":"/apis/management.cattle.io/v3/authconfigs/ping"},"type":"pingConfig"}

@@ -1,1 +1,0 @@
-{"apiVersion":"management.cattle.io/v3","kind":"AuthConfig","metadata":{"creationTimestamp":"2020-06-25T21:39:27Z","generation":1,"labels":{"backupper.cattle.io/old-uid":"c3252836-2d0e-4d96-9e6a-83308560d4c6","cattle.io/creator":"norman"},"name":"freeipa","resourceVersion":"1224","selfLink":"/apis/management.cattle.io/v3/authconfigs/freeipa"},"type":"freeIpaConfig"}

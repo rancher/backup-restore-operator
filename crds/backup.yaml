@@ -27,10 +27,7 @@ spec:
                   type: string
               type: object
             groupVersions:
-              items:
-                type: string
-              nullable: true
-              type: array
+              type: string
           type: object
         status:
           properties:

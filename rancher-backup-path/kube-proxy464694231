@@ -1,1 +1,0 @@
-{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"creationTimestamp":"2020-06-25T21:37:19Z","labels":{"backupper.cattle.io/old-uid":"5c8cc71e-f3e9-46ff-aa6a-46149b820811"},"name":"kube-proxy","namespace":"kube-system","resourceVersion":"200","selfLink":"/api/v1/namespaces/kube-system/serviceaccounts/kube-proxy"},"secrets":[{"name":"kube-proxy-token-bwh89"}]}

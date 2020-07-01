@@ -1,1 +1,0 @@
-{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"creationTimestamp":"2020-06-25T21:37:22Z","labels":{"backupper.cattle.io/old-uid":"f7b34af7-2359-441c-ab71-8fab4f0ff34e"},"name":"job-controller","namespace":"kube-system","resourceVersion":"258","selfLink":"/api/v1/namespaces/kube-system/serviceaccounts/job-controller"},"secrets":[{"name":"job-controller-token-jrcxz"}]}

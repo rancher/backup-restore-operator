@@ -1,0 +1,6 @@
+apiVersion: backupper.cattle.io/v1
+kind: Restore
+metadata:
+  name: my-restore
+spec:
+  backupName: my-backup-path

@@ -18,9 +18,9 @@ type Backup struct {
 
 type BackupSpec struct {
 	BackupStorageLocation           `json:"backupStorageLocation"`
-	GroupVersions                   []string `json:"groupVersions"`
-	BackupEncryptionSecretName      string   `json:"backupEncryptionSecretName"`
-	BackupEncryptionSecretAlgorithm string   `json:"backupEncryptionSecretAlgorithm"`
+	GroupVersions                   string `json:"groupVersions"`
+	BackupEncryptionSecretName      string `json:"backupEncryptionSecretName"`
+	BackupEncryptionSecretAlgorithm string `json:"backupEncryptionSecretAlgorithm"`
 }
 
 type BackupStatus struct {

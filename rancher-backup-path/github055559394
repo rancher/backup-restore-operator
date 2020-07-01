@@ -1,1 +1,0 @@
-{"apiVersion":"management.cattle.io/v3","kind":"AuthConfig","metadata":{"creationTimestamp":"2020-06-25T21:39:27Z","generation":1,"labels":{"backupper.cattle.io/old-uid":"78ca0977-1b1a-4349-8ca2-cd803f68bc14","cattle.io/creator":"norman"},"name":"github","resourceVersion":"1216","selfLink":"/apis/management.cattle.io/v3/authconfigs/github"},"type":"githubConfig"}

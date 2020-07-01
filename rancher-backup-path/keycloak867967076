@@ -1,1 +1,0 @@
-{"apiVersion":"management.cattle.io/v3","kind":"AuthConfig","metadata":{"creationTimestamp":"2020-06-25T21:39:27Z","generation":1,"labels":{"backupper.cattle.io/old-uid":"b84184e3-a330-4e42-9359-c5af1f7da3a6","cattle.io/creator":"norman"},"name":"keycloak","resourceVersion":"1231","selfLink":"/apis/management.cattle.io/v3/authconfigs/keycloak"},"type":"keyCloakConfig"}

@@ -1,1 +1,0 @@
-{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"creationTimestamp":"2020-06-25T21:37:20Z","labels":{"backupper.cattle.io/old-uid":"a566b4a9-b01f-49a8-86f0-554665a9194a"},"name":"node-controller","namespace":"kube-system","resourceVersion":"224","selfLink":"/api/v1/namespaces/kube-system/serviceaccounts/node-controller"},"secrets":[{"name":"node-controller-token-45ksq"}]}

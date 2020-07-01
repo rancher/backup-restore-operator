@@ -1,1 +1,0 @@
-{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"creationTimestamp":"2020-06-25T21:37:20Z","labels":{"backupper.cattle.io/old-uid":"9eb290f3-efe1-4283-ba61-7bdc6bc92fcf"},"name":"token-cleaner","namespace":"kube-system","resourceVersion":"221","selfLink":"/api/v1/namespaces/kube-system/serviceaccounts/token-cleaner"},"secrets":[{"name":"token-cleaner-token-57bhw"}]}
