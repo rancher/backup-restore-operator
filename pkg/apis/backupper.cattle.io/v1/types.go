@@ -18,9 +18,19 @@ type Backup struct {
 
 type BackupSpec struct {
 	BackupStorageLocation           `json:"backupStorageLocation"`
-	GroupVersions                   string `json:"groupVersions"`
-	BackupEncryptionSecretName      string `json:"backupEncryptionSecretName"`
-	BackupEncryptionSecretAlgorithm string `json:"backupEncryptionSecretAlgorithm"`
+	GroupVersions                   string         `json:"groupVersions"`
+	BackupFilters                   []BackupFilter `json:"resources"`
+	BackupEncryptionSecretName      string         `json:"backupEncryptionSecretName"`
+	BackupEncryptionSecretAlgorithm string         `json:"backupEncryptionSecretAlgorithm"`
+}
+
+type BackupFilter struct {
+	ApiGroup          string   `json:"apiGroup"`
+	Kinds             string   `json:"kinds"`
+	ResourceNames     []string `json:"resourceNames"`
+	ResourceNameRegex string   `json:"resourceNameRegex"`
+	Namespaces        []string `json:"namespaces"`
+	NamespaceRegex    string   `json:"namespaceRegex"`
 }
 
 type BackupStatus struct {
