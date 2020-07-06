@@ -91,7 +91,10 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, ownerDirPath, depen
 				continue
 			}
 			err := h.gatherObjectsForResource(res, gv, filter, ownerDirPath, dependentDirPath)
-			fmt.Printf("err: %v", err)
+			if err != nil {
+				fmt.Printf("\nerr in gatherObjectsForResource: %v\n", err)
+				return err
+			}
 		}
 	}
 	return nil
@@ -106,7 +109,7 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 	}
 
 	// resources has all resources under given groupVersion, only user the ones in filter.Kinds
-	if filter.KindsRegex == "*" {
+	if filter.KindsRegex == "." {
 		// continue to retrieve everything
 		resourceList = resources.APIResources
 	} else {
@@ -141,7 +144,7 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 		}
 	}
 	if res.Namespaced {
-		// filter based on namespaces & names if those fields are given
+		// filter based on namespaces if those fields are given
 		if len(filter.Namespaces) > 0 {
 			for _, ns := range filter.Namespaces {
 				fieldSelector += fmt.Sprintf("metadata.namespace=%s,", ns)
