@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	//"github.com/kubernetes/kubernetes/pkg/features"
@@ -47,13 +49,6 @@ func Register(
 }
 
 func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error) {
-	var groupVersionsToBackup []string
-	if len(backup.Spec.GroupVersions) == 0 {
-		// use default
-		groupVersionsToBackup = defaultGroupVersionsToBackup
-	} else {
-		groupVersionsToBackup = strings.Split(backup.Spec.GroupVersions, ",")
-	}
 	// TODO: get objectStore details too
 	backupPath := backup.Spec.Local
 	backupInfo, err := os.Stat(backupPath)
@@ -75,76 +70,190 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
 	//h.discoveryClient.ServerGroupsAndResources()
-	for _, gv := range groupVersionsToBackup {
-		resources, err := h.discoveryClient.ServerResourcesForGroupVersion(gv)
-		if err != nil {
-			return backup, err
-		}
-		gv, err := schema.ParseGroupVersion(gv)
-		if err != nil {
-			return backup, err
-		}
-		fmt.Printf("\nBacking up resources for groupVersion %v\n", gv)
-		for _, res := range resources.APIResources {
-			if avoidBackupResources[res.Name] {
-				continue
-			}
-			if !canListResource(res.Verbs) {
-				fmt.Printf("\nCannot list resource %v\n", res)
-				continue
-			}
-			if !canUpdateResource(res.Verbs) {
-				fmt.Printf("\nCannot update resource %v\n", res)
-				continue
-			}
+	err = h.gatherResources(backup.Spec.BackupFilters, ownerDirPath, dependentDirPath)
+	return backup, err
+}
 
-			gvr := gv.WithResource(res.Name)
-			fmt.Printf("\nBacking up items for resource %v with gvr %v\n", res, gvr)
-			var dr dynamic.ResourceInterface
-			dr = h.dynamicClient.Resource(gvr)
-			// TODO: which context to use
-			ctx := context.Background()
-			// TODO: use single version to get consistent backup
-			//etcdVersioner := etcd3.APIObjectVersioner{}
-			//rev, err := etcdVersioner.ObjectResourceVersion(res.)
-			//if err != nil {
-			//	t.Fatal(err)
-			//}
-			resObjects, err := dr.List(ctx, k8sv1.ListOptions{})
-			if err != nil {
-				return backup, err
+func (h *handler) gatherResources(filters []v1.BackupFilter, ownerDirPath, dependentDirPath string) error {
+	for _, filter := range filters {
+		resourceList, err := h.gatherResourcesForGroupVersion(filter)
+		if err != nil {
+			return err
+		}
+		gv, err := schema.ParseGroupVersion(filter.ApiGroup)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("\nBacking up resources for groupVersion %v\n", gv)
+		for _, res := range resourceList {
+			if skipBackup(res) {
+				continue
 			}
-			for _, resObj := range resObjects.Items {
-				currObjLabels := resObj.Object["metadata"].(map[string]interface{})["labels"]
-				if resObj.Object["metadata"].(map[string]interface{})["uid"] != nil {
-					oidLabel := map[string]string{common.OldUIDReferenceLabel: resObj.Object["metadata"].(map[string]interface{})["uid"].(string)}
-					if currObjLabels == nil {
-						resObj.Object["metadata"].(map[string]interface{})["labels"] = oidLabel
-					} else {
-						currLabels := currObjLabels.(map[string]interface{})
-						currLabels[common.OldUIDReferenceLabel] = resObj.Object["metadata"].(map[string]interface{})["uid"].(string)
-						resObj.Object["metadata"].(map[string]interface{})["labels"] = currLabels
-					}
-				}
-				delete(resObj.Object["metadata"].(map[string]interface{}), "uid")
-				delete(resObj.Object["metadata"].(map[string]interface{}), "resourceVersion")
-				if resObj.Object["metadata"].(map[string]interface{})["ownerReferences"] == nil {
-					resourcePath := ownerDirPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
-					if err := createResourceDir(resourcePath); err != nil {
-						return backup, err
-					}
-					_, err = writeToFile(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
-				} else {
-					resourcePath := dependentDirPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
-					if err := createResourceDir(resourcePath); err != nil {
-						return backup, err
-					}
-					_, err = writeToFile(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
-				}
+			err := h.gatherObjectsForResource(res, gv, filter, ownerDirPath, dependentDirPath)
+			fmt.Printf("err: %v", err)
+		}
+	}
+	return nil
+}
+
+func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv1.APIResource, error) {
+	var resourceList []k8sv1.APIResource
+	groupVersion := filter.ApiGroup
+	resources, err := h.discoveryClient.ServerResourcesForGroupVersion(groupVersion)
+	if err != nil {
+		return resourceList, err
+	}
+
+	// resources has all resources under given groupVersion, only user the ones in filter.Kinds
+	if filter.KindsRegex == "*" {
+		// continue to retrieve everything
+		resourceList = resources.APIResources
+	} else {
+		// else filter out resource with regex match
+		for _, res := range resources.APIResources {
+			matched, err := regexp.MatchString(filter.KindsRegex, res.Name)
+			if err != nil {
+				return resourceList, err
+			}
+			if !matched {
+				continue
+			}
+			fmt.Printf("\nres %v matched regex %v\n", res.Name, filter.KindsRegex)
+			resourceList = append(resourceList, res)
+		}
+	}
+	return resourceList, nil
+}
+
+func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, ownerDirPath, dependentDirPath string) error {
+	var fieldSelector string
+	gvr := gv.WithResource(res.Name)
+	var dr dynamic.ResourceInterface
+	dr = h.dynamicClient.Resource(gvr)
+
+	// TODO: which context to use
+	ctx := context.Background()
+	// TODO: use single version to get consistent backup
+	if len(filter.ResourceNames) > 0 {
+		for _, ns := range filter.ResourceNames {
+			fieldSelector += fmt.Sprintf("metadata.name=%s,", ns)
+		}
+	}
+	if res.Namespaced {
+		// filter based on namespaces & names if those fields are given
+		if len(filter.Namespaces) > 0 {
+			for _, ns := range filter.Namespaces {
+				fieldSelector += fmt.Sprintf("metadata.namespace=%s,", ns)
 			}
 		}
 	}
-	return backup, nil
+	strings.TrimRight(fieldSelector, ",")
+	// resObjects are the objects from those namespaces and with those names after fieldSelectors applied
+	resObjects, err := dr.List(ctx, k8sv1.ListOptions{FieldSelector: fieldSelector})
+	if err != nil {
+		return err
+	}
+	// check for regex
+	var filteredObjects []unstructured.Unstructured
+	if filter.ResourceNameRegex != "" {
+		for _, resObj := range resObjects.Items {
+			metadata := resObj.Object["metadata"].(map[string]interface{})
+			name := metadata["name"].(string)
+			nameMatched, err := regexp.MatchString(filter.ResourceNameRegex, name)
+			if err != nil {
+				return err
+			}
+			if !nameMatched {
+				continue
+			}
+			filteredObjects = append(filteredObjects, resObj)
+			fmt.Printf("\nMatched resource name %v for namesregex %v\n", name, filter.ResourceNameRegex)
+		}
+	}
+	if filter.NamespaceRegex != "" {
+		for _, resObj := range resObjects.Items {
+			metadata := resObj.Object["metadata"].(map[string]interface{})
+			namespace := metadata["namespace"].(string)
+			nsMatched, err := regexp.MatchString(filter.NamespaceRegex, namespace)
+			if err != nil {
+				return err
+			}
+			if !nsMatched {
+				continue
+			}
+			filteredObjects = append(filteredObjects, resObj)
+			fmt.Printf("\nMatched resource ns %v for nsregex %v\n", namespace, filter.NamespaceRegex)
+		}
+	}
+	if filter.NamespaceRegex == "" && filter.ResourceNameRegex == "" {
+		// no regex, return all objects
+		filteredObjects = resObjects.Items
+	}
+
+	return writeBackupObjects(filteredObjects, res, gv, ownerDirPath, dependentDirPath)
+}
+
+func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, ownerDirPath, dependentDirPath string) error {
+	for _, resObj := range resObjects {
+		metadata := resObj.Object["metadata"].(map[string]interface{})
+		// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
+		if _, deletionTs := metadata["deletionTimestamp"]; deletionTs {
+			if _, finSet := metadata["finalizers"]; !finSet {
+				// no finalizers set, don't backup object
+				continue
+			}
+		}
+		currObjLabels := metadata["labels"]
+		if resObj.Object["metadata"].(map[string]interface{})["uid"] != nil {
+			oidLabel := map[string]string{common.OldUIDReferenceLabel: resObj.Object["metadata"].(map[string]interface{})["uid"].(string)}
+			if currObjLabels == nil {
+				metadata["labels"] = oidLabel
+			} else {
+				currLabels := currObjLabels.(map[string]interface{})
+				currLabels[common.OldUIDReferenceLabel] = resObj.Object["metadata"].(map[string]interface{})["uid"].(string)
+				metadata["labels"] = currLabels
+			}
+		}
+		for _, field := range []string{"uid", "resourceVersion", "generation", "creationTimestamp"} {
+			delete(metadata, field)
+		}
+		if resObj.Object["metadata"].(map[string]interface{})["ownerReferences"] == nil {
+			resourcePath := ownerDirPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
+			if err := createResourceDir(resourcePath); err != nil {
+				return err
+			}
+			_, err := writeToFile(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
+			if err != nil {
+				return err
+			}
+		} else {
+			resourcePath := dependentDirPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
+			if err := createResourceDir(resourcePath); err != nil {
+				return err
+			}
+			_, err := writeToFile(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func skipBackup(res k8sv1.APIResource) bool {
+	if avoidBackupResources[res.Name] {
+		return true
+	}
+	if !canListResource(res.Verbs) {
+		fmt.Printf("\nCannot list resource %v\n", res)
+		return true
+	}
+	if !canUpdateResource(res.Verbs) {
+		fmt.Printf("\nCannot update resource %v\n", res)
+		return true
+	}
+	return false
 }
 
 func createResourceDir(path string) error {
