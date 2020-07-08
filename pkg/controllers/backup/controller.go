@@ -1,9 +1,14 @@
 package backup
 
 import (
+	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -70,11 +75,24 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
 	//h.discoveryClient.ServerGroupsAndResources()
-	err = h.gatherResources(backup.Spec.BackupFilters, ownerDirPath, dependentDirPath)
+	aesKeySecretName := backup.Spec.BackupEncryptionSecretName
+	secretsGV, err := schema.ParseGroupVersion("v1")
+	if err != nil {
+		return backup, err
+	}
+	gvr := secretsGV.WithResource("secrets")
+	secretsClient := h.dynamicClient.Resource(gvr)
+	// TODO: accept secrets from different namespaces
+	aesSecret, err := secretsClient.Namespace("default").Get(context.Background(), aesKeySecretName, k8sv1.GetOptions{})
+	if err != nil {
+		return backup, err
+	}
+	aesKey := aesSecret.Object["data"].(map[string]interface{})["aeskey"].(string)
+	err = h.gatherResources(backup.Spec.BackupFilters, ownerDirPath, dependentDirPath, aesKey)
 	return backup, err
 }
 
-func (h *handler) gatherResources(filters []v1.BackupFilter, ownerDirPath, dependentDirPath string) error {
+func (h *handler) gatherResources(filters []v1.BackupFilter, ownerDirPath, dependentDirPath, aesKey string) error {
 	for _, filter := range filters {
 		resourceList, err := h.gatherResourcesForGroupVersion(filter)
 		if err != nil {
@@ -90,7 +108,7 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, ownerDirPath, depen
 			if skipBackup(res) {
 				continue
 			}
-			err := h.gatherObjectsForResource(res, gv, filter, ownerDirPath, dependentDirPath)
+			err := h.gatherObjectsForResource(res, gv, filter, ownerDirPath, dependentDirPath, aesKey)
 			if err != nil {
 				fmt.Printf("\nerr in gatherObjectsForResource: %v\n", err)
 				return err
@@ -129,7 +147,7 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 	return resourceList, nil
 }
 
-func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, ownerDirPath, dependentDirPath string) error {
+func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, ownerDirPath, dependentDirPath, aesKey string) error {
 	var fieldSelector string
 	gvr := gv.WithResource(res.Name)
 	var dr dynamic.ResourceInterface
@@ -194,10 +212,10 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 		filteredObjects = resObjects.Items
 	}
 
-	return writeBackupObjects(filteredObjects, res, gv, ownerDirPath, dependentDirPath)
+	return writeBackupObjects(filteredObjects, res, gv, ownerDirPath, dependentDirPath, aesKey)
 }
 
-func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, ownerDirPath, dependentDirPath string) error {
+func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, ownerDirPath, dependentDirPath, aesKey string) error {
 	for _, resObj := range resObjects {
 		metadata := resObj.Object["metadata"].(map[string]interface{})
 		// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
@@ -206,6 +224,30 @@ func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIRes
 				// no finalizers set, don't backup object
 				continue
 			}
+		}
+		if res.Name == "secrets" {
+			fmt.Printf("\necnrypt secret\n")
+			secretMap := resObj.Object["data"].(map[string]interface{})
+			secretPlaintext, err := json.Marshal(secretMap)
+			if err != nil {
+				return err
+			}
+			block, _ := aes.NewCipher([]byte(aesKey))
+			blockSize := aes.BlockSize
+			paddingSize := blockSize - (len(secretPlaintext) % blockSize)
+			result := make([]byte, blockSize+len(secretPlaintext)+paddingSize)
+			iv := result[:blockSize]
+			if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+				return fmt.Errorf("unable to read sufficient random bytes")
+			}
+			copy(result[blockSize:], secretPlaintext)
+
+			// add PKCS#7 padding for CBC
+			copy(result[blockSize+len(secretPlaintext):], bytes.Repeat([]byte{byte(paddingSize)}, paddingSize))
+
+			mode := cipher.NewCBCEncrypter(block, iv)
+			mode.CryptBlocks(result[blockSize:], result[blockSize:])
+			resObj.Object["data"] = result
 		}
 		currObjLabels := metadata["labels"]
 		if resObj.Object["metadata"].(map[string]interface{})["uid"] != nil {

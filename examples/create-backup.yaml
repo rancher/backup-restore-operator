@@ -1,20 +1,20 @@
 apiVersion: backupper.cattle.io/v1
 kind: Backup
 metadata:
-  name: regex-backup-path
+  name: secret-encrypt-backup
 spec:
   backupStorageLocation:
-    local: regex-backup-path
+    local: secret-encrypt-backup
   resources:
     - apiGroup: "v1"
       kinds: "^namespaces$"
-      resourceNameRegex: "^cattle-|^p-|^c-|^local|^user-|^u-"
+      resourceNameRegex: "^cattle-|^p-|^c-|^local$|^user-|^u-"
     - apiGroup: "v1"
       kinds: "^secrets$|^serviceaccounts$"
-      namespaceRegex: "^cattle-|^p-|^c-|^local|^user-|^u-"
+      namespaceRegex: "^cattle-|^p-|^c-|^local$|^user-|^u-"
     - apiGroup: "rbac.authorization.k8s.io/v1"
       kinds: "^roles$|^rolebindings$"
-      namespaceRegex: "^cattle-|^p-|^c-|^local|^user-|^u-"
+      namespaceRegex: "^cattle-|^p-|^c-|^local$|^user-|^u-"
     - apiGroup: "rbac.authorization.k8s.io/v1"
       kinds: "^clusterroles$|^clusterrolebindings$"
       resourceNameRegex: "^cattle-|^clusterrolebinding-|^globaladmin-user-|^grb-u-"
@@ -22,3 +22,4 @@ spec:
       kinds: "."
     - apiGroup: "project.cattle.io/v3"
       kinds: "."
+  backupEncryptionSecretName: mysecret

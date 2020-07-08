@@ -15,8 +15,6 @@ spec:
       properties:
         spec:
           properties:
-            backupEncryptionSecretAlgorithm:
-              type: string
             backupEncryptionSecretName:
               type: string
             backupStorageLocation:
