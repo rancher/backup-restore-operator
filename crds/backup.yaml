@@ -17,19 +17,19 @@ spec:
           properties:
             backupEncryptionSecretName:
               type: string
-            backupStorageLocation:
-              properties:
-                local:
-                  type: string
-                objectStore:
-                  type: string
-              type: object
-            resources:
+            backupFilters:
               items:
                 properties:
                   apiGroup:
                     type: string
                   kinds:
+                    items:
+                      type: string
+                    nullable: true
+                    type: array
+                  kindsRegex:
+                    type: string
+                  labelSelectors:
                     type: string
                   namespaceRegex:
                     type: string
@@ -48,6 +48,13 @@ spec:
                 type: object
               nullable: true
               type: array
+            backupStorageLocation:
+              properties:
+                local:
+                  type: string
+                objectStore:
+                  type: string
+              type: object
           type: object
         status:
           properties:

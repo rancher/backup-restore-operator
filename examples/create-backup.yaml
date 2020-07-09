@@ -5,21 +5,21 @@ metadata:
 spec:
   backupStorageLocation:
     local: secret-encrypt-backup
-  resources:
+  backupFilters:
     - apiGroup: "v1"
-      kinds: "^namespaces$"
+      kindsRegex: "^namespaces$"
       resourceNameRegex: "^cattle-|^p-|^c-|^local$|^user-|^u-"
     - apiGroup: "v1"
-      kinds: "^secrets$|^serviceaccounts$"
+      kindsRegex: "^secrets$|^serviceaccounts$"
       namespaceRegex: "^cattle-|^p-|^c-|^local$|^user-|^u-"
     - apiGroup: "rbac.authorization.k8s.io/v1"
-      kinds: "^roles$|^rolebindings$"
+      kindsRegex: "^roles$|^rolebindings$"
       namespaceRegex: "^cattle-|^p-|^c-|^local$|^user-|^u-"
     - apiGroup: "rbac.authorization.k8s.io/v1"
-      kinds: "^clusterroles$|^clusterrolebindings$"
+      kindsRegex: "^clusterroles$|^clusterrolebindings$"
       resourceNameRegex: "^cattle-|^clusterrolebinding-|^globaladmin-user-|^grb-u-"
     - apiGroup: "management.cattle.io/v3"
-      kinds: "."
+      kindsRegex: "."
     - apiGroup: "project.cattle.io/v3"
-      kinds: "."
+      kindsRegex: "."
   backupEncryptionSecretName: mysecret
