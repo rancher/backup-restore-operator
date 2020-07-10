@@ -18,6 +18,7 @@ func main() {
 			"backupper.cattle.io": {
 				Types: []interface{}{
 					v1.Backup{},
+					v1.BackupTemplate{},
 					v1.Restore{},
 				},
 				GenerateTypes: true,

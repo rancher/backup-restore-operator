@@ -17,37 +17,6 @@ spec:
           properties:
             backupEncryptionSecretName:
               type: string
-            backupFilters:
-              items:
-                properties:
-                  apiGroup:
-                    type: string
-                  kinds:
-                    items:
-                      type: string
-                    nullable: true
-                    type: array
-                  kindsRegex:
-                    type: string
-                  labelSelectors:
-                    type: string
-                  namespaceRegex:
-                    type: string
-                  namespaces:
-                    items:
-                      type: string
-                    nullable: true
-                    type: array
-                  resourceNameRegex:
-                    type: string
-                  resourceNames:
-                    items:
-                      type: string
-                    nullable: true
-                    type: array
-                type: object
-              nullable: true
-              type: array
             backupStorageLocation:
               properties:
                 local:
@@ -55,6 +24,8 @@ spec:
                 objectStore:
                   type: string
               type: object
+            backupTemplate:
+              type: string
           type: object
         status:
           properties:

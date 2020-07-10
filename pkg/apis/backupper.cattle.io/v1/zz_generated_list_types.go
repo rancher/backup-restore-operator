@@ -43,6 +43,23 @@ func NewBackup(namespace, name string, obj Backup) *Backup {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// BackupTemplateList is a list of BackupTemplate resources
+type BackupTemplateList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []BackupTemplate `json:"items"`
+}
+
+func NewBackupTemplate(namespace, name string, obj BackupTemplate) *BackupTemplate {
+	obj.APIVersion, obj.Kind = SchemeGroupVersion.WithKind("BackupTemplate").ToAPIVersionAndKind()
+	obj.Name = name
+	obj.Namespace = namespace
+	return &obj
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // RestoreList is a list of Restore resources
 type RestoreList struct {
 	metav1.TypeMeta `json:",inline"`

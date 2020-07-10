@@ -18,8 +18,18 @@ type Backup struct {
 
 type BackupSpec struct {
 	BackupStorageLocation      `json:"backupStorageLocation"`
-	BackupFilters              []BackupFilter `json:"backupFilters"`
-	BackupEncryptionSecretName string         `json:"backupEncryptionSecretName"`
+	BackupTemplate             string `json:"backupTemplate"`
+	BackupEncryptionSecretName string `json:"backupEncryptionSecretName"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type BackupTemplate struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	BackupFilters []BackupFilter `json:"backupFilters"`
 }
 
 type BackupFilter struct {

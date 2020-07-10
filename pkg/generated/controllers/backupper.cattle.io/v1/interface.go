@@ -31,6 +31,7 @@ func init() {
 
 type Interface interface {
 	Backup() BackupController
+	BackupTemplate() BackupTemplateController
 	Restore() RestoreController
 }
 
@@ -46,6 +47,9 @@ type version struct {
 
 func (c *version) Backup() BackupController {
 	return NewBackupController(schema.GroupVersionKind{Group: "backupper.cattle.io", Version: "v1", Kind: "Backup"}, "backups", true, c.controllerFactory)
+}
+func (c *version) BackupTemplate() BackupTemplateController {
+	return NewBackupTemplateController(schema.GroupVersionKind{Group: "backupper.cattle.io", Version: "v1", Kind: "BackupTemplate"}, "backuptemplates", true, c.controllerFactory)
 }
 func (c *version) Restore() RestoreController {
 	return NewRestoreController(schema.GroupVersionKind{Group: "backupper.cattle.io", Version: "v1", Kind: "Restore"}, "restores", true, c.controllerFactory)

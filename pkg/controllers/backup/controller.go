@@ -30,6 +30,7 @@ var defaultGroupVersionsToBackup = []string{"v1", "rbac.authorization.k8s.io/v1"
 
 type handler struct {
 	backups         backupControllers.BackupController
+	backupTemplates backupControllers.BackupTemplateController
 	discoveryClient discovery.DiscoveryInterface
 	dynamicClient   dynamic.Interface
 }
@@ -39,11 +40,13 @@ var avoidBackupResources = map[string]bool{"pods": true}
 func Register(
 	ctx context.Context,
 	backups backupControllers.BackupController,
+	backupTemplates backupControllers.BackupTemplateController,
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface) {
 
 	controller := &handler{
 		backups:         backups,
+		backupTemplates: backupTemplates,
 		discoveryClient: clientSet.Discovery(),
 		dynamicClient:   dynamicInterface,
 	}
@@ -88,7 +91,25 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, err
 	}
 	aesKey := aesSecret.Object["data"].(map[string]interface{})["aeskey"].(string)
-	err = h.gatherResources(backup.Spec.BackupFilters, ownerDirPath, dependentDirPath, aesKey)
+	template, err := h.backupTemplates.Get("default", backup.Spec.BackupTemplate, k8sv1.GetOptions{})
+	if err != nil {
+		return backup, err
+	}
+	err = h.gatherResources(template.BackupFilters, ownerDirPath, dependentDirPath, aesKey)
+
+	filters, err := json.Marshal(template.BackupFilters)
+	if err != nil {
+		return backup, err
+	}
+	filterFile, err := os.Create(filepath.Join(backupPath, filepath.Base("filters.json")))
+	if err != nil {
+		return backup, fmt.Errorf("error creating filters file: %v", err)
+	}
+	defer filterFile.Close()
+	if _, err := filterFile.Write(filters); err != nil {
+		return backup, fmt.Errorf("error writing JSON to filters file: %v", err)
+	}
+
 	return backup, err
 }
 
@@ -113,6 +134,7 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, ownerDirPath, depen
 				fmt.Printf("\nerr in gatherObjectsForResource: %v\n", err)
 				return err
 			}
+			// write filter
 		}
 	}
 	return nil
@@ -268,7 +290,7 @@ func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIRes
 			if err := createResourceDir(resourcePath); err != nil {
 				return err
 			}
-			_, err := writeToFile(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
+			err := writeToBackup(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
 			if err != nil {
 				return err
 			}
@@ -277,7 +299,7 @@ func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIRes
 			if err := createResourceDir(resourcePath); err != nil {
 				return err
 			}
-			_, err := writeToFile(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
+			err := writeToBackup(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
 			if err != nil {
 				return err
 			}
@@ -312,27 +334,26 @@ func createResourceDir(path string) error {
 	return nil
 }
 
-func writeToFile(item map[string]interface{}, backupPath, pattern string) (string, error) {
-	f, err := os.Create(filepath.Join(backupPath, filepath.Base(pattern+".json")))
+func writeToBackup(resource map[string]interface{}, backupPath, filename string) error {
+	f, err := os.Create(filepath.Join(backupPath, filepath.Base(filename+".json")))
 	if err != nil {
-		return "", fmt.Errorf("error creating temp file: %v", err)
+		return fmt.Errorf("error creating temp file: %v", err)
 	}
 	defer f.Close()
 
-	jsonBytes, err := json.Marshal(item)
+	resourceBytes, err := json.Marshal(resource)
 	if err != nil {
-		return "", fmt.Errorf("error converting item to JSON: %v", err)
+		return fmt.Errorf("error converting resource to JSON: %v", err)
 	}
 
-	if _, err := f.Write(jsonBytes); err != nil {
-		return "", fmt.Errorf("error writing JSON to file: %v", err)
+	if _, err := f.Write(resourceBytes); err != nil {
+		return fmt.Errorf("error writing JSON to file: %v", err)
 	}
 
 	if err := f.Close(); err != nil {
-		return "", fmt.Errorf("error closing file: %v", err)
+		return fmt.Errorf("error closing file: %v", err)
 	}
-
-	return f.Name(), nil
+	return nil
 }
 
 func canListResource(verbs k8sv1.Verbs) bool {

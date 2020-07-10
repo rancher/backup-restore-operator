@@ -48,11 +48,28 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 	// TODO: logic to read from object store
 	backupPath := backup.Spec.Local
+
+	// first restore namespaces
+	fullPath := filepath.Join(backupPath, "/owners/", "namespaces.#v1")
+	cmdNs := exec.Command("kubectl", "apply", "-f", fullPath, "--recursive")
+	var out, errB bytes.Buffer
+	cmdNs.Stdout = &out
+	cmdNs.Stderr = &errB
+	//fmt.Printf("\nrunning command %v\n", cmd.String())
+	if err := cmdNs.Run(); err != nil {
+		//fmt.Printf("output: %q\n", out.String())
+		fmt.Printf("error: %q\n", errB.String())
+		return restore, err
+	}
+
+	// focus on namespace filter first
+
 	ownerDirInfo, err := ioutil.ReadDir(backupPath + "/owners")
 	if err != nil {
 		return restore, err
 	}
 	var returnErr error
+
 	fmt.Printf("\nRestoring owner objects\n")
 	for _, gvDir := range ownerDirInfo {
 		gvkStr := gvDir.Name()
