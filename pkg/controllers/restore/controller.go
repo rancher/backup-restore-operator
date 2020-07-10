@@ -140,7 +140,10 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 				return restore, err
 			}
 			metadata := fileMap["metadata"].(map[string]interface{})
-			ownerRefs := metadata["ownerReferences"].([]interface{})
+			ownerRefs, ok := metadata["ownerReferences"].([]interface{})
+			if !ok {
+				continue
+			}
 			for ind, obj := range ownerRefs {
 				ownerRef := obj.(map[string]interface{})
 				gv, err := schema.ParseGroupVersion(ownerRef["apiVersion"].(string))
