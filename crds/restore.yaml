@@ -17,6 +17,13 @@ spec:
           properties:
             backupName:
               type: string
+            backupStorageLocation:
+              properties:
+                local:
+                  type: string
+                objectStore:
+                  type: string
+              type: object
           type: object
       type: object
   version: v1
