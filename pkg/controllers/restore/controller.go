@@ -7,32 +7,41 @@ import (
 	"fmt"
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
 	common "github.com/mrajashree/backup/pkg/controllers"
-	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
 	"io/ioutil"
+	"strings"
+
+	//common "github.com/mrajashree/backup/pkg/controllers"
+	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
+	//"io/ioutil"
+	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	//"strings"
 )
 
 type handler struct {
-	restores      backupControllers.RestoreController
-	backups       backupControllers.BackupController
-	dynamicClient dynamic.Interface
+	restores        backupControllers.RestoreController
+	backups         backupControllers.BackupController
+	discoveryClient discovery.DiscoveryInterface
+	dynamicClient   dynamic.Interface
 }
 
 func Register(
 	ctx context.Context,
 	restores backupControllers.RestoreController,
 	backups backupControllers.BackupController,
+	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface) {
 
 	controller := &handler{
-		restores:      restores,
-		backups:       backups,
-		dynamicClient: dynamicInterface,
+		restores:        restores,
+		backups:         backups,
+		dynamicClient:   dynamicInterface,
+		discoveryClient: clientSet.Discovery(),
 	}
 
 	// Register handlers
@@ -50,8 +59,8 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	backupPath := backup.Spec.Local
 
 	// first restore namespaces
-	fullPath := filepath.Join(backupPath, "/owners/", "namespaces.#v1")
-	cmdNs := exec.Command("kubectl", "apply", "-f", fullPath, "--recursive")
+	nsPath := filepath.Join(backupPath, "namespaces")
+	cmdNs := exec.Command("kubectl", "apply", "-f", nsPath, "--recursive")
 	var out, errB bytes.Buffer
 	cmdNs.Stdout = &out
 	cmdNs.Stderr = &errB
@@ -61,15 +70,22 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		fmt.Printf("error: %q\n", errB.String())
 		return restore, err
 	}
-
-	// focus on namespace filter first
-
+	// then restore CRDs
+	CRDPath := filepath.Join(backupPath, "customresourcedefinitions")
+	cmdCRD := exec.Command("kubectl", "apply", "-f", CRDPath, "--recursive")
+	cmdNs.Stdout = &out
+	cmdNs.Stderr = &errB
+	//fmt.Printf("\nrunning command %v\n", cmd.String())
+	if err := cmdCRD.Run(); err != nil {
+		//fmt.Printf("output: %q\n", out.String())
+		fmt.Printf("error: %q\n", errB.String())
+		return restore, err
+	}
 	ownerDirInfo, err := ioutil.ReadDir(backupPath + "/owners")
 	if err != nil {
 		return restore, err
 	}
 	var returnErr error
-
 	fmt.Printf("\nRestoring owner objects\n")
 	for _, gvDir := range ownerDirInfo {
 		gvkStr := gvDir.Name()
@@ -173,14 +189,76 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			fileMap["metadata"] = metadata
 			writeBytes, err := json.Marshal(fileMap)
 			if err != nil {
-				return restore, err
+				fmt.Printf("\ndependent json err: %v\n", err)
+				//return restore, err
 			}
 			err = ioutil.WriteFile(resourceFileName, writeBytes, 0777)
 			if err != nil {
-				return restore, err
+				fmt.Printf("\nerr writing file: %v\n", err)
+				//return restore, err
 			}
 		}
 	}
+
+	// prune
+	//filtersBytes, err := ioutil.ReadFile(filepath.Join(backupPath, "filters.json"))
+	//if err != nil {
+	//	fmt.Printf("\nerr reading file: %v\n", err)
+	//	//return restore, err
+	//}
+	//var backupFilters []v1.BackupFilter
+	//if err := json.Unmarshal(filtersBytes, &backupFilters); err != nil {
+	//	fmt.Printf("\nerr unmarshaling file: %v\n", err)
+	//	//return restore, err
+	//}
+	//
+	//for _, filter := range backupFilters {
+	//	groupVersion := filter.ApiGroup
+	//	resources := filter.Kinds
+	//	// for now, testing with only namespaces
+	//	if groupVersion != "v1" {
+	//		continue
+	//	}
+	//	if resources[0] != "namespaces" {
+	//		continue
+	//	}
+	//	res := resources[0]
+	//	// evaluate all current ns within given regex
+	//	gv, _ := schema.ParseGroupVersion(groupVersion)
+	//	gvr := gv.WithResource("namespaces")
+	//	var dr dynamic.ResourceInterface
+	//	dr = h.dynamicClient.Resource(gvr)
+	//	namespacesList, err := dr.List(context.Background(), k8sv1.ListOptions{})
+	//	if err != nil {
+	//		return restore, err
+	//	}
+	//	nsBackupPath := filepath.Join(backupPath, "owners", res+"."+gv.Group+"#"+gv.Version)
+	//	for _, currNs := range namespacesList.Items {
+	//		name := currNs.Object["metadata"].(map[string]interface{})["name"].(string)
+	//		nameMatched, err := regexp.MatchString(filter.ResourceNameRegex, name)
+	//		if err != nil {
+	//			return restore, err
+	//		}
+	//		if !nameMatched {
+	//			continue
+	//		}
+	//		nsFileName := name + ".json"
+	//		// check if file with this name exists in nsbackupPath
+	//		_, err = os.Stat(filepath.Join(nsBackupPath, nsFileName))
+	//
+	//		if os.IsNotExist(err) {
+	//			fmt.Printf("\ndeleting ns: %v\n", name)
+	//			// not supposed to be here, so delete this ns
+	//			//deleteCmd := exec.Command("kubectl", "delete", res, name)
+	//			//err := deleteCmd.Run()
+	//			//if err != nil {
+	//			//	fmt.Printf("\nError deleting ns: %v\n", name)
+	//			//}
+	//		} else {
+	//			fmt.Printf("\nfound ns %v in backup\n", name)
+	//		}
+	//	}
+	//}
 
 	return restore, nil
 }
