@@ -3,4 +3,4 @@ kind: Restore
 metadata:
   name: my-restore
 spec:
-  backupName: my-backup-path
+  backupName: secret-encrypt-backup

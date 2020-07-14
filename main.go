@@ -75,7 +75,7 @@ func run(c *cli.Context) {
 	}
 
 	backup.Register(ctx, backups.Backupper().V1().Backup(), backups.Backupper().V1().BackupTemplate(), clientSet, dynamicInterace)
-	restore.Register(ctx, backups.Backupper().V1().Restore(), backups.Backupper().V1().Backup(), dynamicInterace)
+	restore.Register(ctx, backups.Backupper().V1().Restore(), backups.Backupper().V1().Backup(), clientSet, dynamicInterace)
 
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())

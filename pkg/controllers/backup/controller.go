@@ -26,8 +26,6 @@ import (
 	"k8s.io/client-go/discovery"
 )
 
-var defaultGroupVersionsToBackup = []string{"v1", "rbac.authorization.k8s.io/v1", "management.cattle.io/v3", "project.cattle.io/v3"}
-
 type handler struct {
 	backups         backupControllers.BackupController
 	backupTemplates backupControllers.BackupTemplateController
@@ -95,7 +93,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if err != nil {
 		return backup, err
 	}
-	err = h.gatherResources(template.BackupFilters, ownerDirPath, dependentDirPath, aesKey)
+	err = h.gatherResources(template.BackupFilters, backupPath, ownerDirPath, dependentDirPath, aesKey)
 
 	filters, err := json.Marshal(template.BackupFilters)
 	if err != nil {
@@ -113,11 +111,18 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	return backup, err
 }
 
-func (h *handler) gatherResources(filters []v1.BackupFilter, ownerDirPath, dependentDirPath, aesKey string) error {
-	for _, filter := range filters {
+func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath, ownerDirPath, dependentDirPath, aesKey string) error {
+	for ind, filter := range filters {
 		resourceList, err := h.gatherResourcesForGroupVersion(filter)
 		if err != nil {
 			return err
+		}
+		if len(filter.Kinds) == 0 {
+			// user gave kinds in regex, updated kinds as a list of resource names that exactly matched the regex
+			for _, res := range resourceList {
+				filter.Kinds = append(filter.Kinds, res.Name)
+			}
+			filters[ind] = filter
 		}
 		gv, err := schema.ParseGroupVersion(filter.ApiGroup)
 		if err != nil {
@@ -125,25 +130,30 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, ownerDirPath, depen
 		}
 
 		fmt.Printf("\nBacking up resources for groupVersion %v\n", gv)
+		fmt.Printf("\nres list: %v\n", resourceList)
 		for _, res := range resourceList {
+			fmt.Printf("\nresource: %v\n", res.Name)
 			if skipBackup(res) {
 				continue
 			}
-			err := h.gatherObjectsForResource(res, gv, filter, ownerDirPath, dependentDirPath, aesKey)
+			err := h.gatherObjectsForResource(res, gv, filter, backupPath, ownerDirPath, dependentDirPath, aesKey)
 			if err != nil {
 				fmt.Printf("\nerr in gatherObjectsForResource: %v\n", err)
 				return err
 			}
-			// write filter
 		}
 	}
 	return nil
 }
 
 func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv1.APIResource, error) {
+	fmt.Printf("\nHere-1\n")
 	var resourceList []k8sv1.APIResource
 	groupVersion := filter.ApiGroup
+
 	resources, err := h.discoveryClient.ServerResourcesForGroupVersion(groupVersion)
+	fmt.Printf("\nres list in gatherResourcesForGroupVersion: %v\n", resources)
+	fmt.Printf("\nHere-2\n")
 	if err != nil {
 		return resourceList, err
 	}
@@ -155,6 +165,9 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 	} else {
 		// else filter out resource with regex match
 		for _, res := range resources.APIResources {
+			if filter.ApiGroup == "apiextensions.k8s.io/v1" {
+				fmt.Printf("\ncollecting resources for CRDs\n")
+			}
 			matched, err := regexp.MatchString(filter.KindsRegex, res.Name)
 			if err != nil {
 				return resourceList, err
@@ -169,7 +182,7 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 	return resourceList, nil
 }
 
-func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, ownerDirPath, dependentDirPath, aesKey string) error {
+func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, backupPath, ownerDirPath, dependentDirPath, aesKey string) error {
 	var fieldSelector string
 	gvr := gv.WithResource(res.Name)
 	var dr dynamic.ResourceInterface
@@ -214,6 +227,7 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 			fmt.Printf("\nMatched resource name %v for namesregex %v\n", name, filter.ResourceNameRegex)
 		}
 	}
+	var filteredNs []string
 	if filter.NamespaceRegex != "" {
 		for _, resObj := range resObjects.Items {
 			metadata := resObj.Object["metadata"].(map[string]interface{})
@@ -226,18 +240,22 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 				continue
 			}
 			filteredObjects = append(filteredObjects, resObj)
+			filteredNs = append(filteredNs, namespace)
 			fmt.Printf("\nMatched resource ns %v for nsregex %v\n", namespace, filter.NamespaceRegex)
 		}
+	}
+	if res.Namespaced && len(filteredNs) > 0 {
+		filter.Namespaces = append(filter.Namespaces, filteredNs...)
 	}
 	if filter.NamespaceRegex == "" && filter.ResourceNameRegex == "" {
 		// no regex, return all objects
 		filteredObjects = resObjects.Items
 	}
 
-	return writeBackupObjects(filteredObjects, res, gv, ownerDirPath, dependentDirPath, aesKey)
+	return writeBackupObjects(filteredObjects, res, gv, backupPath, ownerDirPath, dependentDirPath, aesKey)
 }
 
-func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, ownerDirPath, dependentDirPath, aesKey string) error {
+func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, backupPath, ownerDirPath, dependentDirPath, aesKey string) error {
 	for _, resObj := range resObjects {
 		metadata := resObj.Object["metadata"].(map[string]interface{})
 		// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
@@ -284,6 +302,16 @@ func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIRes
 		}
 		for _, field := range []string{"uid", "resourceVersion", "generation", "creationTimestamp"} {
 			delete(metadata, field)
+		}
+		if res.Name == "customresourcedefinitions" || res.Name == "namespaces" {
+			resourcePath := filepath.Join(backupPath, res.Name)
+			if err := createResourceDir(resourcePath); err != nil {
+				return err
+			}
+			err := writeToBackup(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
+			if err != nil {
+				return err
+			}
 		}
 		if resObj.Object["metadata"].(map[string]interface{})["ownerReferences"] == nil {
 			resourcePath := ownerDirPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version

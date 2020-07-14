@@ -41,6 +41,7 @@ type BackupFilter struct {
 	Namespaces        []string `json:"namespaces"`
 	NamespaceRegex    string   `json:"namespaceRegex"`
 	LabelSelectors    string   `json:"labelSelectors"`
+	Prune             string   `json:"prune"`
 }
 
 type BackupStatus struct {
@@ -67,5 +68,6 @@ type Restore struct {
 }
 
 type RestoreSpec struct {
-	BackupName string `json:"backupName"`
+	BackupName            string `json:"backupName"`
+	BackupStorageLocation `json:"backupStorageLocation"`
 }
