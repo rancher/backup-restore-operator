@@ -1,22 +1,27 @@
 package backup
 
 import (
-	"bytes"
+	//"bytes"
 	"context"
 	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
+
+	//"crypto/aes"
+	//"crypto/cipher"
+	//"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"io"
+	//"io"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/storage/value"
+	k8saes "k8s.io/apiserver/pkg/storage/value/encrypt/aes"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/secretbox"
 	"k8s.io/client-go/dynamic"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-
 	//"github.com/kubernetes/kubernetes/pkg/features"
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
 	common "github.com/mrajashree/backup/pkg/controllers"
@@ -26,7 +31,7 @@ import (
 	"k8s.io/client-go/discovery"
 )
 
-type handler struct {
+type Handler struct {
 	backups         backupControllers.BackupController
 	backupTemplates backupControllers.BackupTemplateController
 	discoveryClient discovery.DiscoveryInterface
@@ -42,7 +47,7 @@ func Register(
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface) {
 
-	controller := &handler{
+	controller := &Handler{
 		backups:         backups,
 		backupTemplates: backupTemplates,
 		discoveryClient: clientSet.Discovery(),
@@ -54,7 +59,7 @@ func Register(
 	//backups.OnRemove(ctx, controllerRemoveName, controller.OnEksConfigRemoved)
 }
 
-func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error) {
+func (h *Handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error) {
 	// TODO: get objectStore details too
 	backupPath := backup.Spec.Local
 	backupInfo, err := os.Stat(backupPath)
@@ -76,24 +81,12 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
 	//h.discoveryClient.ServerGroupsAndResources()
-	aesKeySecretName := backup.Spec.BackupEncryptionSecretName
-	secretsGV, err := schema.ParseGroupVersion("v1")
-	if err != nil {
-		return backup, err
-	}
-	gvr := secretsGV.WithResource("secrets")
-	secretsClient := h.dynamicClient.Resource(gvr)
-	// TODO: accept secrets from different namespaces
-	aesSecret, err := secretsClient.Namespace("default").Get(context.Background(), aesKeySecretName, k8sv1.GetOptions{})
-	if err != nil {
-		return backup, err
-	}
-	aesKey := aesSecret.Object["data"].(map[string]interface{})["aeskey"].(string)
+
 	template, err := h.backupTemplates.Get("default", backup.Spec.BackupTemplate, k8sv1.GetOptions{})
 	if err != nil {
 		return backup, err
 	}
-	err = h.gatherResources(template.BackupFilters, backupPath, ownerDirPath, dependentDirPath, aesKey)
+	err = h.gatherResources(template.BackupFilters, backupPath, ownerDirPath, dependentDirPath, &backup.Spec.BackupEncryptionConfig)
 
 	filters, err := json.Marshal(template.BackupFilters)
 	if err != nil {
@@ -111,7 +104,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	return backup, err
 }
 
-func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath, ownerDirPath, dependentDirPath, aesKey string) error {
+func (h *Handler) gatherResources(filters []v1.BackupFilter, backupPath, ownerDirPath, dependentDirPath string, encryptionConfig *v1.BackupEncryptionConfig) error {
 	for ind, filter := range filters {
 		resourceList, err := h.gatherResourcesForGroupVersion(filter)
 		if err != nil {
@@ -136,7 +129,7 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath, ownerDi
 			if skipBackup(res) {
 				continue
 			}
-			err := h.gatherObjectsForResource(res, gv, filter, backupPath, ownerDirPath, dependentDirPath, aesKey)
+			err := h.gatherObjectsForResource(res, gv, filter, backupPath, ownerDirPath, dependentDirPath, encryptionConfig)
 			if err != nil {
 				fmt.Printf("\nerr in gatherObjectsForResource: %v\n", err)
 				return err
@@ -146,7 +139,7 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath, ownerDi
 	return nil
 }
 
-func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv1.APIResource, error) {
+func (h *Handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv1.APIResource, error) {
 	fmt.Printf("\nHere-1\n")
 	var resourceList []k8sv1.APIResource
 	groupVersion := filter.ApiGroup
@@ -182,7 +175,7 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 	return resourceList, nil
 }
 
-func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, backupPath, ownerDirPath, dependentDirPath, aesKey string) error {
+func (h *Handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, backupPath, ownerDirPath, dependentDirPath string, encryptionConfig *v1.BackupEncryptionConfig) error {
 	var fieldSelector string
 	gvr := gv.WithResource(res.Name)
 	var dr dynamic.ResourceInterface
@@ -252,10 +245,10 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 		filteredObjects = resObjects.Items
 	}
 
-	return writeBackupObjects(filteredObjects, res, gv, backupPath, ownerDirPath, dependentDirPath, aesKey)
+	return h.writeBackupObjects(filteredObjects, res, gv, backupPath, ownerDirPath, dependentDirPath, encryptionConfig)
 }
 
-func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, backupPath, ownerDirPath, dependentDirPath, aesKey string) error {
+func (h *Handler) writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, backupPath, ownerDirPath, dependentDirPath string, encryptionConfig *v1.BackupEncryptionConfig) error {
 	for _, resObj := range resObjects {
 		metadata := resObj.Object["metadata"].(map[string]interface{})
 		// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
@@ -265,29 +258,14 @@ func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIRes
 				continue
 			}
 		}
+		objName := resObj.Object["metadata"].(map[string]interface{})["name"].(string)
 		if res.Name == "secrets" {
-			fmt.Printf("\necnrypt secret\n")
 			secretMap := resObj.Object["data"].(map[string]interface{})
-			secretPlaintext, err := json.Marshal(secretMap)
+			encrypted, err := h.encryptSecrets(secretMap, encryptionConfig, objName)
 			if err != nil {
 				return err
 			}
-			block, _ := aes.NewCipher([]byte(aesKey))
-			blockSize := aes.BlockSize
-			paddingSize := blockSize - (len(secretPlaintext) % blockSize)
-			result := make([]byte, blockSize+len(secretPlaintext)+paddingSize)
-			iv := result[:blockSize]
-			if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-				return fmt.Errorf("unable to read sufficient random bytes")
-			}
-			copy(result[blockSize:], secretPlaintext)
-
-			// add PKCS#7 padding for CBC
-			copy(result[blockSize+len(secretPlaintext):], bytes.Repeat([]byte{byte(paddingSize)}, paddingSize))
-
-			mode := cipher.NewCBCEncrypter(block, iv)
-			mode.CryptBlocks(result[blockSize:], result[blockSize:])
-			resObj.Object["data"] = result
+			resObj.Object["data"] = encrypted
 		}
 		currObjLabels := metadata["labels"]
 		if resObj.Object["metadata"].(map[string]interface{})["uid"] != nil {
@@ -308,7 +286,7 @@ func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIRes
 			if err := createResourceDir(resourcePath); err != nil {
 				return err
 			}
-			err := writeToBackup(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
+			err := writeToBackup(resObj.Object, resourcePath, objName)
 			if err != nil {
 				return err
 			}
@@ -318,7 +296,7 @@ func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIRes
 			if err := createResourceDir(resourcePath); err != nil {
 				return err
 			}
-			err := writeToBackup(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
+			err := writeToBackup(resObj.Object, resourcePath, objName)
 			if err != nil {
 				return err
 			}
@@ -327,13 +305,116 @@ func writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIRes
 			if err := createResourceDir(resourcePath); err != nil {
 				return err
 			}
-			err := writeToBackup(resObj.Object, resourcePath, resObj.Object["metadata"].(map[string]interface{})["name"].(string))
+			err := writeToBackup(resObj.Object, resourcePath, objName)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func (h *Handler) encryptSecrets(secretMap map[string]interface{}, encryptionConfig *v1.BackupEncryptionConfig, objName string) ([]byte, error) {
+	fmt.Printf("\necnrypt secret\n")
+	var encryptionKey string
+	var encrypted []byte
+	secretPlaintext, err := json.Marshal(secretMap)
+	if err != nil {
+		return encrypted, err
+	}
+	if encryptionConfig.EncryptionSecret != "" {
+		// either aescbc/gcm or secretbox, read secret
+		encryptionKey, err = h.readEncryptionSecret(encryptionConfig.EncryptionSecret)
+		if err != nil {
+			return encrypted, err
+		}
+	}
+	switch encryptionConfig.EncryptionProvider {
+	case "aescbc":
+		encrypted, err = encryptCBCMode([]byte(encryptionKey), secretPlaintext)
+		if err != nil {
+			return encrypted, err
+		}
+	case "aesgcm":
+		encrypted, err = encryptGCMMode([]byte(encryptionKey), secretPlaintext, objName)
+		if err != nil {
+			return encrypted, err
+		}
+	case "secretbox":
+		var key [32]byte
+		copy(key[:], encryptionKey)
+		encrypted, err = encryptSecretbox(key, secretPlaintext, objName)
+		if err != nil {
+			return encrypted, err
+		}
+	case "kms":
+		KMSConfig := encryptionConfig.KMSConfiguration
+		envelopeService, err := envelope.NewGRPCService(KMSConfig.Endpoint, KMSConfig.Timeout.Duration)
+		if err != nil {
+			return encrypted, fmt.Errorf("could not configure KMS plugin %q, error: %v", KMSConfig.PluginName, err)
+		}
+		envelopeTransformer, err := envelope.NewEnvelopeTransformer(envelopeService, int(*KMSConfig.CacheSize), k8saes.NewCBCTransformer)
+		if err != nil {
+			return encrypted, err
+		}
+		encrypted, err = envelopeTransformer.TransformToStorage(secretPlaintext, value.DefaultContext([]byte(objName)))
+		if err != nil {
+			return encrypted, err
+		}
+		//resObj.Object["data"] = encrypted
+	}
+	return encrypted, nil
+}
+
+func (h *Handler) readEncryptionSecret(aesSecretName string) (string, error) {
+	secretsGV, err := schema.ParseGroupVersion("v1")
+	if err != nil {
+		return "", err
+	}
+	gvr := secretsGV.WithResource("secrets")
+	secretsClient := h.dynamicClient.Resource(gvr)
+	// TODO: accept secrets from different namespaces
+	encryptionSecret, err := secretsClient.Namespace("default").Get(context.Background(), aesSecretName, k8sv1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	encryptionKey := encryptionSecret.Object["data"].(map[string]interface{})["secret"].(string)
+	return encryptionKey, nil
+}
+
+func encryptCBCMode(aesKeyBytes, secretPlaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(aesKeyBytes)
+	if err != nil {
+		return []byte{}, err
+	}
+	cbcTransformer := k8saes.NewCBCTransformer(block)
+	encrypted, err := cbcTransformer.TransformToStorage(secretPlaintext, value.DefaultContext{})
+	if err != nil {
+		return []byte{}, err
+	}
+	return encrypted, nil
+}
+
+func encryptGCMMode(aesKeyBytes, secretPlaintext []byte, resourceName string) ([]byte, error) {
+	block, err := aes.NewCipher(aesKeyBytes)
+	if err != nil {
+		return []byte{}, err
+	}
+	gcmTransformer := k8saes.NewGCMTransformer(block)
+	encrypted, err := gcmTransformer.TransformToStorage(secretPlaintext, value.DefaultContext([]byte(resourceName)))
+	if err != nil {
+		return []byte{}, err
+	}
+	return encrypted, nil
+}
+
+func encryptSecretbox(secretboxBytes [32]byte, secretPlaintext []byte, resourceName string) ([]byte, error) {
+	secretboxTransformer := secretbox.NewSecretboxTransformer(secretboxBytes)
+	encrypted, err := secretboxTransformer.TransformToStorage(secretPlaintext, value.DefaultContext([]byte(resourceName)))
+	if err != nil {
+		return []byte{}, err
+	}
+	return encrypted, nil
 }
 
 func skipBackup(res k8sv1.APIResource) bool {

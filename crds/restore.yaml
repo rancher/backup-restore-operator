@@ -24,6 +24,8 @@ spec:
                 objectStore:
                   type: string
               type: object
+            pruneRestore:
+              type: boolean
           type: object
       type: object
   version: v1

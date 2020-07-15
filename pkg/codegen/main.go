@@ -19,6 +19,7 @@ func main() {
 				Types: []interface{}{
 					v1.Backup{},
 					v1.BackupTemplate{},
+					v1.BackupEncryptionConfig{},
 					v1.Restore{},
 				},
 				GenerateTypes: true,

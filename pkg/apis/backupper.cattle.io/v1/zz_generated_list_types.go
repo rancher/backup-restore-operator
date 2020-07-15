@@ -60,6 +60,23 @@ func NewBackupTemplate(namespace, name string, obj BackupTemplate) *BackupTempla
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// BackupEncryptionConfigList is a list of BackupEncryptionConfig resources
+type BackupEncryptionConfigList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []BackupEncryptionConfig `json:"items"`
+}
+
+func NewBackupEncryptionConfig(namespace, name string, obj BackupEncryptionConfig) *BackupEncryptionConfig {
+	obj.APIVersion, obj.Kind = SchemeGroupVersion.WithKind("BackupEncryptionConfig").ToAPIVersionAndKind()
+	obj.Name = name
+	obj.Namespace = namespace
+	return &obj
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // RestoreList is a list of Restore resources
 type RestoreList struct {
 	metav1.TypeMeta `json:",inline"`

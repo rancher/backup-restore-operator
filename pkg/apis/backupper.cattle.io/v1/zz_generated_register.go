@@ -28,9 +28,10 @@ import (
 )
 
 var (
-	BackupResourceName         = "backups"
-	BackupTemplateResourceName = "backuptemplates"
-	RestoreResourceName        = "restores"
+	BackupResourceName                 = "backups"
+	BackupEncryptionConfigResourceName = "backupencryptionconfigs"
+	BackupTemplateResourceName         = "backuptemplates"
+	RestoreResourceName                = "restores"
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -56,6 +57,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&Backup{},
 		&BackupList{},
+		&BackupEncryptionConfig{},
+		&BackupEncryptionConfigList{},
 		&BackupTemplate{},
 		&BackupTemplateList{},
 		&Restore{},

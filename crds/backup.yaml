@@ -15,8 +15,26 @@ spec:
       properties:
         spec:
           properties:
-            backupEncryptionSecretName:
-              type: string
+            backupEncryptionConfig:
+              properties:
+                encryptionProvider:
+                  type: string
+                encryptionSecret:
+                  type: string
+                kmsconfig:
+                  properties:
+                    cacheSize:
+                      nullable: true
+                      type: integer
+                    endpoint:
+                      type: string
+                    pluginName:
+                      type: string
+                    timeout:
+                      nullable: true
+                      type: string
+                  type: object
+              type: object
             backupStorageLocation:
               properties:
                 local:
