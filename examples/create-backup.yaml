@@ -14,6 +14,7 @@ spec:
   backupStorageLocation:
     local: secret-encrypt-backup
   backupTemplate: mcm-backup-template
+  encryptionConfigPath: examples/encryptionConfig.yaml
   backupEncryptionConfig:
     encryptionProvider: aescbc
     encryptionSecret: backup-secret

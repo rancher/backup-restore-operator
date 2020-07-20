@@ -346,7 +346,7 @@ func (in *Restore) DeepCopyInto(out *Restore) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
-	out.Spec = in.Spec
+	in.Spec.DeepCopyInto(&out.Spec)
 	return
 }
 
@@ -405,6 +405,7 @@ func (in *RestoreList) DeepCopyObject() runtime.Object {
 func (in *RestoreSpec) DeepCopyInto(out *RestoreSpec) {
 	*out = *in
 	out.BackupStorageLocation = in.BackupStorageLocation
+	in.BackupEncryptionConfig.DeepCopyInto(&out.BackupEncryptionConfig)
 	return
 }
 

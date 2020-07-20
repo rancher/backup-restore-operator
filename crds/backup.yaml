@@ -44,6 +44,8 @@ spec:
               type: object
             backupTemplate:
               type: string
+            encryptionConfigPath:
+              type: string
           type: object
         status:
           properties:

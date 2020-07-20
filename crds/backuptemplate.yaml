@@ -35,7 +35,7 @@ spec:
                 nullable: true
                 type: array
               prune:
-                type: string
+                type: boolean
               resourceNameRegex:
                 type: string
               resourceNames:

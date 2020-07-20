@@ -20,6 +20,7 @@ type BackupSpec struct {
 	BackupStorageLocation  `json:"backupStorageLocation"`
 	BackupTemplate         string                 `json:"backupTemplate"`
 	BackupEncryptionConfig BackupEncryptionConfig `json:"backupEncryptionConfig"`
+	EncryptionConfigPath   string                 `json:"encryptionConfigPath"`
 }
 
 // +genclient
@@ -41,7 +42,7 @@ type BackupFilter struct {
 	Namespaces        []string `json:"namespaces"`
 	NamespaceRegex    string   `json:"namespaceRegex"`
 	LabelSelectors    string   `json:"labelSelectors"`
-	Prune             string   `json:"prune"`
+	Prune             bool     `json:"prune"`
 }
 
 type BackupStatus struct {
@@ -68,9 +69,10 @@ type Restore struct {
 }
 
 type RestoreSpec struct {
-	BackupName            string `json:"backupName"`
-	BackupStorageLocation `json:"backupStorageLocation"`
-	PruneRestore          bool `json:"pruneRestore"`
+	BackupName             string `json:"backupName"`
+	BackupStorageLocation  `json:"backupStorageLocation"`
+	PruneRestore           bool                   `json:"pruneRestore"`
+	BackupEncryptionConfig BackupEncryptionConfig `json:"backupEncryptionConfig"`
 }
 
 // +genclient
