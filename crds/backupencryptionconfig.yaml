@@ -13,23 +13,82 @@ spec:
   validation:
     openAPIV3Schema:
       properties:
-        encryptionProvider:
-          type: string
-        encryptionSecret:
-          type: string
-        kmsconfig:
-          properties:
-            cacheSize:
-              nullable: true
-              type: integer
-            endpoint:
-              type: string
-            pluginName:
-              type: string
-            timeout:
-              nullable: true
-              type: string
-          type: object
+        resources:
+          items:
+            properties:
+              providers:
+                items:
+                  properties:
+                    aescbc:
+                      nullable: true
+                      properties:
+                        keys:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              secret:
+                                type: string
+                            type: object
+                          nullable: true
+                          type: array
+                      type: object
+                    aesgcm:
+                      nullable: true
+                      properties:
+                        keys:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              secret:
+                                type: string
+                            type: object
+                          nullable: true
+                          type: array
+                      type: object
+                    identity:
+                      nullable: true
+                      type: object
+                    kms:
+                      nullable: true
+                      properties:
+                        cacheSize:
+                          nullable: true
+                          type: integer
+                        endpoint:
+                          type: string
+                        name:
+                          type: string
+                        timeout:
+                          nullable: true
+                          type: string
+                      type: object
+                    secretbox:
+                      nullable: true
+                      properties:
+                        keys:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              secret:
+                                type: string
+                            type: object
+                          nullable: true
+                          type: array
+                      type: object
+                  type: object
+                nullable: true
+                type: array
+              resources:
+                items:
+                  type: string
+                nullable: true
+                type: array
+            type: object
+          nullable: true
+          type: array
       type: object
   version: v1
   versions:

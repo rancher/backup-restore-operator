@@ -11,6 +11,7 @@ import (
 	//"io"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8sconfig "k8s.io/apiserver/pkg/apis/config"
 	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/dynamic"
@@ -28,10 +29,11 @@ import (
 )
 
 type handler struct {
-	backups         backupControllers.BackupController
-	backupTemplates backupControllers.BackupTemplateController
-	discoveryClient discovery.DiscoveryInterface
-	dynamicClient   dynamic.Interface
+	backups                 backupControllers.BackupController
+	backupTemplates         backupControllers.BackupTemplateController
+	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController
+	discoveryClient         discovery.DiscoveryInterface
+	dynamicClient           dynamic.Interface
 }
 
 var avoidBackupResources = map[string]bool{"pods": true}
@@ -40,14 +42,16 @@ func Register(
 	ctx context.Context,
 	backups backupControllers.BackupController,
 	backupTemplates backupControllers.BackupTemplateController,
+	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController,
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface) {
 
 	controller := &handler{
-		backups:         backups,
-		backupTemplates: backupTemplates,
-		discoveryClient: clientSet.Discovery(),
-		dynamicClient:   dynamicInterface,
+		backups:                 backups,
+		backupTemplates:         backupTemplates,
+		backupEncryptionConfigs: backupEncryptionConfigs,
+		discoveryClient:         clientSet.Discovery(),
+		dynamicClient:           dynamicInterface,
 	}
 
 	// Register handlers
@@ -77,7 +81,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
 	//h.discoveryClient.ServerGroupsAndResources()
-	transformerMap, err := encryptionconfig.GetTransformerOverrides(backup.Spec.EncryptionConfigPath)
+	transformerMap, err := h.getEncryptionTransformers(backup.Spec.BackupEncryptionConfigName, backup.Spec.BackupEncryptionConfigNamespace)
 	if err != nil {
 		return backup, err
 	}
@@ -102,6 +106,66 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 
 	return backup, err
+}
+
+func (h *handler) getEncryptionTransformers(configName, ns string) (map[schema.GroupResource]value.Transformer, error) {
+	resourceToPrefixTransformer := map[schema.GroupResource][]value.PrefixTransformer{}
+	config, err := h.backupEncryptionConfigs.Get(ns, configName, k8sv1.GetOptions{})
+	if err != nil {
+		return map[schema.GroupResource]value.Transformer{}, err
+	}
+	// For each entry in the configuration
+	for _, resourceConfig := range config.Resources {
+		k8sresourceConfig := k8sconfig.ResourceConfiguration{Resources: resourceConfig.Resources}
+		k8sresourceConfig.Providers = make([]k8sconfig.ProviderConfiguration, len(resourceConfig.Providers))
+		for ind, providers := range resourceConfig.Providers {
+			if providers.AESCBC != nil {
+				k8sresourceConfig.Providers[ind].AESCBC = &k8sconfig.AESConfiguration{Keys: getK8sKeys(providers.AESCBC.Keys)}
+			}
+			if providers.AESGCM != nil {
+				k8sresourceConfig.Providers[ind].AESGCM = &k8sconfig.AESConfiguration{Keys: getK8sKeys(providers.AESGCM.Keys)}
+			}
+			if providers.Secretbox != nil {
+				k8sresourceConfig.Providers[ind].Secretbox = &k8sconfig.SecretboxConfiguration{Keys: getK8sKeys(providers.Secretbox.Keys)}
+			}
+			if providers.KMS != nil {
+				kms := providers.KMS
+				k8sresourceConfig.Providers[ind].KMS = &k8sconfig.KMSConfiguration{
+					Name:      kms.Name,
+					CacheSize: kms.CacheSize,
+					Endpoint:  kms.Endpoint,
+					Timeout:   kms.Timeout,
+				}
+			}
+		}
+		transformers, err := encryptionconfig.GetPrefixTransformers(&k8sresourceConfig)
+		if err != nil {
+			return map[schema.GroupResource]value.Transformer{}, err
+		}
+
+		// For each resource, create a list of providers to use
+		for _, resource := range resourceConfig.Resources {
+			gr := schema.ParseGroupResource(resource)
+			resourceToPrefixTransformer[gr] = append(
+				resourceToPrefixTransformer[gr], transformers...)
+		}
+	}
+
+	result := map[schema.GroupResource]value.Transformer{}
+	for gr, transList := range resourceToPrefixTransformer {
+		result[gr] = value.NewMutableTransformer(value.NewPrefixTransformers(fmt.Errorf("no matching prefix found"), transList...))
+	}
+	return result, nil
+}
+
+func getK8sKeys(rancherKeys []v1.Key) []k8sconfig.Key {
+	var k8sKeys []k8sconfig.Key
+	for _, rancherkey := range rancherKeys {
+		name := rancherkey.Name
+		secret := rancherkey.Secret
+		k8sKeys = append(k8sKeys, k8sconfig.Key{Name: name, Secret: secret})
+	}
+	return k8sKeys
 }
 
 func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath, ownerDirPath, dependentDirPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
@@ -214,7 +278,7 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 				continue
 			}
 			filteredObjects = append(filteredObjects, resObj)
-			fmt.Printf("\nMatched resource name %v for namesregex %v\n", name, filter.ResourceNameRegex)
+			//fmt.Printf("\nMatched resource name %v for namesregex %v\n", name, filter.ResourceNameRegex)
 		}
 	}
 	var filteredNs []string
@@ -231,7 +295,7 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 			}
 			filteredObjects = append(filteredObjects, resObj)
 			filteredNs = append(filteredNs, namespace)
-			fmt.Printf("\nMatched resource ns %v for nsregex %v\n", namespace, filter.NamespaceRegex)
+			//fmt.Printf("\nMatched resource ns %v for nsregex %v\n", namespace, filter.NamespaceRegex)
 		}
 	}
 	if res.Namespaced && len(filteredNs) > 0 {
@@ -256,7 +320,7 @@ func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res
 			}
 		}
 
-		objName := resObj.Object["metadata"].(map[string]interface{})["name"].(string)
+		objName := metadata["name"].(string)
 		for _, field := range []string{"uid", "resourceVersion", "generation", "creationTimestamp"} {
 			delete(metadata, field)
 		}
@@ -275,25 +339,30 @@ func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res
 
 		gr := schema.ParseGroupResource(res.Name + "." + res.Group)
 		encryptionTransformer := transformerMap[gr]
+		additionalAuthenticatedData := objName
+		if res.Namespaced {
+			additionalAuthenticatedData = metadata["namespace"].(string) + "/" + additionalAuthenticatedData
+		}
 
 		if res.Name == "customresourcedefinitions" || res.Name == "namespaces" {
 			resourcePath := filepath.Join(backupPath, res.Name)
 			if err := createResourceDir(resourcePath); err != nil {
 				return err
 			}
-			err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer)
+			err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
 			if err != nil {
 				return err
 			}
 		}
 
-		ownerRefs := resObj.Object["metadata"].(map[string]interface{})["ownerReferences"]
+		ownerRefs := metadata["ownerReferences"]
+
 		if ownerRefs == nil {
 			resourcePath := ownerDirPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
 			if err := createResourceDir(resourcePath); err != nil {
 				return err
 			}
-			err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer)
+			err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
 			if err != nil {
 				return err
 			}
@@ -302,7 +371,7 @@ func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res
 			if err := createResourceDir(resourcePath); err != nil {
 				return err
 			}
-			err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer)
+			err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
 			if err != nil {
 				return err
 			}
@@ -337,7 +406,7 @@ func createResourceDir(path string) error {
 	return nil
 }
 
-func writeToBackup(resource map[string]interface{}, backupPath, filename string, transformer value.Transformer) error {
+func writeToBackup(resource map[string]interface{}, backupPath, filename string, transformer value.Transformer, additionalAuthenticatedData string) error {
 	f, err := os.Create(filepath.Join(backupPath, filepath.Base(filename+".json")))
 	if err != nil {
 		return fmt.Errorf("error creating temp file: %v", err)
@@ -349,7 +418,7 @@ func writeToBackup(resource map[string]interface{}, backupPath, filename string,
 		return fmt.Errorf("error converting resource to JSON: %v", err)
 	}
 	if transformer != nil {
-		encrypted, err := transformer.TransformToStorage(resourceBytes, value.DefaultContext{})
+		encrypted, err := transformer.TransformToStorage(resourceBytes, value.DefaultContext([]byte(additionalAuthenticatedData)))
 		if err != nil {
 			return fmt.Errorf("error converting resource to JSON: %v", err)
 		}

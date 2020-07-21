@@ -1,20 +1,30 @@
-apiVersion: v1
-kind: Secret
+apiVersion: backupper.cattle.io/v1
+kind: BackupEncryptionConfig
 metadata:
-  name: backup-secret
-type: Opaque
-data:
-  secret: E7206F8710099E6DF3E10EBCFF3D4B1A
+  name: testconfig
+  namespace: default
+resources:
+  - resources:
+    - secrets
+    providers:
+      - aescbc:
+          keys:
+          - name: key1
+            secret: c2VjcmV0IGlzIHNlY3VyZQ==
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backupper
 ---
 apiVersion: backupper.cattle.io/v1
 kind: Backup
 metadata:
   name: secret-encrypt-backup
+  namespace: default
 spec:
   backupStorageLocation:
     local: secret-encrypt-backup
   backupTemplate: mcm-backup-template
-  encryptionConfigPath: examples/encryptionConfig.yaml
-  backupEncryptionConfig:
-    encryptionProvider: aescbc
-    encryptionSecret: backup-secret
+  backupEncryptionConfigName: testconfig
+  backupEncryptionConfigNamespace: default
