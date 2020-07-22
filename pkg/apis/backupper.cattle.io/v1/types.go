@@ -69,8 +69,9 @@ type Restore struct {
 }
 
 type RestoreSpec struct {
-	BackupName             string `json:"backupName"`
-	BackupStorageLocation  `json:"backupStorageLocation"`
-	PruneRestore           bool   `json:"pruneRestore"`
-	BackupEncryptionConfig string `json:"backupEncryptionConfig"`
+	BackupName                      string `json:"backupName"`
+	BackupStorageLocation           `json:"backupStorageLocation"`
+	PruneRestore                    bool   `json:"pruneRestore"`
+	BackupEncryptionConfigName      string `json:"backupEncryptionConfigName"`
+	BackupEncryptionConfigNamespace string `json:"backupEncryptionConfigNamespace"`
 }

@@ -1,6 +1,22 @@
 apiVersion: backupper.cattle.io/v1
+kind: BackupEncryptionConfig
+metadata:
+  name: testconfig
+  namespace: default
+resources:
+  - resources:
+      - secrets
+    providers:
+      - aescbc:
+          keys:
+            - name: key1
+              secret: c2VjcmV0IGlzIHNlY3VyZQ==
+---
+apiVersion: backupper.cattle.io/v1
 kind: Restore
 metadata:
   name: my-restore
 spec:
   backupName: secret-encrypt-backup
+  backupEncryptionConfigName: testconfig
+  backupEncryptionConfigNamespace: default

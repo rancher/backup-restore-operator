@@ -8,6 +8,7 @@ import (
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
 	common "github.com/mrajashree/backup/pkg/controllers"
 	"io/ioutil"
+	"k8s.io/apiserver/pkg/storage/value"
 	"strings"
 
 	//common "github.com/mrajashree/backup/pkg/controllers"
@@ -24,24 +25,27 @@ import (
 )
 
 type handler struct {
-	restores        backupControllers.RestoreController
-	backups         backupControllers.BackupController
-	discoveryClient discovery.DiscoveryInterface
-	dynamicClient   dynamic.Interface
+	restores                backupControllers.RestoreController
+	backups                 backupControllers.BackupController
+	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController
+	discoveryClient         discovery.DiscoveryInterface
+	dynamicClient           dynamic.Interface
 }
 
 func Register(
 	ctx context.Context,
 	restores backupControllers.RestoreController,
 	backups backupControllers.BackupController,
+	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController,
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface) {
 
 	controller := &handler{
-		restores:        restores,
-		backups:         backups,
-		dynamicClient:   dynamicInterface,
-		discoveryClient: clientSet.Discovery(),
+		restores:                restores,
+		backups:                 backups,
+		backupEncryptionConfigs: backupEncryptionConfigs,
+		dynamicClient:           dynamicInterface,
+		discoveryClient:         clientSet.Discovery(),
 	}
 
 	// Register handlers
@@ -57,65 +61,24 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 	// TODO: logic to read from object store
 	backupPath := backup.Spec.Local
-
-	// first restore namespaces
-	nsPath := filepath.Join(backupPath, "namespaces")
-	cmdNs := exec.Command("kubectl", "apply", "-f", nsPath, "--recursive")
-	var out, errB bytes.Buffer
-	cmdNs.Stdout = &out
-	cmdNs.Stderr = &errB
-	//fmt.Printf("\nrunning command %v\n", cmd.String())
-	if err := cmdNs.Run(); err != nil {
-		//fmt.Printf("output: %q\n", out.String())
-		fmt.Printf("error: %q\n", errB.String())
-		return restore, err
-	}
-	// then restore CRDs
-	CRDPath := filepath.Join(backupPath, "customresourcedefinitions")
-	cmdCRD := exec.Command("kubectl", "apply", "-f", CRDPath, "--recursive")
-	cmdNs.Stdout = &out
-	cmdNs.Stderr = &errB
-	//fmt.Printf("\nrunning command %v\n", cmd.String())
-	if err := cmdCRD.Run(); err != nil {
-		//fmt.Printf("output: %q\n", out.String())
-		fmt.Printf("error: %q\n", errB.String())
-		return restore, err
-	}
-	ownerDirInfo, err := ioutil.ReadDir(backupPath + "/owners")
+	config, err := h.backupEncryptionConfigs.Get(restore.Spec.BackupEncryptionConfigNamespace, restore.Spec.BackupEncryptionConfigName, k8sv1.GetOptions{})
 	if err != nil {
 		return restore, err
 	}
-	var returnErr error
-	fmt.Printf("\nRestoring owner objects\n")
-	for _, gvDir := range ownerDirInfo {
-		gvkStr := gvDir.Name()
-		gvkParts := strings.Split(gvkStr, "#")
-		version := gvkParts[1]
-		kindGrp := strings.SplitN(gvkParts[0], ".", 1)
-		kind := kindGrp[0]
-		var grp string
-		if len(kindGrp) > 1 {
-			grp = kindGrp[1]
-		}
-		fmt.Printf("\nrestoring items of gvk %v, %v, %v\n", grp, version, kind)
-		fullPath := filepath.Join(backupPath, "/owners/", gvDir.Name())
-		cmd := exec.Command("kubectl", "apply", "-f", fullPath, "--recursive")
-		var out, errB bytes.Buffer
-		cmd.Stdout = &out
-		cmd.Stderr = &errB
-		//fmt.Printf("\nrunning command %v\n", cmd.String())
-		if err := cmd.Run(); err != nil {
-			//fmt.Printf("output: %q\n", out.String())
-			fmt.Printf("error: %q\n", errB.String())
-			returnErr = err
-		} else {
-			//fmt.Printf("output: %q\n", out.String())
-			//fmt.Printf("\ndone!\n")
-		}
-		defer cmd.Wait()
-
-		// owners created
+	transformerMap, err := common.GetEncryptionTransformers(config)
+	if err != nil {
+		return restore, err
 	}
+	// first restore namespaces
+	if err := h.restoreResource(filepath.Join(backupPath, "namespaces")); err != nil {
+		return restore, err
+	}
+	// then restore CRDs
+	if err := h.restoreResource(filepath.Join(backupPath, "customresourcedefinitions")); err != nil {
+		return restore, err
+	}
+
+	returnErr := h.restoreOwners(backupPath, transformerMap)
 	if returnErr != nil {
 		fmt.Printf("Controller will retry because of error %v", returnErr)
 		//return restore, err
@@ -261,4 +224,97 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	//}
 
 	return restore, nil
+}
+
+func (h *handler) restoreOwners(backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+	ownerDirInfo, err := ioutil.ReadDir(backupPath + "/owners")
+	if err != nil {
+		return err
+	}
+	for _, gvDir := range ownerDirInfo {
+		gvkStr := gvDir.Name()
+		gvkParts := strings.Split(gvkStr, "#")
+		version := gvkParts[1]
+		kindGrp := strings.SplitN(gvkParts[0], ".", 1)
+		kind := strings.TrimRight(kindGrp[0], ".")
+		var grp string
+		if len(kindGrp) > 1 {
+			grp = kindGrp[1]
+		}
+		gr := schema.ParseGroupResource(kind + "." + grp)
+		decryptionTransformer, ok := transformerMap[gr]
+		fmt.Printf("\nrestoring items of gvk %v, %v, %v\n", grp, version, kind)
+		if ok {
+			fmt.Printf("\ndecryptionTransformer %v for resource %v\n", decryptionTransformer, gr)
+			resourceDirPath := filepath.Join(backupPath, "/owners/", gvDir.Name())
+			// resourceDirPath is backup/owners/secrets.#v1
+			err := decryptAndRestore(resourceDirPath, decryptionTransformer)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		fullPath := filepath.Join(backupPath, "/owners/", gvDir.Name())
+		cmd := exec.Command("kubectl", "apply", "-f", fullPath, "--recursive")
+		var out, errB bytes.Buffer
+		cmd.Stdout = &out
+		cmd.Stderr = &errB
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("error: %q\n", errB.String())
+			return err
+		}
+		defer cmd.Wait()
+
+		// owners created
+	}
+	return nil
+}
+
+func decryptAndRestore(resourceDirPath string, decryptionTransformer value.Transformer) error {
+	resourceDirInfo, err := ioutil.ReadDir(resourceDirPath)
+	if err != nil {
+		return err
+	}
+	for _, secretFile := range resourceDirInfo {
+		//secretName := strings.TrimRight(secretFile.Name(), ".json")
+		fmt.Printf("\ndecrypting %v\n", secretFile.Name())
+		resourceFileName := filepath.Join(resourceDirPath, secretFile.Name())
+		// read file and decrypt
+		fileBytes, err := ioutil.ReadFile(resourceFileName)
+		if err != nil {
+			return err
+		}
+		var encryptedBytes []byte
+		if err := json.Unmarshal(fileBytes, &encryptedBytes); err != nil {
+			return err
+		}
+		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(secretFile.Name()))
+		if err != nil {
+			return err
+		}
+		fmt.Printf("\ndecrypted: %v\n", string(decrypted))
+		err = ioutil.WriteFile(resourceFileName, decrypted, 0777)
+		if err != nil {
+			return err
+		}
+		cmd := exec.Command("kubectl", "apply", "-f", resourceFileName)
+		cmd.Run()
+	}
+	return nil
+}
+
+func (h *handler) restoreResource(resourcePath string) error {
+	// first restore namespaces
+	cmd := exec.Command("kubectl", "apply", "-f", resourcePath, "--recursive")
+	var out, errB bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errB
+	//fmt.Printf("\nrunning command %v\n", cmd.String())
+	if err := cmd.Run(); err != nil {
+		//fmt.Printf("output: %q\n", out.String())
+		fmt.Printf("error: %q\n", errB.String())
+		return err
+	}
+	return nil
 }
