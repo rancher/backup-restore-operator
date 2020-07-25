@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
@@ -173,68 +175,76 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	if dependentRestoreErr != nil {
 		return restore, dependentRestoreErr
 	}
-
-	// prune
-	//filtersBytes, err := ioutil.ReadFile(filepath.Join(backupPath, "filters.json"))
-	//if err != nil {
-	//	fmt.Printf("\nerr reading file: %v\n", err)
-	//	//return restore, err
-	//}
-	//var backupFilters []v1.BackupFilter
-	//if err := json.Unmarshal(filtersBytes, &backupFilters); err != nil {
-	//	fmt.Printf("\nerr unmarshaling file: %v\n", err)
-	//	//return restore, err
-	//}
-	//
-	//for _, filter := range backupFilters {
-	//	groupVersion := filter.ApiGroup
-	//	resources := filter.Kinds
-	//	// for now, testing with only namespaces
-	//	if groupVersion != "v1" {
-	//		continue
-	//	}
-	//	if resources[0] != "namespaces" {
-	//		continue
-	//	}
-	//	res := resources[0]
-	//	// evaluate all current ns within given regex
-	//	gv, _ := schema.ParseGroupVersion(groupVersion)
-	//	gvr := gv.WithResource("namespaces")
-	//	var dr dynamic.ResourceInterface
-	//	dr = h.dynamicClient.Resource(gvr)
-	//	namespacesList, err := dr.List(context.Background(), k8sv1.ListOptions{})
-	//	if err != nil {
-	//		return restore, err
-	//	}
-	//	nsBackupPath := filepath.Join(backupPath, "owners", res+"."+gv.Group+"#"+gv.Version)
-	//	for _, currNs := range namespacesList.Items {
-	//		name := currNs.Object["metadata"].(map[string]interface{})["name"].(string)
-	//		nameMatched, err := regexp.MatchString(filter.ResourceNameRegex, name)
-	//		if err != nil {
-	//			return restore, err
-	//		}
-	//		if !nameMatched {
-	//			continue
-	//		}
-	//		nsFileName := name + ".json"
-	//		// check if file with this name exists in nsbackupPath
-	//		_, err = os.Stat(filepath.Join(nsBackupPath, nsFileName))
-	//
-	//		if os.IsNotExist(err) {
-	//			fmt.Printf("\ndeleting ns: %v\n", name)
-	//			// not supposed to be here, so delete this ns
-	//			//deleteCmd := exec.Command("kubectl", "delete", res, name)
-	//			//err := deleteCmd.Run()
-	//			//if err != nil {
-	//			//	fmt.Printf("\nError deleting ns: %v\n", name)
-	//			//}
-	//		} else {
-	//			fmt.Printf("\nfound ns %v in backup\n", name)
-	//		}
-	//	}
-	//}
-
+	h.prune(backupPath)
 	return restore, nil
+}
+
+func (h *handler) prune(backupPath string) error {
+	// prune
+	filtersBytes, err := ioutil.ReadFile(filepath.Join(backupPath, "filters.json"))
+	if err != nil {
+		return fmt.Errorf("error reading backup fitlers file: %v", err)
+	}
+	var backupFilters []v1.BackupFilter
+	if err := json.Unmarshal(filtersBytes, &backupFilters); err != nil {
+		return fmt.Errorf("error unmarshaling backup filters file: %v", err)
+	}
+	resourceToPrune := make(map[string][]string)
+	for _, filter := range backupFilters {
+		groupVersion := filter.ApiGroup
+		resources := filter.Kinds
+		// for now, testing with only namespaces
+		if groupVersion != "v1" {
+			continue
+		}
+		for _, res := range resources {
+			if res != "namespaces" {
+				continue
+			}
+			// evaluate all current ns within given regex
+			gv, _ := schema.ParseGroupVersion(groupVersion)
+			gvr := gv.WithResource("namespaces")
+			var dr dynamic.ResourceInterface
+			dr = h.dynamicClient.Resource(gvr)
+			namespacesList, err := dr.List(context.Background(), k8sv1.ListOptions{})
+			if err != nil {
+				return err
+			}
+			//TODO  check in owners and dependents
+			nsBackupPath := filepath.Join(backupPath, "owners", res+"."+gv.Group+"#"+gv.Version)
+			for _, currNs := range namespacesList.Items {
+				name := currNs.Object["metadata"].(map[string]interface{})["name"].(string)
+				nameMatched, err := regexp.MatchString(filter.ResourceNameRegex, name)
+				if err != nil {
+					return err
+				}
+				if !nameMatched {
+					continue
+				}
+				nsFileName := name + ".json"
+				// check if file with this name exists in nsbackupPath
+				_, err = os.Stat(filepath.Join(nsBackupPath, nsFileName))
+				if os.IsNotExist(err) {
+					fmt.Printf("\nMarking %v for deletion\n", name)
+					resourceToPrune[res] = append(resourceToPrune[res], name)
+
+				} else {
+					fmt.Printf("\nfound ns %v in backup\n", name)
+				}
+			}
+		}
+	}
+
+	for resource, names := range resourceToPrune {
+		for _, name := range names {
+			// not supposed to be here, so delete this resource
+			out, err := exec.Command("kubectl", "delete", resource, name).CombinedOutput()
+			if err != nil {
+				fmt.Printf("\nError deleting resource %v: %v\n", name, string(out)+"\n"+err.Error())
+			}
+		}
+	}
+	return nil
 }
 
 func (h *handler) restoreOwners(backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
