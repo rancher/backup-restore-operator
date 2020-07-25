@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -90,7 +91,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, err
 	}
 	err = h.gatherResources(template.BackupFilters, backupPath, ownerDirPath, dependentDirPath, transformerMap)
-	fmt.Printf("\nDone gathering\n")
+	logrus.Infof("Done with backup")
 	filters, err := json.Marshal(template.BackupFilters)
 	if err != nil {
 		return backup, err

@@ -28,6 +28,8 @@ spec:
                 objectStore:
                   type: string
               type: object
+            forcePruneTimeout:
+              type: integer
             pruneRestore:
               type: boolean
           type: object

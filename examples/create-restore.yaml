@@ -20,3 +20,4 @@ spec:
   backupName: secret-encrypt-backup
   backupEncryptionConfigName: testconfig
   backupEncryptionConfigNamespace: default
+  forcePruneTimeout: 60
