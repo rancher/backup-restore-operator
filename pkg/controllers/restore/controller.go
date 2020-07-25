@@ -1,10 +1,10 @@
 package restore
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -162,7 +162,16 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			}
 			output, err := exec.Command("kubectl", "apply", "-f", resourceFileName).CombinedOutput()
 			if err != nil {
-				fmt.Printf("\noutput: %v, err : %v\n", string(output), err)
+				if strings.Contains(string(output), "--validate=false") {
+					logrus.Info("Error during restore, retrying with validate=false")
+					retryop, err := exec.Command("kubectl", "apply", "-f", resourceFileName, "--validate=false").CombinedOutput()
+					if err != nil {
+						return restore, fmt.Errorf("error when restoring %v with validate=false: %v", resourceFileName, string(retryop)+err.Error())
+					} else {
+						logrus.Info("Retry with validate=false succeeded")
+						continue
+					}
+				}
 				return restore, err
 			}
 			err = ioutil.WriteFile(resourceFileName, originalFileContent, 0777)
@@ -191,6 +200,9 @@ func (h *handler) prune(backupPath string) error {
 	}
 	resourceToPrune := make(map[string][]string)
 	for _, filter := range backupFilters {
+		//if !filter.Prune {
+		//	continue
+		//}
 		groupVersion := filter.ApiGroup
 		resources := filter.Kinds
 		// for now, testing with only namespaces
@@ -275,17 +287,20 @@ func (h *handler) restoreOwners(backupPath string, transformerMap map[schema.Gro
 		}
 
 		fullPath := filepath.Join(backupPath, "/owners/", gvDir.Name())
-		cmd := exec.Command("kubectl", "apply", "-f", fullPath, "--recursive")
-		var out, errB bytes.Buffer
-		cmd.Stdout = &out
-		cmd.Stderr = &errB
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("error: %q\n", errB.String())
-			//return err
+		output, err := exec.Command("kubectl", "apply", "-f", fullPath, "--recursive").CombinedOutput()
+		if err != nil {
+			if strings.Contains(string(output), "--validate=false") {
+				logrus.Info("Error during restore, retrying with validate=false")
+				retryop, err := exec.Command("kubectl", "apply", "-f", fullPath, "--recursive", "--validate=false").CombinedOutput()
+				if err != nil {
+					return fmt.Errorf("error when restoring %v with validate=false: %v", fullPath, string(retryop)+err.Error())
+				} else {
+					logrus.Info("Retry with validate=false succeeded")
+					continue
+				}
+			}
+			return fmt.Errorf("error restoring secret %v: %v", fullPath, string(output)+err.Error())
 		}
-		defer cmd.Wait()
-
-		// owners created
 	}
 	return nil
 }
@@ -296,9 +311,6 @@ func decryptAndRestore(resourceDirPath string, decryptionTransformer value.Trans
 		return err
 	}
 	for _, secretFile := range resourceDirInfo {
-		if secretFile.Name() == "c-c-dpqd6.json" {
-			continue
-		}
 		resourceFileName := filepath.Join(resourceDirPath, secretFile.Name())
 		// read file and decrypt
 		fileBytes, err := ioutil.ReadFile(resourceFileName)
@@ -316,28 +328,54 @@ func decryptAndRestore(resourceDirPath string, decryptionTransformer value.Trans
 		// write secret to same file to apply. then write fileBytes again
 		err = ioutil.WriteFile(resourceFileName, decrypted, 0777)
 		if err != nil {
-			return err
+			return fmt.Errorf("error writing decryped secret %v to file for restore: %v", resourceFileName, err)
 		}
 		output, err := exec.Command("kubectl", "apply", "-f", resourceFileName).CombinedOutput()
 		if err != nil {
-			fmt.Printf("\noutput: %v, err : %v\n", output, err)
-			return err
+			if strings.Contains(string(output), "--validate=false") {
+				logrus.Info("Error during restore, retrying with validate=false")
+				retryop, err := exec.Command("kubectl", "apply", "-f", resourceFileName, "--validate=false").CombinedOutput()
+				if err != nil {
+					return fmt.Errorf("error when restoring %v with validate=false: %v", resourceFileName, string(retryop)+err.Error())
+				} else {
+					logrus.Info("Retry with validate=false succeeded")
+					continue
+				}
+			}
+			if strings.Contains(string(output), "Too long: must have at most 262144 bytes") {
+				logrus.Info("Error during restore, retrying with replace")
+				retryop, err := exec.Command("kubectl", "replace", "-f", resourceFileName).CombinedOutput()
+				if err != nil {
+					return fmt.Errorf("error when restoring %v with replace: %v", resourceFileName, string(retryop)+err.Error())
+				} else {
+					logrus.Info("Retry with kubectl replace succeeded")
+					continue
+				}
+			}
+			return fmt.Errorf("error restoring secret %v: %v", resourceFileName, string(output)+err.Error())
 		}
 		err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
 		if err != nil {
-			return err
+			return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, err)
 		}
 	}
 	return nil
 }
 
 func (h *handler) restoreResource(resourcePath string) error {
-	cmd := exec.Command("kubectl", "apply", "-f", resourcePath, "--recursive")
-	var out, errB bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errB
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error restoring resource %v: %v", resourcePath, errB.String())
+	output, err := exec.Command("kubectl", "apply", "-f", resourcePath, "--recursive").CombinedOutput()
+	if err != nil {
+		if strings.Contains(string(output), "--validate=false") {
+			logrus.Info("Error during restore, retrying with validate=false")
+			retryop, err := exec.Command("kubectl", "apply", "-f", resourcePath, "--recursive", "--validate=false").CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("error when restoring %v with validate=false: %v", resourcePath, string(retryop)+err.Error())
+			} else {
+				logrus.Info("Retry with validate=false succeeded")
+				return nil
+			}
+		}
+		return fmt.Errorf("error restoring resource %v: %v", resourcePath, string(output)+err.Error())
 	}
 	return nil
 }
