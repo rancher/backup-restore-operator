@@ -5,23 +5,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
-	common "github.com/mrajashree/backup/pkg/controllers"
 	"io/ioutil"
-	"k8s.io/apiserver/pkg/storage/value"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
-	//common "github.com/mrajashree/backup/pkg/controllers"
+	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
+	common "github.com/mrajashree/backup/pkg/controllers"
 	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
-	//"io/ioutil"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
-	"os/exec"
-	"path/filepath"
-	//"strings"
 )
 
 type handler struct {
@@ -90,6 +87,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return restore, err
 	}
 	fmt.Printf("Now restoring depedents..")
+	var dependentRestoreErr error
 	for _, gvDir := range dependentDirInfo {
 		gvkStr := gvDir.Name()
 		gvkParts := strings.Split(gvkStr, "#")
@@ -109,12 +107,12 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		for _, resourceFile := range resourceDirInfo {
 			// read the resource file to get the ownerRef's apiVersion, kind and name.
 			resourceFileName := filepath.Join(resourceDirPath, resourceFile.Name())
-			fileBytes, err := ioutil.ReadFile(resourceFileName)
+			originalFileContent, err := ioutil.ReadFile(resourceFileName)
 			if err != nil {
 				return restore, err
 			}
 			fileMap := make(map[string]interface{})
-			err = json.Unmarshal(fileBytes, &fileMap)
+			err = json.Unmarshal(originalFileContent, &fileMap)
 			if err != nil {
 				return restore, err
 			}
@@ -133,14 +131,17 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 				// TODO: proper method for getting plural name from kind
 				kind := strings.ToLower(strings.Split(ownerKind, ".")[0]) + "s"
 				gvr := gv.WithResource(kind)
-				ownerOldUID := ownerRef["uid"].(string)
 				dr := h.dynamicClient.Resource(gvr)
+				ownerOldUID := ownerRef["uid"].(string)
 				// TODO: which context to use
 				ctx := context.Background()
-				ownerOldUIDLabel := fmt.Sprintf("%s=%s", common.OldUIDReferenceLabel, ownerOldUID)
-				ownerObj, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: ownerOldUIDLabel})
+				ownerObj, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", common.OldUIDReferenceLabel, ownerOldUID)})
 				if err != nil {
-					fmt.Printf("\nerror in listing by label: %v\n", err)
+					return restore, fmt.Errorf("error listing owner by label: %v", err)
+				}
+				if len(ownerObj.Items) == 0 {
+					fmt.Printf("\nNEWERR3 owner could be a dependent itself, to try this again, return err at end\n")
+					dependentRestoreErr = fmt.Errorf("retry this")
 					continue
 				}
 				newOwnerUID := ownerObj.Items[0].Object["metadata"].(map[string]interface{})["uid"]
@@ -148,19 +149,29 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 				ownerRefs[ind] = ownerRef
 			}
 			metadata["ownerReferences"] = ownerRefs
-			metadata["labels"] = map[string]string{"updated": "true"}
 			fileMap["metadata"] = metadata
 			writeBytes, err := json.Marshal(fileMap)
 			if err != nil {
-				fmt.Printf("\ndependent json err: %v\n", err)
-				//return restore, err
+				return restore, fmt.Errorf("error marshaling updated ownerRefs: %v", err)
 			}
 			err = ioutil.WriteFile(resourceFileName, writeBytes, 0777)
 			if err != nil {
-				fmt.Printf("\nerr writing file: %v\n", err)
-				//return restore, err
+				return restore, fmt.Errorf("error writing updated ownerRefs to file: %v", err)
+			}
+			output, err := exec.Command("kubectl", "apply", "-f", resourceFileName).CombinedOutput()
+			if err != nil {
+				fmt.Printf("\noutput: %v, err : %v\n", string(output), err)
+				return restore, err
+			}
+			err = ioutil.WriteFile(resourceFileName, originalFileContent, 0777)
+			if err != nil {
+				return restore, fmt.Errorf("error writing original ownerRefs to file: %v", err)
 			}
 		}
+
+	}
+	if dependentRestoreErr != nil {
+		return restore, dependentRestoreErr
 	}
 
 	// prune
@@ -245,9 +256,7 @@ func (h *handler) restoreOwners(backupPath string, transformerMap map[schema.Gro
 		decryptionTransformer, ok := transformerMap[gr]
 		fmt.Printf("\nrestoring items of gvk %v, %v, %v\n", grp, version, kind)
 		if ok {
-			fmt.Printf("\ndecryptionTransformer %v for resource %v\n", decryptionTransformer, gr)
 			resourceDirPath := filepath.Join(backupPath, "/owners/", gvDir.Name())
-			// resourceDirPath is backup/owners/secrets.#v1
 			err := decryptAndRestore(resourceDirPath, decryptionTransformer)
 			if err != nil {
 				return err
@@ -262,7 +271,7 @@ func (h *handler) restoreOwners(backupPath string, transformerMap map[schema.Gro
 		cmd.Stderr = &errB
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("error: %q\n", errB.String())
-			return err
+			//return err
 		}
 		defer cmd.Wait()
 
@@ -277,8 +286,9 @@ func decryptAndRestore(resourceDirPath string, decryptionTransformer value.Trans
 		return err
 	}
 	for _, secretFile := range resourceDirInfo {
-		//secretName := strings.TrimRight(secretFile.Name(), ".json")
-		fmt.Printf("\ndecrypting %v\n", secretFile.Name())
+		if secretFile.Name() == "c-c-dpqd6.json" {
+			continue
+		}
 		resourceFileName := filepath.Join(resourceDirPath, secretFile.Name())
 		// read file and decrypt
 		fileBytes, err := ioutil.ReadFile(resourceFileName)
@@ -293,28 +303,40 @@ func decryptAndRestore(resourceDirPath string, decryptionTransformer value.Trans
 		if err != nil {
 			return err
 		}
-		fmt.Printf("\ndecrypted: %v\n", string(decrypted))
+		// write secret to same file to apply. then write fileBytes again
 		err = ioutil.WriteFile(resourceFileName, decrypted, 0777)
 		if err != nil {
 			return err
 		}
-		cmd := exec.Command("kubectl", "apply", "-f", resourceFileName)
-		cmd.Run()
+		output, err := exec.Command("kubectl", "apply", "-f", resourceFileName).CombinedOutput()
+		if err != nil {
+			fmt.Printf("\noutput: %v, err : %v\n", output, err)
+			return err
+		}
+		err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func (h *handler) restoreResource(resourcePath string) error {
-	// first restore namespaces
 	cmd := exec.Command("kubectl", "apply", "-f", resourcePath, "--recursive")
 	var out, errB bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errB
-	//fmt.Printf("\nrunning command %v\n", cmd.String())
 	if err := cmd.Run(); err != nil {
-		//fmt.Printf("output: %q\n", out.String())
-		fmt.Printf("error: %q\n", errB.String())
-		return err
+		return fmt.Errorf("error restoring resource %v: %v", resourcePath, errB.String())
 	}
 	return nil
 }
+
+//cmd := fmt.Sprintf("cat <<EOF | kubectl apply -f - `%s` EOF", string(decrypted))
+//stdOut, stdErr := exec.Command("bash", "-c", cmd).CombinedOutput()
+//if stdErr != nil {
+//	fmt.Printf("\nout: %v\n", string(stdOut))
+//	fmt.Printf("secret apply error %v in executing command", stdErr.Error())
+//	return err
+//}
+//fmt.Printf("\nout: %v\n", string(stdOut))

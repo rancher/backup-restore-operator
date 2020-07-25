@@ -1,29 +1,24 @@
 package backup
 
 import (
-	//"bytes"
 	"context"
-	//"crypto/aes"
-	//"crypto/cipher"
-	//"crypto/rand"
 	"encoding/json"
 	"fmt"
-	//"io"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/storage/value"
-	"k8s.io/client-go/dynamic"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	//"github.com/kubernetes/kubernetes/pkg/features"
+
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
 	common "github.com/mrajashree/backup/pkg/controllers"
 	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 )
 
 type handler struct {
@@ -128,10 +123,7 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath, ownerDi
 			return err
 		}
 
-		//fmt.Printf("\nBacking up resources for groupVersion %v\n", gv)
-		//fmt.Printf("\nres list: %v\n", resourceList)
 		for _, res := range resourceList {
-			//fmt.Printf("\nresource: %v\n", res.Name)
 			if skipBackup(res) {
 				continue
 			}
@@ -220,7 +212,6 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 				continue
 			}
 			filteredObjects = append(filteredObjects, resObj)
-			//fmt.Printf("\nMatched resource name %v for namesregex %v\n", name, filter.ResourceNameRegex)
 		}
 	}
 	var filteredNs []string
@@ -237,7 +228,6 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 			}
 			filteredObjects = append(filteredObjects, resObj)
 			filteredNs = append(filteredNs, namespace)
-			//fmt.Printf("\nMatched resource ns %v for nsregex %v\n", namespace, filter.NamespaceRegex)
 		}
 	}
 	if res.Namespaced && len(filteredNs) > 0 {
@@ -262,12 +252,8 @@ func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res
 			}
 		}
 
-		objName := metadata["name"].(string)
-		for _, field := range []string{"uid", "resourceVersion", "generation", "creationTimestamp"} {
-			delete(metadata, field)
-		}
-
 		currObjLabels := metadata["labels"]
+		objName := metadata["name"].(string)
 		if resObj.Object["metadata"].(map[string]interface{})["uid"] != nil {
 			oidLabel := map[string]string{common.OldUIDReferenceLabel: resObj.Object["metadata"].(map[string]interface{})["uid"].(string)}
 			if currObjLabels == nil {
@@ -277,6 +263,10 @@ func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res
 				currLabels[common.OldUIDReferenceLabel] = resObj.Object["metadata"].(map[string]interface{})["uid"].(string)
 				metadata["labels"] = currLabels
 			}
+		}
+
+		for _, field := range []string{"uid", "resourceVersion", "generation", "creationTimestamp"} {
+			delete(metadata, field)
 		}
 
 		gr := schema.ParseGroupResource(res.Name + "." + res.Group)
