@@ -22,6 +22,7 @@ import (
 )
 
 type handler struct {
+	ctx                     context.Context
 	backups                 backupControllers.BackupController
 	backupTemplates         backupControllers.BackupTemplateController
 	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController
@@ -40,6 +41,7 @@ func Register(
 	dynamicInterface dynamic.Interface) {
 
 	controller := &handler{
+		ctx:                     ctx,
 		backups:                 backups,
 		backupTemplates:         backupTemplates,
 		backupEncryptionConfigs: backupEncryptionConfigs,
@@ -114,6 +116,10 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath, ownerDi
 		if len(filter.Kinds) == 0 {
 			// user gave kinds in regex, updated kinds as a list of resource names that exactly matched the regex
 			for _, res := range resourceList {
+				if strings.Contains(res.Name, "/status") {
+					// example "customresourcedefinitions/status"
+					continue
+				}
 				filter.Kinds = append(filter.Kinds, res.Name)
 			}
 			filters[ind] = filter
@@ -153,9 +159,6 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 	} else {
 		// else filter out resource with regex match
 		for _, res := range resources.APIResources {
-			if filter.ApiGroup == "apiextensions.k8s.io/v1" {
-				fmt.Printf("\ncollecting resources for CRDs\n")
-			}
 			matched, err := regexp.MatchString(filter.KindsRegex, res.Name)
 			if err != nil {
 				return resourceList, err
@@ -172,34 +175,31 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 
 func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, backupPath, ownerDirPath, dependentDirPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
 	var fieldSelector string
+	var filteredObjects []unstructured.Unstructured
 	gvr := gv.WithResource(res.Name)
 	var dr dynamic.ResourceInterface
 	dr = h.dynamicClient.Resource(gvr)
 
-	// TODO: which context to use
-	ctx := context.Background()
 	// TODO: use single version to get consistent backup
 	if len(filter.ResourceNames) > 0 {
 		for _, ns := range filter.ResourceNames {
 			fieldSelector += fmt.Sprintf("metadata.name=%s,", ns)
 		}
 	}
-	if res.Namespaced {
-		// filter based on namespaces if those fields are given
-		if len(filter.Namespaces) > 0 {
-			for _, ns := range filter.Namespaces {
-				fieldSelector += fmt.Sprintf("metadata.namespace=%s,", ns)
-			}
+	// filter based on namespaces if those fields are given
+	if len(filter.Namespaces) > 0 {
+		for _, ns := range filter.Namespaces {
+			fieldSelector += fmt.Sprintf("metadata.namespace=%s,", ns)
 		}
 	}
+
 	strings.TrimRight(fieldSelector, ",")
 	// resObjects are the objects from those namespaces and with those names after fieldSelectors applied
-	resObjects, err := dr.List(ctx, k8sv1.ListOptions{FieldSelector: fieldSelector})
+	resObjects, err := dr.List(h.ctx, k8sv1.ListOptions{FieldSelector: fieldSelector})
 	if err != nil {
 		return err
 	}
 	// check for regex
-	var filteredObjects []unstructured.Unstructured
 	if filter.ResourceNameRegex != "" {
 		for _, resObj := range resObjects.Items {
 			metadata := resObj.Object["metadata"].(map[string]interface{})

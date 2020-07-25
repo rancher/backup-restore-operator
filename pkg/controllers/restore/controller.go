@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -15,8 +14,11 @@ import (
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
 	common "github.com/mrajashree/backup/pkg/controllers"
 	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
+	"github.com/rancher/wrangler/pkg/slice"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
@@ -24,6 +26,7 @@ import (
 )
 
 type handler struct {
+	ctx                     context.Context
 	restores                backupControllers.RestoreController
 	backups                 backupControllers.BackupController
 	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController
@@ -40,6 +43,7 @@ func Register(
 	dynamicInterface dynamic.Interface) {
 
 	controller := &handler{
+		ctx:                     ctx,
 		restores:                restores,
 		backups:                 backups,
 		backupEncryptionConfigs: backupEncryptionConfigs,
@@ -80,7 +84,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	returnErr := h.restoreOwners(backupPath, transformerMap)
 	if returnErr != nil {
 		fmt.Printf("Controller will retry because of error %v", returnErr)
-		//return restore, err
+		return restore, err
 	}
 
 	// now create dependents, for each dependent individual kubectl apply, get owner uid label. Get new obj UID and update
@@ -179,12 +183,14 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 				return restore, fmt.Errorf("error writing original ownerRefs to file: %v", err)
 			}
 		}
-
 	}
 	if dependentRestoreErr != nil {
 		return restore, dependentRestoreErr
 	}
-	h.prune(backupPath)
+	if err := h.prune(backupPath); err != nil {
+		fmt.Printf("\nerror pruning: %v\n", err)
+	}
+	fmt.Printf("\nDone restoring\n")
 	return restore, nil
 }
 
@@ -199,60 +205,124 @@ func (h *handler) prune(backupPath string) error {
 		return fmt.Errorf("error unmarshaling backup filters file: %v", err)
 	}
 	resourceToPrune := make(map[string][]string)
+	resourceToPruneNamespaced := make(map[string][]string)
 	for _, filter := range backupFilters {
 		//if !filter.Prune {
 		//	continue
 		//}
 		groupVersion := filter.ApiGroup
 		resources := filter.Kinds
-		// for now, testing with only namespaces
-		if groupVersion != "v1" {
-			continue
-		}
 		for _, res := range resources {
-			if res != "namespaces" {
-				continue
-			}
-			// evaluate all current ns within given regex
+			var fieldSelector string
+			var filteredObjects []unstructured.Unstructured
+
 			gv, _ := schema.ParseGroupVersion(groupVersion)
-			gvr := gv.WithResource("namespaces")
+			gvr := gv.WithResource(res)
 			var dr dynamic.ResourceInterface
 			dr = h.dynamicClient.Resource(gvr)
-			namespacesList, err := dr.List(context.Background(), k8sv1.ListOptions{})
+
+			// filter based on namespaces if given
+			if len(filter.Namespaces) > 0 {
+				for _, ns := range filter.Namespaces {
+					fieldSelector += fmt.Sprintf("metadata.namespace=%s,", ns)
+				}
+			}
+
+			resObjects, err := dr.List(context.Background(), k8sv1.ListOptions{FieldSelector: fieldSelector})
 			if err != nil {
 				return err
 			}
-			//TODO  check in owners and dependents
-			nsBackupPath := filepath.Join(backupPath, "owners", res+"."+gv.Group+"#"+gv.Version)
-			for _, currNs := range namespacesList.Items {
-				name := currNs.Object["metadata"].(map[string]interface{})["name"].(string)
-				nameMatched, err := regexp.MatchString(filter.ResourceNameRegex, name)
-				if err != nil {
-					return err
+
+			if filter.NamespaceRegex != "" {
+				for _, resObj := range resObjects.Items {
+					metadata := resObj.Object["metadata"].(map[string]interface{})
+					namespace := metadata["namespace"].(string)
+					nsMatched, err := regexp.MatchString(filter.NamespaceRegex, namespace)
+					if err != nil {
+						return err
+					}
+					if !nsMatched {
+						// resource does not match up to filter, ignore it
+						continue
+					}
+					filteredObjects = append(filteredObjects, resObj)
 				}
-				if !nameMatched {
+			} else {
+				filteredObjects = resObjects.Items
+			}
+
+			for _, obj := range filteredObjects {
+				metadata := obj.Object["metadata"].(map[string]interface{})
+				name := metadata["name"].(string)
+				namespace, _ := metadata["namespace"].(string)
+				// resource doesn't match to this filter, so ignore it
+				if len(filter.ResourceNames) > 0 && !slice.ContainsString(filter.ResourceNames, name) {
 					continue
 				}
-				nsFileName := name + ".json"
-				// check if file with this name exists in nsbackupPath
-				_, err = os.Stat(filepath.Join(nsBackupPath, nsFileName))
-				if os.IsNotExist(err) {
-					fmt.Printf("\nMarking %v for deletion\n", name)
-					resourceToPrune[res] = append(resourceToPrune[res], name)
+				if filter.ResourceNameRegex != "" {
+					nameMatched, err := regexp.MatchString(filter.ResourceNameRegex, name)
+					if err != nil {
+						return err
+					}
+					// resource doesn't match to this filter, so ignore it
+					if !nameMatched {
+						continue
+					}
+				}
 
-				} else {
-					fmt.Printf("\nfound ns %v in backup\n", name)
+				// resource matches to this filter, check if it exists in the backup
+				// first check if it's a CRD or a namespace
+				var backupObjectPaths []string
+				for _, path := range []string{"customresourcedefinitions", "namespaces"} {
+					objBackupPath := filepath.Join(backupPath, path)
+					backupObjectPaths = append(backupObjectPaths, objBackupPath)
+				}
+				for _, path := range []string{"owners", "dependents"} {
+					objBackupPath := filepath.Join(backupPath, path, res+"."+gv.Group+"#"+gv.Version)
+					backupObjectPaths = append(backupObjectPaths, objBackupPath)
+				}
+				exists := false
+				for _, path := range backupObjectPaths {
+					fileName := name + ".json"
+					_, err := os.Stat(filepath.Join(path, fileName))
+					if err == nil || os.IsExist(err) {
+						exists = true
+						continue
+					}
+				}
+				if !exists {
+					if namespace != "" {
+						resourceToPruneNamespaced[res] = append(resourceToPruneNamespaced[res], namespace+"/"+name)
+					} else {
+						resourceToPrune[res] = append(resourceToPrune[res], name)
+					}
 				}
 			}
+			fmt.Printf("\ndone gathering prune resourceNames for res %v\n", res)
 		}
 	}
 
+	fmt.Printf("\nneed to delete following resources: %v\n", resourceToPrune)
+	fmt.Printf("\nneed to delete following namespaced resources: %v\n", resourceToPruneNamespaced)
 	for resource, names := range resourceToPrune {
 		for _, name := range names {
 			// not supposed to be here, so delete this resource
 			out, err := exec.Command("kubectl", "delete", resource, name).CombinedOutput()
 			if err != nil {
 				fmt.Printf("\nError deleting resource %v: %v\n", name, string(out)+"\n"+err.Error())
+			}
+		}
+	}
+	fmt.Printf("\nneed to delete following namespaced resources: %v\n", resourceToPruneNamespaced)
+	for resource, names := range resourceToPruneNamespaced {
+		for _, nsName := range names {
+			split := strings.SplitN(nsName, "/", 2)
+			ns := split[0]
+			name := split[1]
+			// not supposed to be here, so delete this resource
+			out, err := exec.Command("kubectl", "delete", resource, name, "-n", ns).CombinedOutput()
+			if err != nil {
+				fmt.Printf("\nError deleting namespaced resource %v: %v\n", name, string(out)+"\n"+err.Error())
 			}
 		}
 	}
@@ -336,23 +406,35 @@ func decryptAndRestore(resourceDirPath string, decryptionTransformer value.Trans
 				logrus.Info("Error during restore, retrying with validate=false")
 				retryop, err := exec.Command("kubectl", "apply", "-f", resourceFileName, "--validate=false").CombinedOutput()
 				if err != nil {
+					// write the original encrypted secret before returning
+					err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
+					if err != nil {
+						return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, err)
+					}
 					return fmt.Errorf("error when restoring %v with validate=false: %v", resourceFileName, string(retryop)+err.Error())
 				} else {
 					logrus.Info("Retry with validate=false succeeded")
-					continue
 				}
-			}
-			if strings.Contains(string(output), "Too long: must have at most 262144 bytes") {
+			} else if strings.Contains(string(output), "Too long: must have at most 262144 bytes") {
 				logrus.Info("Error during restore, retrying with replace")
 				retryop, err := exec.Command("kubectl", "replace", "-f", resourceFileName).CombinedOutput()
 				if err != nil {
+					// write the original encrypted secret before returning
+					err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
+					if err != nil {
+						return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, err)
+					}
 					return fmt.Errorf("error when restoring %v with replace: %v", resourceFileName, string(retryop)+err.Error())
 				} else {
 					logrus.Info("Retry with kubectl replace succeeded")
-					continue
 				}
+			} else {
+				err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
+				if err != nil {
+					return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, err)
+				}
+				return fmt.Errorf("error restoring secret %v: %v", resourceFileName, string(output)+err.Error())
 			}
-			return fmt.Errorf("error restoring secret %v: %v", resourceFileName, string(output)+err.Error())
 		}
 		err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
 		if err != nil {
