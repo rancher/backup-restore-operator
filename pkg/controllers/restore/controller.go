@@ -372,6 +372,7 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 				name := metadata["name"].(string)
 				namespace, _ := metadata["namespace"].(string)
 				// resource doesn't match to this filter, so ignore it
+				// TODO: check if exact name match logic makes sense
 				if len(filter.ResourceNames) > 0 && !slice.ContainsString(filter.ResourceNames, name) {
 					continue
 				}
@@ -381,6 +382,7 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 						return err
 					}
 					// resource doesn't match to this filter, so ignore it
+					// for instance for rancher, we want to inlude all p-xxxx ns, so if the ns is totally different, ignore it
 					if !nameMatched {
 						continue
 					}
@@ -403,6 +405,26 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 					_, err := os.Stat(filepath.Join(path, fileName))
 					if err == nil || os.IsExist(err) {
 						exists = true
+						// check if this resource was marked for deletion for a previous filter
+						if namespace != "" {
+							contains, index := containsString(resourceToPruneNamespaced[res], namespace+"/"+name)
+							if contains {
+								if index == len(resourceToPruneNamespaced[res]) {
+									resourceToPruneNamespaced[res] = resourceToPruneNamespaced[res][:index]
+								} else {
+									resourceToPruneNamespaced[res] = append(resourceToPruneNamespaced[res][:index], resourceToPruneNamespaced[res][index+1:]...)
+								}
+							}
+						} else {
+							contains, index := containsString(resourceToPrune[res], name)
+							if contains {
+								if index == len(resourceToPrune[res]) {
+									resourceToPrune[res] = resourceToPrune[res][:index]
+								} else {
+									resourceToPrune[res] = append(resourceToPrune[res][:index], resourceToPrune[res][index+1:]...)
+								}
+							}
+						}
 						continue
 					}
 				}
@@ -515,3 +537,12 @@ func (h *handler) restoreResource(resourcePath string) error {
 //	return err
 //}
 //fmt.Printf("\nout: %v\n", string(stdOut))
+
+func containsString(slice []string, item string) (bool, int) {
+	for ind, j := range slice {
+		if j == item {
+			return true, ind
+		}
+	}
+	return false, 0
+}
