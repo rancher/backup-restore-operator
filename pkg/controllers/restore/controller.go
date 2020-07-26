@@ -320,8 +320,8 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 	if err := json.Unmarshal(filtersBytes, &backupFilters); err != nil {
 		return fmt.Errorf("error unmarshaling backup filters file: %v", err)
 	}
-	resourceToPrune := make(map[string][]string)
-	resourceToPruneNamespaced := make(map[string][]string)
+	resourceToPrune := make(map[string]map[string]bool)
+	resourceToPruneNamespaced := make(map[string]map[string]bool)
 	for _, filter := range backupFilters {
 		//if !filter.Prune {
 		//	continue
@@ -407,22 +407,13 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 						exists = true
 						// check if this resource was marked for deletion for a previous filter
 						if namespace != "" {
-							contains, index := containsString(resourceToPruneNamespaced[res], namespace+"/"+name)
-							if contains {
-								if index == len(resourceToPruneNamespaced[res]) {
-									resourceToPruneNamespaced[res] = resourceToPruneNamespaced[res][:index]
-								} else {
-									resourceToPruneNamespaced[res] = append(resourceToPruneNamespaced[res][:index], resourceToPruneNamespaced[res][index+1:]...)
-								}
+							if _, ok := resourceToPruneNamespaced[res][namespace+"/"+name]; ok {
+								// remove it from the map of resources to be pruned
+								delete(resourceToPruneNamespaced[res], namespace+"/"+name)
 							}
 						} else {
-							contains, index := containsString(resourceToPrune[res], name)
-							if contains {
-								if index == len(resourceToPrune[res]) {
-									resourceToPrune[res] = resourceToPrune[res][:index]
-								} else {
-									resourceToPrune[res] = append(resourceToPrune[res][:index], resourceToPrune[res][index+1:]...)
-								}
+							if _, ok := resourceToPrune[res][name]; ok {
+								delete(resourceToPrune[res], name)
 							}
 						}
 						continue
@@ -430,9 +421,15 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 				}
 				if !exists {
 					if namespace != "" {
-						resourceToPruneNamespaced[res] = append(resourceToPruneNamespaced[res], namespace+"/"+name)
+						if _, ok := resourceToPruneNamespaced[res][namespace+"/"+name]; ok {
+							continue
+						}
+						resourceToPruneNamespaced[res][namespace+"/"+name] = true
 					} else {
-						resourceToPrune[res] = append(resourceToPrune[res], name)
+						if _, ok := resourceToPrune[res][name]; ok {
+							continue
+						}
+						resourceToPrune[res][name] = true
 					}
 				}
 			}
@@ -442,7 +439,7 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 
 	fmt.Printf("\nneed to delete following resources: %v\n", resourceToPrune)
 	fmt.Printf("\nneed to delete following namespaced resources: %v\n", resourceToPruneNamespaced)
-	go func(ctx context.Context, resourceToPrune map[string][]string, resourceToPruneNamespaced map[string][]string, pruneTimeout int) {
+	go func(ctx context.Context, resourceToPrune map[string]map[string]bool, resourceToPruneNamespaced map[string]map[string]bool, pruneTimeout int) {
 		deleteResources(resourceToPrune, resourceToPruneNamespaced, false)
 		time.Sleep(time.Duration(pruneTimeout) * time.Second)
 		logrus.Infof("Ensuring resources to prune are deleted")
@@ -451,9 +448,9 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 	return nil
 }
 
-func deleteResources(resourceToPrune map[string][]string, resourceToPruneNamespaced map[string][]string, removeFinalizers bool) {
+func deleteResources(resourceToPrune map[string]map[string]bool, resourceToPruneNamespaced map[string]map[string]bool, removeFinalizers bool) {
 	for resource, names := range resourceToPrune {
-		for _, name := range names {
+		for name := range names {
 			if removeFinalizers {
 				getCMDOp, err := exec.Command("kubectl", "get", resource, name).CombinedOutput()
 				if err != nil && strings.Contains(string(getCMDOp), "NotFound") {
@@ -480,7 +477,7 @@ func deleteResources(resourceToPrune map[string][]string, resourceToPruneNamespa
 	}
 
 	for resource, names := range resourceToPruneNamespaced {
-		for _, nsName := range names {
+		for nsName := range names {
 			split := strings.SplitN(nsName, "/", 2)
 			ns := split[0]
 			name := split[1]
@@ -537,12 +534,3 @@ func (h *handler) restoreResource(resourcePath string) error {
 //	return err
 //}
 //fmt.Printf("\nout: %v\n", string(stdOut))
-
-func containsString(slice []string, item string) (bool, int) {
-	for ind, j := range slice {
-		if j == item {
-			return true, ind
-		}
-	}
-	return false, 0
-}
