@@ -10,17 +10,14 @@ import (
 	"fmt"
 	"github.com/mrajashree/backup/pkg/controllers/backup"
 	"github.com/mrajashree/backup/pkg/controllers/restore"
-	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/client-go/dynamic"
-	"os"
-
 	"github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io"
 	"github.com/rancher/wrangler/pkg/kubeconfig"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/rancher/wrangler/pkg/start"
+	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/client-go/dynamic"
 	//"github.com/rancher/wrangler/pkg/start"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
 )
 
 var (
@@ -29,30 +26,15 @@ var (
 	KubeConfig string
 )
 
-func main() {
-	app := cli.NewApp()
-	app.Name = "testy"
-	app.Version = fmt.Sprintf("%s (%s)", Version, GitCommit)
-	app.Usage = "testy needs help!"
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "kubeconfig",
-			EnvVar:      "KUBECONFIG",
-			Destination: &KubeConfig,
-		},
-	}
-	app.Action = run
-
-	if err := app.Run(os.Args); err != nil {
-		logrus.Fatal(err)
-	}
+func init() {
+	flag.StringVar(&KubeConfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
+	flag.Parse()
 }
 
-func run(c *cli.Context) {
-	flag.Parse()
-
+func main() {
 	logrus.Info("Starting controller")
 	ctx := signals.SetupSignalHandler(context.Background())
+	fmt.Printf("kubeconfig: %v\n", KubeConfig)
 
 	kubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
 	if err != nil {
