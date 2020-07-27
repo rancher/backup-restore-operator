@@ -25,8 +25,24 @@ spec:
               properties:
                 local:
                   type: string
-                objectStore:
-                  type: string
+                s3objectStore:
+                  nullable: true
+                  properties:
+                    accessKey:
+                      type: string
+                    bucketName:
+                      type: string
+                    endpoint:
+                      type: string
+                    endpointCa:
+                      type: string
+                    folder:
+                      type: string
+                    region:
+                      type: string
+                    secretKey:
+                      type: string
+                  type: object
               type: object
             forcePruneTimeout:
               type: integer

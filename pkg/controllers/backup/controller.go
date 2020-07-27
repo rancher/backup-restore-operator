@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 	"strings"
 
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
-	common "github.com/mrajashree/backup/pkg/controllers"
+	util "github.com/mrajashree/backup/pkg/controllers"
 	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,22 +57,29 @@ func Register(
 }
 
 func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error) {
-	// TODO: get objectStore details too
-	backupPath := backup.Spec.Local
-	backupInfo, err := os.Stat(backupPath)
-	if err == nil && backupInfo.IsDir() {
+	if condition.Cond(v1.BackupConditionReady).IsTrue(backup) && condition.Cond(v1.BackupConditionUploaded).IsTrue(backup) {
 		return backup, nil
 	}
-	err = os.Mkdir(backupPath, os.ModePerm)
+	// TODO: get objectStore details too
+	_, err := os.Stat(util.BackupBaseDir)
+	if os.IsNotExist(err) {
+		err := os.Mkdir(util.BackupBaseDir, os.ModePerm)
+		if err != nil {
+			return backup, fmt.Errorf("error creating backup dir: %v", err)
+		}
+	}
+	var tmpBackupPath = filepath.Join(util.BackupBaseDir, backup.Spec.BackupFileName)
+
+	err = os.Mkdir(tmpBackupPath, os.ModePerm)
 	if err != nil {
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
-	ownerDirPath := backupPath + "/owners"
+	ownerDirPath := tmpBackupPath + "/owners"
 	err = os.Mkdir(ownerDirPath, os.ModePerm)
 	if err != nil {
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
-	dependentDirPath := backupPath + "/dependents"
+	dependentDirPath := tmpBackupPath + "/dependents"
 	err = os.Mkdir(dependentDirPath, os.ModePerm)
 	if err != nil {
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
@@ -81,7 +89,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if err != nil {
 		return backup, err
 	}
-	transformerMap, err := common.GetEncryptionTransformers(config)
+	transformerMap, err := util.GetEncryptionTransformers(config)
 	if err != nil {
 		return backup, err
 	}
@@ -90,13 +98,13 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if err != nil {
 		return backup, err
 	}
-	err = h.gatherResources(template.BackupFilters, backupPath, ownerDirPath, dependentDirPath, transformerMap)
-	logrus.Infof("Done with backup")
+	err = h.gatherResources(template.BackupFilters, tmpBackupPath, ownerDirPath, dependentDirPath, transformerMap)
+
 	filters, err := json.Marshal(template.BackupFilters)
 	if err != nil {
 		return backup, err
 	}
-	filterFile, err := os.Create(filepath.Join(backupPath, filepath.Base("filters.json")))
+	filterFile, err := os.Create(filepath.Join(tmpBackupPath, filepath.Base("filters.json")))
 	if err != nil {
 		return backup, fmt.Errorf("error creating filters file: %v", err)
 	}
@@ -104,6 +112,42 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if _, err := filterFile.Write(filters); err != nil {
 		return backup, fmt.Errorf("error writing JSON to filters file: %v", err)
 	}
+	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
+	gzipFile := backup.Spec.BackupFileName + ".tgz"
+	if backup.Spec.Local != "" {
+		// for local, to send backup tar to given local path, use that as the path when creating compressed file
+		if err := util.CreateTarAndGzip(tmpBackupPath, backup.Spec.Local, gzipFile); err != nil {
+			return backup, err
+		}
+		condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
+		if err := os.RemoveAll(tmpBackupPath); err != nil {
+			return backup, err
+		}
+		if updBackup, err := h.backups.UpdateStatus(backup); err != nil {
+			return updBackup, err
+		}
+	} else if backup.Spec.ObjectStore != nil {
+		// for objectstore, if folder name exists, use that as path, else use backupBase
+		if backup.Spec.ObjectStore.Folder != "" {
+			if err := os.Mkdir(filepath.Join(util.BackupBaseDir, backup.Spec.ObjectStore.Folder), os.ModePerm); err != nil {
+				return backup, err
+			}
+			gzipFile = fmt.Sprintf("%s/%s", backup.Spec.ObjectStore.Folder, gzipFile)
+		}
+		if err := util.CreateTarAndGzip(tmpBackupPath, util.BackupBaseDir, gzipFile); err != nil {
+			return backup, err
+		}
+
+		s3Client, err := util.SetS3Service(backup.Spec.ObjectStore, false)
+		if err != nil {
+			return backup, err
+		}
+		if err := util.UploadBackupFile(s3Client, backup.Spec.ObjectStore.BucketName, gzipFile, filepath.Join(util.BackupBaseDir, gzipFile)); err != nil {
+			return backup, err
+		}
+	}
+	condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
+	logrus.Infof("Done with backup")
 
 	return backup, err
 }
@@ -256,12 +300,12 @@ func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res
 		currObjLabels := metadata["labels"]
 		objName := metadata["name"].(string)
 		if resObj.Object["metadata"].(map[string]interface{})["uid"] != nil {
-			oidLabel := map[string]string{common.OldUIDReferenceLabel: resObj.Object["metadata"].(map[string]interface{})["uid"].(string)}
+			oidLabel := map[string]string{util.OldUIDReferenceLabel: resObj.Object["metadata"].(map[string]interface{})["uid"].(string)}
 			if currObjLabels == nil {
 				metadata["labels"] = oidLabel
 			} else {
 				currLabels := currObjLabels.(map[string]interface{})
-				currLabels[common.OldUIDReferenceLabel] = resObj.Object["metadata"].(map[string]interface{})["uid"].(string)
+				currLabels[util.OldUIDReferenceLabel] = resObj.Object["metadata"].(map[string]interface{})["uid"].(string)
 				metadata["labels"] = currLabels
 			}
 		}

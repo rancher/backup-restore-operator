@@ -17,6 +17,7 @@ type Backup struct {
 }
 
 type BackupSpec struct {
+	BackupFileName                  string `json:"backupFileName"`
 	BackupStorageLocation           `json:"backupStorageLocation"`
 	BackupTemplate                  string `json:"backupTemplate"`
 	BackupEncryptionConfigName      string `json:"backupEncryptionConfigName"`
@@ -45,17 +46,29 @@ type BackupFilter struct {
 	Prune             bool     `json:"prune"`
 }
 
+var (
+	BackupConditionReady    string
+	BackupConditionUploaded string
+)
+
 type BackupStatus struct {
 	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
 	Summary    string                              `json:"summary,omitempty"`
 }
 
 type BackupStorageLocation struct {
-	ObjectStore string `json:"objectStore"`
-	Local       string `json:"local"`
+	ObjectStore *ObjectStore `json:"s3objectStore"`
+	Local       string       `json:"local"`
 }
 
-type BackupObjectStore struct {
+type ObjectStore struct {
+	Endpoint   string `json:"endpoint"`
+	EndpointCA string `json:"endpointCa"`
+	AccessKey  string `json:"accessKey"`
+	SecretKey  string `json:"secretKey"`
+	BucketName string `json:"bucketName"`
+	Region     string `json:"region"`
+	Folder     string `json:"folder"`
 }
 
 // +genclient
