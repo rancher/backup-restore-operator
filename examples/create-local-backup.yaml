@@ -20,11 +20,12 @@ metadata:
 apiVersion: backupper.cattle.io/v1
 kind: Backup
 metadata:
-  name: secret-encrypt-backup
+  name: test-tgz-backup
   namespace: default
 spec:
+  backupFileName: tgz-backup
   backupStorageLocation:
-    local: secret-encrypt-backup
+    local: test-backup-location-local
   backupTemplate: mcm-backup-template
-  backupEncryptionConfigName: testconfig
-  backupEncryptionConfigNamespace: default
+  encryptionConfigName: testconfig
+  encryptionConfigNamespace: default

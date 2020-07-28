@@ -6,8 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path"
 	"strings"
 
 	"github.com/minio/minio-go/v6"
@@ -22,12 +25,12 @@ const (
 	contentType     = "application/gzip"
 )
 
-func SetS3Service(bc *v1.ObjectStore, useSSL bool) (*minio.Client, error) {
+func SetS3Service(bc *v1.ObjectStore, accessKey, secretKey string, useSSL bool) (*minio.Client, error) {
 	// Initialize minio client object.
 	log.WithFields(log.Fields{
 		"s3-endpoint":    bc.Endpoint,
 		"s3-bucketName":  bc.BucketName,
-		"s3-accessKey":   bc.AccessKey,
+		"s3-accessKey":   accessKey,
 		"s3-region":      bc.Region,
 		"s3-endpoint-ca": bc.EndpointCA,
 		"s3-folder":      bc.Folder,
@@ -40,14 +43,14 @@ func SetS3Service(bc *v1.ObjectStore, useSSL bool) (*minio.Client, error) {
 	bucketLookup := getBucketLookupType(bc.Endpoint)
 	for retries := 0; retries <= s3ServerRetries; retries++ {
 		// if the s3 access key and secret is not set use iam role
-		if len(bc.AccessKey) == 0 && len(bc.SecretKey) == 0 {
+		if len(accessKey) == 0 && len(secretKey) == 0 {
 			log.Info("invoking set s3 service client use IAM role")
 			cred = credentials.NewIAM("")
 			if bc.Endpoint == "" {
 				bc.Endpoint = s3Endpoint
 			}
 		} else {
-			cred = credentials.NewStatic(bc.AccessKey, bc.SecretKey, "", credentials.SignatureDefault)
+			cred = credentials.NewStatic(accessKey, secretKey, "", credentials.SignatureDefault)
 		}
 		client, err = minio.NewWithOptions(bc.Endpoint, &minio.Options{
 			Creds:        cred,
@@ -109,6 +112,59 @@ func UploadBackupFile(svc *minio.Client, bucketName, fileName, filePath string) 
 		break
 	}
 	return nil
+}
+
+func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (string, error) {
+	var filename string
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	objectCh := client.ListObjectsV2(bucket, prefix, false, doneCh)
+	for object := range objectCh {
+		if object.Err != nil {
+			log.Errorf("failed to list objects in backup buckets [%s]: %v", bucket, object.Err)
+			return "", object.Err
+		}
+		fmt.Printf("\nobject.Key: %v\n", object.Key)
+		fmt.Printf("\nprefix: %v\n", prefix)
+		if prefix == object.Key {
+			filename = object.Key
+			break
+		}
+	}
+	if len(filename) == 0 {
+		return "", fmt.Errorf("failed to download s3 backup: no backups found")
+	}
+	// if folder is included, strip it so it doesnt end up in a folder on the host itself
+	targetFilename := path.Base(filename)
+	targetFileLocation := fmt.Sprintf("%s/%s", BackupBaseDir, targetFilename)
+	var object *minio.Object
+	var err error
+	for retries := 0; retries <= s3ServerRetries; retries++ {
+		object, err = client.GetObject(bucket, filename, minio.GetObjectOptions{})
+		if err != nil {
+			log.Infof("Failed to download backup file [%s]: %v, retried %d times", filename, err, retries)
+			if retries >= s3ServerRetries {
+				return "", fmt.Errorf("unable to download backup file for [%s]: %v", filename, err)
+			}
+		}
+		log.Infof("Successfully downloaded [%s]", filename)
+	}
+
+	localFile, err := os.Create(targetFileLocation)
+	if err != nil {
+		return "", fmt.Errorf("failed to create local file [%s]: %v", targetFileLocation, err)
+	}
+	defer localFile.Close()
+
+	if _, err = io.Copy(localFile, object); err != nil {
+		return "", fmt.Errorf("failed to copy retrieved object to local file [%s]: %v", targetFileLocation, err)
+	}
+	if err := os.Chmod(targetFileLocation, 0600); err != nil {
+		return "", fmt.Errorf("changing permission of the locally downloaded snapshot failed")
+	}
+
+	return targetFilename, nil
 }
 
 func setTransportCA(tr http.RoundTripper, endpointCA string) (http.RoundTripper, error) {

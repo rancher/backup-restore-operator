@@ -1,0 +1,17 @@
+apiVersion: backupper.cattle.io/v1
+kind: Backup
+metadata:
+  name: s3ver4-backup
+  namespace: default
+spec:
+  backupFileName: tests4tar
+  backupStorageLocation:
+    s3objectStore:
+      credentials: default/creds
+      bucketName: rajashree-backup-test
+      folder: ecm1
+      region: us-west-2
+      endpoint: s3.us-west-2.amazonaws.com
+  backupTemplate: mcm-backup-template
+  encryptionConfigName: testconfig
+  encryptionConfigNamespace: default

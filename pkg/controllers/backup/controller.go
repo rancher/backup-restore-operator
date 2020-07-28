@@ -85,7 +85,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
 	//h.discoveryClient.ServerGroupsAndResources()
-	config, err := h.backupEncryptionConfigs.Get(backup.Spec.BackupEncryptionConfigNamespace, backup.Spec.BackupEncryptionConfigName, k8sv1.GetOptions{})
+	config, err := h.backupEncryptionConfigs.Get(backup.Spec.EncryptionConfigNamespace, backup.Spec.EncryptionConfigName, k8sv1.GetOptions{})
 	if err != nil {
 		return backup, err
 	}
@@ -113,40 +113,24 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, fmt.Errorf("error writing JSON to filters file: %v", err)
 	}
 	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
-	gzipFile := backup.Spec.BackupFileName + ".tgz"
+	gzipFile := backup.Spec.BackupFileName + ".tar.gz"
 	if backup.Spec.Local != "" {
 		// for local, to send backup tar to given local path, use that as the path when creating compressed file
 		if err := util.CreateTarAndGzip(tmpBackupPath, backup.Spec.Local, gzipFile); err != nil {
 			return backup, err
 		}
-		condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
-		if err := os.RemoveAll(tmpBackupPath); err != nil {
-			return backup, err
-		}
-		if updBackup, err := h.backups.UpdateStatus(backup); err != nil {
-			return updBackup, err
-		}
 	} else if backup.Spec.ObjectStore != nil {
-		// for objectstore, if folder name exists, use that as path, else use backupBase
-		if backup.Spec.ObjectStore.Folder != "" {
-			if err := os.Mkdir(filepath.Join(util.BackupBaseDir, backup.Spec.ObjectStore.Folder), os.ModePerm); err != nil {
-				return backup, err
-			}
-			gzipFile = fmt.Sprintf("%s/%s", backup.Spec.ObjectStore.Folder, gzipFile)
-		}
-		if err := util.CreateTarAndGzip(tmpBackupPath, util.BackupBaseDir, gzipFile); err != nil {
-			return backup, err
-		}
-
-		s3Client, err := util.SetS3Service(backup.Spec.ObjectStore, false)
-		if err != nil {
-			return backup, err
-		}
-		if err := util.UploadBackupFile(s3Client, backup.Spec.ObjectStore.BucketName, gzipFile, filepath.Join(util.BackupBaseDir, gzipFile)); err != nil {
+		if err := h.uploadToS3(backup, tmpBackupPath, gzipFile); err != nil {
 			return backup, err
 		}
 	}
 	condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
+	if err := os.RemoveAll(tmpBackupPath); err != nil {
+		return backup, err
+	}
+	if updBackup, err := h.backups.UpdateStatus(backup); err != nil {
+		return updBackup, err
+	}
 	logrus.Infof("Done with backup")
 
 	return backup, err

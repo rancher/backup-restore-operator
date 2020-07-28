@@ -15,11 +15,7 @@ spec:
       properties:
         spec:
           properties:
-            backupEncryptionConfigName:
-              type: string
-            backupEncryptionConfigNamespace:
-              type: string
-            backupName:
+            backupFileName:
               type: string
             backupStorageLocation:
               properties:
@@ -28,9 +24,9 @@ spec:
                 s3objectStore:
                   nullable: true
                   properties:
-                    accessKey:
-                      type: string
                     bucketName:
+                      type: string
+                    credentials:
                       type: string
                     endpoint:
                       type: string
@@ -40,10 +36,12 @@ spec:
                       type: string
                     region:
                       type: string
-                    secretKey:
-                      type: string
                   type: object
               type: object
+            encryptionConfigName:
+              type: string
+            encryptionConfigNamespace:
+              type: string
             forcePruneTimeout:
               type: integer
             pruneRestore:

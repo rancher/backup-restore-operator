@@ -17,11 +17,11 @@ type Backup struct {
 }
 
 type BackupSpec struct {
-	BackupFileName                  string `json:"backupFileName"`
-	BackupStorageLocation           `json:"backupStorageLocation"`
-	BackupTemplate                  string `json:"backupTemplate"`
-	BackupEncryptionConfigName      string `json:"backupEncryptionConfigName"`
-	BackupEncryptionConfigNamespace string `json:"backupEncryptionConfigNamespace"`
+	BackupFileName            string `json:"backupFileName"`
+	BackupStorageLocation     `json:"backupStorageLocation"`
+	BackupTemplate            string `json:"backupTemplate"`
+	EncryptionConfigName      string `json:"encryptionConfigName"`
+	EncryptionConfigNamespace string `json:"encryptionConfigNamespace"`
 }
 
 // +genclient
@@ -62,13 +62,12 @@ type BackupStorageLocation struct {
 }
 
 type ObjectStore struct {
-	Endpoint   string `json:"endpoint"`
-	EndpointCA string `json:"endpointCa"`
-	AccessKey  string `json:"accessKey"`
-	SecretKey  string `json:"secretKey"`
-	BucketName string `json:"bucketName"`
-	Region     string `json:"region"`
-	Folder     string `json:"folder"`
+	Endpoint    string `json:"endpoint"`
+	EndpointCA  string `json:"endpointCa"`
+	Credentials string `json:"credentials"`
+	BucketName  string `json:"bucketName"`
+	Region      string `json:"region"`
+	Folder      string `json:"folder"`
 }
 
 // +genclient
@@ -82,10 +81,10 @@ type Restore struct {
 }
 
 type RestoreSpec struct {
-	BackupName                      string `json:"backupName"`
-	BackupStorageLocation           `json:"backupStorageLocation"`
-	PruneRestore                    bool   `json:"pruneRestore"`
-	ForcePruneTimeout               int    `json:"forcePruneTimeout"`
-	BackupEncryptionConfigName      string `json:"backupEncryptionConfigName"`
-	BackupEncryptionConfigNamespace string `json:"backupEncryptionConfigNamespace"`
+	BackupFileName            string `json:"backupFileName"`
+	BackupStorageLocation     `json:"backupStorageLocation"`
+	PruneRestore              bool   `json:"pruneRestore"`
+	ForcePruneTimeout         int    `json:"forcePruneTimeout"`
+	EncryptionConfigName      string `json:"encryptionConfigName"`
+	EncryptionConfigNamespace string `json:"encryptionConfigNamespace"`
 }

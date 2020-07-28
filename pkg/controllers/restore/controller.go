@@ -13,7 +13,7 @@ import (
 	"time"
 
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
-	common "github.com/mrajashree/backup/pkg/controllers"
+	util "github.com/mrajashree/backup/pkg/controllers"
 	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/sirupsen/logrus"
@@ -58,18 +58,31 @@ func Register(
 }
 
 func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, error) {
-	backupName := restore.Spec.BackupName
-	backup, err := h.backups.Get("default", backupName, k8sv1.GetOptions{})
+
+	backupName := restore.Spec.BackupFileName
+	backupPath := filepath.Join(util.BackupBaseDir, backupName)
+	// if local, backup tar.gz must be added to the "Local" path
+	if restore.Spec.Local != "" {
+		backupFilePath := filepath.Join(restore.Spec.Local, backupName)
+		if err := util.LoadFromTarGzip(backupFilePath); err != nil {
+			return restore, err
+		}
+	} else if restore.Spec.ObjectStore != nil {
+		if err := h.downloadFromS3(restore); err != nil {
+			return restore, err
+		}
+		backupFilePath := filepath.Join(util.BackupBaseDir, backupName)
+		if err := util.LoadFromTarGzip(backupFilePath); err != nil {
+			return restore, err
+		}
+	}
+	backupPath = strings.TrimSuffix(backupPath, ".tar.gz")
+
+	config, err := h.backupEncryptionConfigs.Get(restore.Spec.EncryptionConfigNamespace, restore.Spec.EncryptionConfigName, k8sv1.GetOptions{})
 	if err != nil {
 		return restore, err
 	}
-	// TODO: logic to read from object store
-	backupPath := backup.Spec.Local
-	config, err := h.backupEncryptionConfigs.Get(restore.Spec.BackupEncryptionConfigNamespace, restore.Spec.BackupEncryptionConfigName, k8sv1.GetOptions{})
-	if err != nil {
-		return restore, err
-	}
-	transformerMap, err := common.GetEncryptionTransformers(config)
+	transformerMap, err := util.GetEncryptionTransformers(config)
 	if err != nil {
 		return restore, err
 	}
@@ -142,7 +155,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 				ownerOldUID := ownerRef["uid"].(string)
 				// TODO: which context to use
 				ctx := context.Background()
-				ownerObj, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", common.OldUIDReferenceLabel, ownerOldUID)})
+				ownerObj, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", util.OldUIDReferenceLabel, ownerOldUID)})
 				if err != nil {
 					return restore, fmt.Errorf("error listing owner by label: %v", err)
 				}
@@ -192,6 +205,9 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return restore, fmt.Errorf("error pruning during restore")
 	}
 	logrus.Infof("Done restoring")
+	if err := os.RemoveAll(backupPath); err != nil {
+		return restore, err
+	}
 	return restore, nil
 }
 
@@ -421,15 +437,14 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 				}
 				if !exists {
 					if namespace != "" {
-						if _, ok := resourceToPruneNamespaced[res][namespace+"/"+name]; ok {
-							continue
+						if _, ok := resourceToPruneNamespaced[res][namespace+"/"+name]; !ok {
+							resourceToPruneNamespaced[res] = map[string]bool{namespace + "/" + name: true}
 						}
-						resourceToPruneNamespaced[res][namespace+"/"+name] = true
+
 					} else {
-						if _, ok := resourceToPrune[res][name]; ok {
-							continue
+						if _, ok := resourceToPrune[res][name]; !ok {
+							resourceToPrune[res] = map[string]bool{name: true}
 						}
-						resourceToPrune[res][name] = true
 					}
 				}
 			}
@@ -441,7 +456,9 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 	fmt.Printf("\nneed to delete following namespaced resources: %v\n", resourceToPruneNamespaced)
 	go func(ctx context.Context, resourceToPrune map[string]map[string]bool, resourceToPruneNamespaced map[string]map[string]bool, pruneTimeout int) {
 		deleteResources(resourceToPrune, resourceToPruneNamespaced, false)
-		time.Sleep(time.Duration(pruneTimeout) * time.Second)
+		logrus.Infof("Done trying delete -1")
+		//time.Sleep(time.Duration(pruneTimeout) * time.Second)
+		time.Sleep(10 * time.Second)
 		logrus.Infof("Ensuring resources to prune are deleted")
 		deleteResources(resourceToPrune, resourceToPruneNamespaced, true)
 	}(h.ctx, resourceToPrune, resourceToPruneNamespaced, pruneTimeout)
