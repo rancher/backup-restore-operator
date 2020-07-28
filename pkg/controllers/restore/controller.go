@@ -92,7 +92,8 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 	// then restore CRDs
 	if err := h.restoreResource(filepath.Join(backupPath, "customresourcedefinitions")); err != nil {
-		return restore, err
+		logrus.Errorf("controller will retry with error %v", err)
+		//return restore, err
 	}
 
 	returnErr := h.restoreOwners(backupPath, transformerMap)
@@ -229,6 +230,9 @@ func (h *handler) restoreOwners(backupPath string, transformerMap map[schema.Gro
 		gr := schema.ParseGroupResource(kind + "." + grp)
 		decryptionTransformer, ok := transformerMap[gr]
 		fmt.Printf("\nrestoring items of gvk %v, %v, %v\n", grp, version, kind)
+		if kind == "customresourcedefinitions.apiextensions.k8s.io" {
+			continue
+		}
 		if ok {
 			resourceDirPath := filepath.Join(backupPath, "/owners/", gvDir.Name())
 			err := decryptAndRestore(resourceDirPath, decryptionTransformer)
@@ -301,6 +305,22 @@ func decryptAndRestore(resourceDirPath string, decryptionTransformer value.Trans
 				logrus.Info("Error during restore, retrying with replace")
 				retryop, err := exec.Command("kubectl", "replace", "-f", resourceFileName).CombinedOutput()
 				if err != nil {
+					// retry with kubectl create
+					fmt.Printf("string error: %v", string(retryop))
+					if strings.Contains(string(retryop), "NotFound") || strings.Contains(string(retryop), "not found") {
+						createop, err := exec.Command("kubectl", "create", "-f", resourceFileName).CombinedOutput()
+						// write the original encrypted secret before returning
+						if err != nil {
+							writeErr := ioutil.WriteFile(resourceFileName, fileBytes, 0777)
+							if writeErr != nil {
+								return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, writeErr)
+							}
+							return fmt.Errorf("error when restoring %v with create: %v", resourceFileName, string(createop)+err.Error())
+						} else {
+							logrus.Info("Retry with kubectl create succeeded")
+							continue
+						}
+					}
 					// write the original encrypted secret before returning
 					err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
 					if err != nil {
@@ -458,7 +478,7 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 		deleteResources(resourceToPrune, resourceToPruneNamespaced, false)
 		logrus.Infof("Done trying delete -1")
 		//time.Sleep(time.Duration(pruneTimeout) * time.Second)
-		time.Sleep(10 * time.Second)
+		time.Sleep(2 * time.Second)
 		logrus.Infof("Ensuring resources to prune are deleted")
 		deleteResources(resourceToPrune, resourceToPruneNamespaced, true)
 	}(h.ctx, resourceToPrune, resourceToPruneNamespaced, pruneTimeout)

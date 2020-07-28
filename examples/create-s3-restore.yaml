@@ -1,10 +1,10 @@
 apiVersion: backupper.cattle.io/v1
 kind: Restore
 metadata:
-  name: restore-s3
+  name: restore-s3-demo
   namespace: default
 spec:
-  backupFileName: tests4tar.tar.gz
+  backupFileName: backup1.tar.gz
   backupStorageLocation:
     s3objectStore:
       credentials: default/creds

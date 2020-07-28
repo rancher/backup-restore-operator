@@ -22,6 +22,7 @@ type BackupSpec struct {
 	BackupTemplate            string `json:"backupTemplate"`
 	EncryptionConfigName      string `json:"encryptionConfigName"`
 	EncryptionConfigNamespace string `json:"encryptionConfigNamespace"`
+	BackupSchedule            string `json:"backupSchedule"`
 }
 
 // +genclient
