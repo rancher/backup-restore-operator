@@ -125,8 +125,7 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 			log.Errorf("failed to list objects in backup buckets [%s]: %v", bucket, object.Err)
 			return "", object.Err
 		}
-		fmt.Printf("\nobject.Key: %v\n", object.Key)
-		fmt.Printf("\nprefix: %v\n", prefix)
+
 		if prefix == object.Key {
 			filename = object.Key
 			break

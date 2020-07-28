@@ -88,12 +88,12 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 	// first restore namespaces
 	if err := h.restoreResource(filepath.Join(backupPath, "namespaces")); err != nil {
-		return restore, err
+		return restore, fmt.Errorf("Error restoring namespace: %v", err)
 	}
 	// then restore CRDs
 	if err := h.restoreResource(filepath.Join(backupPath, "customresourcedefinitions")); err != nil {
-		logrus.Errorf("controller will retry with error %v", err)
-		//return restore, err
+		logrus.Errorf("Error restoring CRD: %v", err)
+		//return restore, fmt.Errorf("Error restoring CRD: %v", err)
 	}
 
 	returnErr := h.restoreOwners(backupPath, transformerMap)
@@ -161,7 +161,8 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 					return restore, fmt.Errorf("error listing owner by label: %v", err)
 				}
 				if len(ownerObj.Items) == 0 {
-					fmt.Printf("\nNEWERR3 owner could be a dependent itself, to try this again, return err at end\n")
+					logrus.Infof("No %v returned for label %v", kind, fmt.Sprintf("%s=%s", util.OldUIDReferenceLabel, ownerOldUID))
+					logrus.Errorf("Owner of %v could be a dependent itself, to try this again, return err at end")
 					dependentRestoreErr = fmt.Errorf("retry this")
 					continue
 				}
@@ -179,7 +180,10 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			if err != nil {
 				return restore, fmt.Errorf("error writing updated ownerRefs to file: %v", err)
 			}
+			// apply doubles data set size because of annotation creation; replace the object; use dynaminClient.Update; kubectl replace of create
 			output, err := exec.Command("kubectl", "apply", "-f", resourceFileName).CombinedOutput()
+			// use dynamic client.Update && client.UpdateStatus for  subsresources
+			// use discovery client to find which resource has status subresource
 			if err != nil {
 				if strings.Contains(string(output), "--validate=false") {
 					logrus.Info("Error during restore, retrying with validate=false")
@@ -229,6 +233,10 @@ func (h *handler) restoreOwners(backupPath string, transformerMap map[schema.Gro
 		}
 		gr := schema.ParseGroupResource(kind + "." + grp)
 		decryptionTransformer, ok := transformerMap[gr]
+		if kind == "customresourcedefinitions.apiextensions.k8s.io" {
+			// already restored
+			continue
+		}
 		fmt.Printf("\nrestoring items of gvk %v, %v, %v\n", grp, version, kind)
 		if kind == "customresourcedefinitions.apiextensions.k8s.io" {
 			continue
@@ -293,9 +301,9 @@ func decryptAndRestore(resourceDirPath string, decryptionTransformer value.Trans
 				retryop, err := exec.Command("kubectl", "apply", "-f", resourceFileName, "--validate=false").CombinedOutput()
 				if err != nil {
 					// write the original encrypted secret before returning
-					err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
-					if err != nil {
-						return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, err)
+					writeErr := ioutil.WriteFile(resourceFileName, fileBytes, 0777)
+					if writeErr != nil {
+						return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, writeErr)
 					}
 					return fmt.Errorf("error when restoring %v with validate=false: %v", resourceFileName, string(retryop)+err.Error())
 				} else {
@@ -322,9 +330,9 @@ func decryptAndRestore(resourceDirPath string, decryptionTransformer value.Trans
 						}
 					}
 					// write the original encrypted secret before returning
-					err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
-					if err != nil {
-						return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, err)
+					writeErr := ioutil.WriteFile(resourceFileName, fileBytes, 0777)
+					if writeErr != nil {
+						return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, writeErr)
 					}
 					return fmt.Errorf("error when restoring %v with replace: %v", resourceFileName, string(retryop)+err.Error())
 				} else {
@@ -475,6 +483,7 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 	fmt.Printf("\nneed to delete following resources: %v\n", resourceToPrune)
 	fmt.Printf("\nneed to delete following namespaced resources: %v\n", resourceToPruneNamespaced)
 	go func(ctx context.Context, resourceToPrune map[string]map[string]bool, resourceToPruneNamespaced map[string]map[string]bool, pruneTimeout int) {
+		// workers group parallel deletion
 		deleteResources(resourceToPrune, resourceToPruneNamespaced, false)
 		logrus.Infof("Done trying delete -1")
 		//time.Sleep(time.Duration(pruneTimeout) * time.Second)
