@@ -60,7 +60,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if condition.Cond(v1.BackupConditionReady).IsTrue(backup) && condition.Cond(v1.BackupConditionUploaded).IsTrue(backup) {
 		return backup, nil
 	}
-	// TODO: get objectStore details too
 	_, err := os.Stat(util.BackupBaseDir)
 	if os.IsNotExist(err) {
 		err := os.Mkdir(util.BackupBaseDir, os.ModePerm)
@@ -71,16 +70,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	var tmpBackupPath = filepath.Join(util.BackupBaseDir, backup.Spec.BackupFileName)
 
 	err = os.Mkdir(tmpBackupPath, os.ModePerm)
-	if err != nil {
-		return backup, fmt.Errorf("error creating temp dir: %v", err)
-	}
-	ownerDirPath := tmpBackupPath + "/owners"
-	err = os.Mkdir(ownerDirPath, os.ModePerm)
-	if err != nil {
-		return backup, fmt.Errorf("error creating temp dir: %v", err)
-	}
-	dependentDirPath := tmpBackupPath + "/dependents"
-	err = os.Mkdir(dependentDirPath, os.ModePerm)
 	if err != nil {
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
@@ -98,7 +87,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if err != nil {
 		return backup, err
 	}
-	err = h.gatherResources(template.BackupFilters, tmpBackupPath, ownerDirPath, dependentDirPath, transformerMap)
+	err = h.gatherResources(template.BackupFilters, tmpBackupPath, transformerMap)
 
 	filters, err := json.Marshal(template.BackupFilters)
 	if err != nil {
@@ -136,7 +125,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	return backup, err
 }
 
-func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath, ownerDirPath, dependentDirPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
 	for ind, filter := range filters {
 		resourceList, err := h.gatherResourcesForGroupVersion(filter)
 		if err != nil {
@@ -162,7 +151,7 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath, ownerDi
 			if skipBackup(res) {
 				continue
 			}
-			err := h.gatherObjectsForResource(res, gv, filter, backupPath, ownerDirPath, dependentDirPath, transformerMap)
+			err := h.gatherObjectsForResource(res, gv, filter, backupPath, transformerMap)
 			if err != nil {
 				//fmt.Printf("\nerr in gatherObjectsForResource: %v\n", err)
 				return err
@@ -195,14 +184,14 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 			if !matched {
 				continue
 			}
-			fmt.Printf("\nres %v matched regex %v\n", res.Name, filter.KindsRegex)
+			logrus.Infof("resource kind %v matched regex %v\n", res.Name, filter.KindsRegex)
 			resourceList = append(resourceList, res)
 		}
 	}
 	return resourceList, nil
 }
 
-func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, backupPath, ownerDirPath, dependentDirPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
 	var fieldSelector string
 	var filteredObjects []unstructured.Unstructured
 	gvr := gv.WithResource(res.Name)
@@ -267,10 +256,10 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 		filteredObjects = resObjects.Items
 	}
 
-	return h.writeBackupObjects(filteredObjects, res, gv, backupPath, ownerDirPath, dependentDirPath, transformerMap)
+	return h.writeBackupObjects(filteredObjects, res, gv, backupPath, transformerMap)
 }
 
-func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, backupPath, ownerDirPath, dependentDirPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
 	for _, resObj := range resObjects {
 		metadata := resObj.Object["metadata"].(map[string]interface{})
 		// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
@@ -305,37 +294,19 @@ func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res
 		//	additionalAuthenticatedData = metadata["namespace"].(string) + "/" + additionalAuthenticatedData
 		//}
 
-		if res.Name == "customresourcedefinitions" || res.Name == "namespaces" {
-			resourcePath := filepath.Join(backupPath, res.Name)
-			if err := createResourceDir(resourcePath); err != nil {
-				return err
-			}
-			err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
-			if err != nil {
-				return err
-			}
+		resourcePath := backupPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
+		if err := createResourceDir(resourcePath); err != nil {
+			return err
 		}
+		//if res.Namespaced {
+		//	ns := metadata["namespace"].(string)
+		//	// prepend resource file name with the namespace, separated by `#` since no k8s resource can contain # in name
+		//	objName = fmt.Sprintf("%s#%s", ns, objName)
+		//}
 
-		ownerRefs := metadata["ownerReferences"]
-
-		if ownerRefs == nil {
-			resourcePath := ownerDirPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
-			if err := createResourceDir(resourcePath); err != nil {
-				return err
-			}
-			err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
-			if err != nil {
-				return err
-			}
-		} else {
-			resourcePath := dependentDirPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
-			if err := createResourceDir(resourcePath); err != nil {
-				return err
-			}
-			err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
-			if err != nil {
-				return err
-			}
+		err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -346,11 +317,11 @@ func skipBackup(res k8sv1.APIResource) bool {
 		return true
 	}
 	if !canListResource(res.Verbs) {
-		fmt.Printf("\nCannot list resource %v\n", res)
+		logrus.Debugf("Cannot list resource %v, not backing up", res)
 		return true
 	}
 	if !canUpdateResource(res.Verbs) {
-		fmt.Printf("\nCannot update resource %v\n", res)
+		logrus.Debugf("Cannot update resource %v, not backing up\n", res)
 		return true
 	}
 	return false
