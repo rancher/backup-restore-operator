@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+
+	//"k8s.io/apimachinery/pkg/api/meta"
+	//"k8s.io/client-go/restmapper"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -17,13 +21,18 @@ import (
 	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	//"k8s.io/apimachinery/pkg/api/meta"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	//"k8s.io/client-go/restmapper"
 )
 
 type handler struct {
@@ -34,6 +43,18 @@ type handler struct {
 	discoveryClient         discovery.DiscoveryInterface
 	dynamicClient           dynamic.Interface
 }
+
+type restoreObj struct {
+	Name               string
+	GVR                schema.GroupVersionResource
+	DynamicClient      dynamic.ResourceInterface
+	obj                *unstructured.Unstructured
+	ResourceConfigPath string
+	UID                string
+}
+
+//var RestoreObjCreated = make(map[types.UID]map[*restoreObj]bool)
+//var RestoreObjAdjacencyList = make(map[types.UID]map[*restoreObj][]restoreObj)
 
 func Register(
 	ctx context.Context,
@@ -58,7 +79,9 @@ func Register(
 }
 
 func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, error) {
-
+	fmt.Printf("\nsyncing for restore %v\n", restore.Name)
+	created := make(map[*restoreObj]bool)
+	adjacencyList := make(map[*restoreObj][]*restoreObj)
 	backupName := restore.Spec.BackupFileName
 	backupPath := filepath.Join(util.BackupBaseDir, backupName)
 	// if local, backup tar.gz must be added to the "Local" path
@@ -86,21 +109,29 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	if err != nil {
 		return restore, err
 	}
-	// first restore namespaces
-	if err := h.restoreResource(filepath.Join(backupPath, "namespaces")); err != nil {
-		return restore, fmt.Errorf("Error restoring namespace: %v", err)
-	}
-	// then restore CRDs
-	if err := h.restoreResource(filepath.Join(backupPath, "customresourcedefinitions")); err != nil {
-		logrus.Errorf("Error restoring CRD: %v", err)
-		//return restore, fmt.Errorf("Error restoring CRD: %v", err)
+
+	// first restore CRDs
+	if err := h.restoreCRDs(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1", transformerMap, created); err != nil {
+		return restore, fmt.Errorf("error restoring CRD: %v", err)
 	}
 
-	returnErr := h.restoreOwners(backupPath, transformerMap)
-	if returnErr != nil {
-		fmt.Printf("Controller will retry because of error %v", returnErr)
+	// generate adjacency lists for dependents and ownerRefs
+	if err := h.generateDependencyGraph(backupPath, transformerMap, adjacencyList); err != nil {
 		return restore, err
 	}
+	fmt.Printf("\nadjacencyList: \n")
+	for key, val := range adjacencyList {
+		if len(val) > 0 {
+			fmt.Printf("dependent: %#v\n", key)
+			fmt.Printf("owners:")
+			for _, values := range val {
+				fmt.Printf("\nvalue: %#v\n", values)
+			}
+			fmt.Println("")
+		}
+	}
+
+	return restore, nil
 
 	// now create dependents, for each dependent individual kubectl apply, get owner uid label. Get new obj UID and update
 	dependentDirInfo, err := ioutil.ReadDir(backupPath + "/dependents")
@@ -216,56 +247,224 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	return restore, nil
 }
 
-func (h *handler) restoreOwners(backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
-	ownerDirInfo, err := ioutil.ReadDir(backupPath + "/owners")
+func (h *handler) restoreCRDs(backupPath, resourceGVK string, transformerMap map[schema.GroupResource]value.Transformer, created map[*restoreObj]bool) error {
+	resourceDirPath := path.Join(backupPath, resourceGVK)
+	gvkParts := strings.Split(resourceGVK, "#")
+	version := gvkParts[1]
+	kindGrp := strings.SplitN(gvkParts[0], ".", 2)
+	kind := strings.TrimSuffix(kindGrp[0], ".")
+	var grp string
+	if len(kindGrp) > 1 {
+		grp = kindGrp[1]
+	}
+	gr := schema.ParseGroupResource(kind + "." + grp)
+	gvr := gr.WithVersion(version)
+	dr := h.dynamicClient.Resource(gvr)
+	//fmt.Printf("\ndr: %v\n", dr)
+	decryptionTransformer, _ := transformerMap[gr]
+	dirContents, err := ioutil.ReadDir(resourceDirPath)
 	if err != nil {
 		return err
 	}
-	for _, gvDir := range ownerDirInfo {
-		gvkStr := gvDir.Name()
-		gvkParts := strings.Split(gvkStr, "#")
+	for _, resFile := range dirContents {
+		resManifestPath := filepath.Join(resourceDirPath, resFile.Name())
+		err := h.restoreResource(resManifestPath, resFile.Name(), decryptionTransformer, dr)
+		if err != nil {
+			fmt.Printf("\nreturning error %v from here\n", err)
+			return fmt.Errorf("restoreCRDs: %v", err)
+		}
+		restoreObjKey := &restoreObj{
+			Name:               resFile.Name(),
+			ResourceConfigPath: resManifestPath,
+			GVR:                gvr,
+		}
+		created[restoreObjKey] = true
+	}
+	return nil
+}
+
+func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[schema.GroupResource]value.Transformer, adjacencyList map[*restoreObj][]*restoreObj) error {
+	backupEntries, err := ioutil.ReadDir(backupPath)
+	if err != nil {
+		return err
+	}
+
+	for _, backupEntry := range backupEntries {
+		if !backupEntry.IsDir() {
+			// only file is filters.json which we read during prune, so continue
+			continue
+		}
+		// example catalogs.management.cattle.io#v3
+		resourceGVK := backupEntry.Name()
+		resourceDirPath := path.Join(backupPath, resourceGVK)
+		gvkParts := strings.Split(resourceGVK, "#")
 		version := gvkParts[1]
 		kindGrp := strings.SplitN(gvkParts[0], ".", 1)
-		kind := strings.TrimRight(kindGrp[0], ".")
+		kind := strings.TrimSuffix(kindGrp[0], ".")
 		var grp string
 		if len(kindGrp) > 1 {
 			grp = kindGrp[1]
 		}
 		gr := schema.ParseGroupResource(kind + "." + grp)
-		decryptionTransformer, ok := transformerMap[gr]
-		if kind == "customresourcedefinitions.apiextensions.k8s.io" {
-			// already restored
-			continue
+		gvr := gr.WithVersion(version)
+		dynamicClient := h.dynamicClient.Resource(gvr)
+		resourceFiles, err := ioutil.ReadDir(resourceDirPath)
+		if err != nil {
+			return err
 		}
-		fmt.Printf("\nrestoring items of gvk %v, %v, %v\n", grp, version, kind)
-		if kind == "customresourcedefinitions.apiextensions.k8s.io" {
-			continue
-		}
-		if ok {
-			resourceDirPath := filepath.Join(backupPath, "/owners/", gvDir.Name())
-			err := decryptAndRestore(resourceDirPath, decryptionTransformer)
-			if err != nil {
+
+		for _, resourceFile := range resourceFiles {
+			resManifestPath := filepath.Join(resourceDirPath, resourceFile.Name())
+			if err := h.addToAdjacencyList(backupPath, resManifestPath, resourceFile.Name(), transformerMap[gr], adjacencyList, dynamicClient); err != nil {
 				return err
 			}
-			continue
-		}
-		fullPath := filepath.Join(backupPath, "/owners/", gvDir.Name())
-		//h.restoreResource(fullPath)
-		output, err := exec.Command("kubectl", "apply", "-f", fullPath, "--recursive").CombinedOutput()
-		if err != nil {
-			if strings.Contains(string(output), "--validate=false") {
-				logrus.Info("Error during restore, retrying with validate=false")
-				retryop, err := exec.Command("kubectl", "apply", "-f", fullPath, "--recursive", "--validate=false").CombinedOutput()
-				if err != nil {
-					return fmt.Errorf("error when restoring %v with validate=false: %v", fullPath, string(retryop)+err.Error())
-				} else {
-					logrus.Info("Retry with validate=false succeeded")
-					continue
-				}
-			}
-			return fmt.Errorf("error restoring secret %v: %v", fullPath, string(output)+err.Error())
 		}
 	}
+	return nil
+}
+
+func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, decryptionTransformer value.Transformer, adjacencyList map[*restoreObj][]*restoreObj, dynClient dynamic.ResourceInterface) error {
+	logrus.Infof("Processing %v for adjacency list", resConfigPath)
+	resBytes, err := ioutil.ReadFile(resConfigPath)
+	if err != nil {
+		return err
+	}
+
+	if decryptionTransformer != nil {
+		var encryptedBytes []byte
+		if err := json.Unmarshal(resBytes, &encryptedBytes); err != nil {
+			return err
+		}
+		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(aad))
+		if err != nil {
+			return err
+		}
+		resBytes = decrypted
+	}
+	fileMap := make(map[string]interface{})
+	err = json.Unmarshal(resBytes, &fileMap)
+	if err != nil {
+		return err
+	}
+
+	metadata, metadataFound := fileMap["metadata"].(map[string]interface{})
+	if !metadataFound {
+		return nil
+	}
+
+	// cannot create this resource right now, add to adjacency list
+	name, _ := metadata["name"].(string)
+	currRestoreObj := &restoreObj{
+		Name:               name,
+		DynamicClient:      dynClient,
+		ResourceConfigPath: resConfigPath,
+	}
+
+	var ownersList []*restoreObj
+	ownerRefs, ownerRefsFound := metadata["ownerReferences"].([]interface{})
+	if !ownerRefsFound {
+		adjacencyList[currRestoreObj] = ownersList
+		return nil
+	}
+	fmt.Printf("\nAdding owners!!!!\n")
+	for _, owner := range ownerRefs {
+		ownerRefData, ok := owner.(map[string]interface{})
+		if !ok {
+			logrus.Errorf("invalid ownerRef")
+			continue
+		}
+		groupVersion := ownerRefData["apiVersion"].(string)
+
+		gv, err := schema.ParseGroupVersion(groupVersion)
+		if err != nil {
+			logrus.Errorf(" err %v parsing ownerRef apiVersion", err)
+			continue
+		}
+		kind := ownerRefData["kind"].(string)
+		gvk := gv.WithKind(kind)
+		// TODO: find alternative other than UnsafeGuessKindToResource
+		plural, _ := meta.UnsafeGuessKindToResource(gvk)
+		gvr := gv.WithResource(plural.Resource)
+
+		var apiGroup, version string
+		split := strings.SplitN(groupVersion, "/", 2)
+		if len(split) == 1 {
+			version = split[0]
+		} else {
+			apiGroup = split[0]
+			version = split[1]
+		}
+		// kind + "." + apigroup + "#" + version
+		ownerDirPath := fmt.Sprintf("%s.%s#%s", plural.Resource, apiGroup, version)
+		ownerName := ownerRefData["name"].(string)
+		ownerObj := &restoreObj{
+			Name:               ownerName,
+			DynamicClient:      h.dynamicClient.Resource(gvr),
+			ResourceConfigPath: filepath.Join(backupPath, ownerDirPath, ownerName+".json"),
+		}
+		ownersList = append(ownersList, ownerObj)
+	}
+	adjacencyList[currRestoreObj] = ownersList
+	return nil
+}
+
+func (h *handler) createFromAdjacencyList(adjacencyList map[*restoreObj][]*restoreObj) {
+	for len(adjacencyList) > 0 {
+		for dependent, owner := range adjacencyList {
+			if len(owner) == 0 {
+				// object has no owners, create
+				dependent.
+			}
+		}
+	}
+}
+
+func (h *handler) restoreResource(resConfigPath, aad string, decryptionTransformer value.Transformer, dr dynamic.ResourceInterface) error {
+	logrus.Infof("Restoring from %v", resConfigPath)
+	resBytes, err := ioutil.ReadFile(resConfigPath)
+	if err != nil {
+		return err
+	}
+	if decryptionTransformer != nil {
+		var encryptedBytes []byte
+		if err := json.Unmarshal(resBytes, &encryptedBytes); err != nil {
+			return err
+		}
+		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(aad))
+		if err != nil {
+			return err
+		}
+		resBytes = decrypted
+	}
+	fileMap := make(map[string]interface{})
+	err = json.Unmarshal(resBytes, &fileMap)
+	if err != nil {
+		return err
+	}
+	fileMapMetadata := fileMap["metadata"].(map[string]interface{})
+	name := fileMapMetadata["name"].(string)
+	obj := &unstructured.Unstructured{Object: fileMap}
+	// TODO: subresources
+	res, err := dr.Get(h.ctx, name, k8sv1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("restoreResource: err getting resource %v", err)
+		}
+		// create and return
+		_, err := dr.Create(h.ctx, obj, k8sv1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	resMetadata := res.Object["metadata"].(map[string]interface{})
+	resourceVersion := resMetadata["resourceVersion"].(string)
+	obj.Object["metadata"].(map[string]interface{})["resourceVersion"] = resourceVersion
+	_, err = dr.Update(h.ctx, obj, k8sv1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("restoreResource: err updating resource %v", err)
+	}
+
 	return nil
 }
 
@@ -553,30 +752,3 @@ func deleteResources(resourceToPrune map[string]map[string]bool, resourceToPrune
 		}
 	}
 }
-
-func (h *handler) restoreResource(resourcePath string) error {
-	output, err := exec.Command("kubectl", "apply", "-f", resourcePath, "--recursive").CombinedOutput()
-	if err != nil {
-		if strings.Contains(string(output), "--validate=false") {
-			logrus.Info("Error during restore, retrying with validate=false")
-			retryop, err := exec.Command("kubectl", "apply", "-f", resourcePath, "--recursive", "--validate=false").CombinedOutput()
-			if err != nil {
-				return fmt.Errorf("error when restoring %v with validate=false: %v", resourcePath, string(retryop)+err.Error())
-			} else {
-				logrus.Info("Retry with validate=false succeeded")
-				return nil
-			}
-		}
-		return fmt.Errorf("error restoring resource %v: %v", resourcePath, string(output)+err.Error())
-	}
-	return nil
-}
-
-//cmd := fmt.Sprintf("cat <<EOF | kubectl apply -f - `%s` EOF", string(decrypted))
-//stdOut, stdErr := exec.Command("bash", "-c", cmd).CombinedOutput()
-//if stdErr != nil {
-//	fmt.Printf("\nout: %v\n", string(stdOut))
-//	fmt.Printf("secret apply error %v in executing command", stdErr.Error())
-//	return err
-//}
-//fmt.Printf("\nout: %v\n", string(stdOut))
