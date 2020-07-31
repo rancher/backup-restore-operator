@@ -47,10 +47,7 @@ type handler struct {
 type restoreObj struct {
 	Name               string
 	GVR                schema.GroupVersionResource
-	DynamicClient      dynamic.ResourceInterface
-	obj                *unstructured.Unstructured
 	ResourceConfigPath string
-	UID                string
 }
 
 //var RestoreObjCreated = make(map[types.UID]map[*restoreObj]bool)
@@ -110,7 +107,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return restore, err
 	}
 
-	// first restore CRDs
+	//// first restore CRDs
 	if err := h.restoreCRDs(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1", transformerMap, created); err != nil {
 		return restore, fmt.Errorf("error restoring CRD: %v", err)
 	}
@@ -129,6 +126,10 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			}
 			fmt.Println("")
 		}
+	}
+
+	if err := h.createFromAdjacencyList(adjacencyList, created, transformerMap); err != nil {
+		return restore, err
 	}
 
 	return restore, nil
@@ -249,17 +250,8 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 func (h *handler) restoreCRDs(backupPath, resourceGVK string, transformerMap map[schema.GroupResource]value.Transformer, created map[*restoreObj]bool) error {
 	resourceDirPath := path.Join(backupPath, resourceGVK)
-	gvkParts := strings.Split(resourceGVK, "#")
-	version := gvkParts[1]
-	kindGrp := strings.SplitN(gvkParts[0], ".", 2)
-	kind := strings.TrimSuffix(kindGrp[0], ".")
-	var grp string
-	if len(kindGrp) > 1 {
-		grp = kindGrp[1]
-	}
-	gr := schema.ParseGroupResource(kind + "." + grp)
-	gvr := gr.WithVersion(version)
-	dr := h.dynamicClient.Resource(gvr)
+	gvr := getGVR(resourceGVK)
+	gr := gvr.GroupResource()
 	//fmt.Printf("\ndr: %v\n", dr)
 	decryptionTransformer, _ := transformerMap[gr]
 	dirContents, err := ioutil.ReadDir(resourceDirPath)
@@ -268,7 +260,7 @@ func (h *handler) restoreCRDs(backupPath, resourceGVK string, transformerMap map
 	}
 	for _, resFile := range dirContents {
 		resManifestPath := filepath.Join(resourceDirPath, resFile.Name())
-		err := h.restoreResource(resManifestPath, resFile.Name(), decryptionTransformer, dr)
+		err := h.restoreResource(resManifestPath, resFile.Name(), decryptionTransformer, gvr)
 		if err != nil {
 			fmt.Printf("\nreturning error %v from here\n", err)
 			return fmt.Errorf("restoreCRDs: %v", err)
@@ -297,17 +289,8 @@ func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[
 		// example catalogs.management.cattle.io#v3
 		resourceGVK := backupEntry.Name()
 		resourceDirPath := path.Join(backupPath, resourceGVK)
-		gvkParts := strings.Split(resourceGVK, "#")
-		version := gvkParts[1]
-		kindGrp := strings.SplitN(gvkParts[0], ".", 1)
-		kind := strings.TrimSuffix(kindGrp[0], ".")
-		var grp string
-		if len(kindGrp) > 1 {
-			grp = kindGrp[1]
-		}
-		gr := schema.ParseGroupResource(kind + "." + grp)
-		gvr := gr.WithVersion(version)
-		dynamicClient := h.dynamicClient.Resource(gvr)
+		gvr := getGVR(resourceGVK)
+		gr := gvr.GroupResource()
 		resourceFiles, err := ioutil.ReadDir(resourceDirPath)
 		if err != nil {
 			return err
@@ -315,7 +298,7 @@ func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[
 
 		for _, resourceFile := range resourceFiles {
 			resManifestPath := filepath.Join(resourceDirPath, resourceFile.Name())
-			if err := h.addToAdjacencyList(backupPath, resManifestPath, resourceFile.Name(), transformerMap[gr], adjacencyList, dynamicClient); err != nil {
+			if err := h.addToAdjacencyList(backupPath, resManifestPath, resourceFile.Name(), gvr, transformerMap[gr], adjacencyList); err != nil {
 				return err
 			}
 		}
@@ -323,7 +306,7 @@ func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[
 	return nil
 }
 
-func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, decryptionTransformer value.Transformer, adjacencyList map[*restoreObj][]*restoreObj, dynClient dynamic.ResourceInterface) error {
+func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, gvr schema.GroupVersionResource, decryptionTransformer value.Transformer, adjacencyList map[*restoreObj][]*restoreObj) error {
 	logrus.Infof("Processing %v for adjacency list", resConfigPath)
 	resBytes, err := ioutil.ReadFile(resConfigPath)
 	if err != nil {
@@ -356,8 +339,8 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, decr
 	name, _ := metadata["name"].(string)
 	currRestoreObj := &restoreObj{
 		Name:               name,
-		DynamicClient:      dynClient,
 		ResourceConfigPath: resConfigPath,
+		GVR:                gvr,
 	}
 
 	var ownersList []*restoreObj
@@ -366,7 +349,7 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, decr
 		adjacencyList[currRestoreObj] = ownersList
 		return nil
 	}
-	fmt.Printf("\nAdding owners!!!!\n")
+
 	for _, owner := range ownerRefs {
 		ownerRefData, ok := owner.(map[string]interface{})
 		if !ok {
@@ -399,8 +382,8 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, decr
 		ownerName := ownerRefData["name"].(string)
 		ownerObj := &restoreObj{
 			Name:               ownerName,
-			DynamicClient:      h.dynamicClient.Resource(gvr),
 			ResourceConfigPath: filepath.Join(backupPath, ownerDirPath, ownerName+".json"),
+			GVR:                gvr,
 		}
 		ownersList = append(ownersList, ownerObj)
 	}
@@ -408,18 +391,36 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, decr
 	return nil
 }
 
-func (h *handler) createFromAdjacencyList(adjacencyList map[*restoreObj][]*restoreObj) {
+func (h *handler) createFromAdjacencyList(adjacencyList map[*restoreObj][]*restoreObj, created map[*restoreObj]bool, transformerMap map[schema.GroupResource]value.Transformer) error {
 	for len(adjacencyList) > 0 {
-		for dependent, owner := range adjacencyList {
-			if len(owner) == 0 {
-				// object has no owners, create
-				dependent.
+		for dependent, owners := range adjacencyList {
+			fmt.Printf("\nadjacencyList len: %v\n", len(adjacencyList))
+			canCreate := true
+			for _, owner := range owners {
+				if !created[owner] {
+					canCreate = false
+					break
+				}
 			}
+			if !canCreate {
+				continue
+			}
+			// will be true if obj has no owners, or if all owners are created
+			gr := dependent.GVR.GroupResource()
+			transformer, _ := transformerMap[gr]
+			// iterate all owners to get UID and update file's ownerreferences
+			if err := h.restoreResource(dependent.ResourceConfigPath, dependent.Name, transformer, dependent.GVR); err != nil {
+				return err
+			}
+			created[dependent] = true
+			delete(adjacencyList, dependent)
+
 		}
 	}
+	return nil
 }
 
-func (h *handler) restoreResource(resConfigPath, aad string, decryptionTransformer value.Transformer, dr dynamic.ResourceInterface) error {
+func (h *handler) restoreResource(resConfigPath, aad string, decryptionTransformer value.Transformer, gvr schema.GroupVersionResource) error {
 	logrus.Infof("Restoring from %v", resConfigPath)
 	resBytes, err := ioutil.ReadFile(resConfigPath)
 	if err != nil {
@@ -441,12 +442,21 @@ func (h *handler) restoreResource(resConfigPath, aad string, decryptionTransform
 	if err != nil {
 		return err
 	}
+	fmt.Printf("\ndone unmarshaling\n")
 	fileMapMetadata := fileMap["metadata"].(map[string]interface{})
 	name := fileMapMetadata["name"].(string)
+	namespace, _ := fileMapMetadata["namespace"].(string)
 	obj := &unstructured.Unstructured{Object: fileMap}
 	// TODO: subresources
+	var dr dynamic.ResourceInterface
+	dr = h.dynamicClient.Resource(gvr)
+	if namespace != "" {
+		dr = h.dynamicClient.Resource(gvr).Namespace(namespace)
+	}
+	fmt.Printf("\ngetting %v for %v from ns %v\n", name, gvr, namespace)
 	res, err := dr.Get(h.ctx, name, k8sv1.GetOptions{})
 	if err != nil {
+		fmt.Printf("\nerr when getting resource %w\n", err)
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("restoreResource: err getting resource %v", err)
 		}
@@ -468,89 +478,18 @@ func (h *handler) restoreResource(resConfigPath, aad string, decryptionTransform
 	return nil
 }
 
-func decryptAndRestore(resourceDirPath string, decryptionTransformer value.Transformer) error {
-	resourceDirInfo, err := ioutil.ReadDir(resourceDirPath)
-	if err != nil {
-		return err
+func getGVR(resourceGVK string) schema.GroupVersionResource {
+	gvkParts := strings.Split(resourceGVK, "#")
+	version := gvkParts[1]
+	kindGrp := strings.SplitN(gvkParts[0], ".", 2)
+	kind := strings.TrimSuffix(kindGrp[0], ".")
+	var grp string
+	if len(kindGrp) > 1 {
+		grp = kindGrp[1]
 	}
-	for _, secretFile := range resourceDirInfo {
-		resourceFileName := filepath.Join(resourceDirPath, secretFile.Name())
-		// read file and decrypt
-		fileBytes, err := ioutil.ReadFile(resourceFileName)
-		if err != nil {
-			return err
-		}
-		var encryptedBytes []byte
-		if err := json.Unmarshal(fileBytes, &encryptedBytes); err != nil {
-			return err
-		}
-		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(secretFile.Name()))
-		if err != nil {
-			return err
-		}
-		// write secret to same file to apply. then write fileBytes again
-		err = ioutil.WriteFile(resourceFileName, decrypted, 0777)
-		if err != nil {
-			return fmt.Errorf("error writing decryped secret %v to file for restore: %v", resourceFileName, err)
-		}
-		output, err := exec.Command("kubectl", "apply", "-f", resourceFileName).CombinedOutput()
-		if err != nil {
-			if strings.Contains(string(output), "--validate=false") {
-				logrus.Info("Error during restore, retrying with validate=false")
-				retryop, err := exec.Command("kubectl", "apply", "-f", resourceFileName, "--validate=false").CombinedOutput()
-				if err != nil {
-					// write the original encrypted secret before returning
-					writeErr := ioutil.WriteFile(resourceFileName, fileBytes, 0777)
-					if writeErr != nil {
-						return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, writeErr)
-					}
-					return fmt.Errorf("error when restoring %v with validate=false: %v", resourceFileName, string(retryop)+err.Error())
-				} else {
-					logrus.Info("Retry with validate=false succeeded")
-				}
-			} else if strings.Contains(string(output), "Too long: must have at most 262144 bytes") {
-				logrus.Info("Error during restore, retrying with replace")
-				retryop, err := exec.Command("kubectl", "replace", "-f", resourceFileName).CombinedOutput()
-				if err != nil {
-					// retry with kubectl create
-					fmt.Printf("string error: %v", string(retryop))
-					if strings.Contains(string(retryop), "NotFound") || strings.Contains(string(retryop), "not found") {
-						createop, err := exec.Command("kubectl", "create", "-f", resourceFileName).CombinedOutput()
-						// write the original encrypted secret before returning
-						if err != nil {
-							writeErr := ioutil.WriteFile(resourceFileName, fileBytes, 0777)
-							if writeErr != nil {
-								return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, writeErr)
-							}
-							return fmt.Errorf("error when restoring %v with create: %v", resourceFileName, string(createop)+err.Error())
-						} else {
-							logrus.Info("Retry with kubectl create succeeded")
-							continue
-						}
-					}
-					// write the original encrypted secret before returning
-					writeErr := ioutil.WriteFile(resourceFileName, fileBytes, 0777)
-					if writeErr != nil {
-						return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, writeErr)
-					}
-					return fmt.Errorf("error when restoring %v with replace: %v", resourceFileName, string(retryop)+err.Error())
-				} else {
-					logrus.Info("Retry with kubectl replace succeeded")
-				}
-			} else {
-				err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
-				if err != nil {
-					return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, err)
-				}
-				return fmt.Errorf("error restoring secret %v: %v", resourceFileName, string(output)+err.Error())
-			}
-		}
-		err = ioutil.WriteFile(resourceFileName, fileBytes, 0777)
-		if err != nil {
-			return fmt.Errorf("error writing original secret %v to file for restore: %v", resourceFileName, err)
-		}
-	}
-	return nil
+	gr := schema.ParseGroupResource(kind + "." + grp)
+	gvr := gr.WithVersion(version)
+	return gvr
 }
 
 func (h *handler) prune(backupPath string, pruneTimeout int) error {
