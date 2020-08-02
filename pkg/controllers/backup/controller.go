@@ -67,6 +67,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return backup, fmt.Errorf("error creating backup dir: %v", err)
 		}
 	}
+	// TODO: use temp dir os.TempDir()
 	var tmpBackupPath = filepath.Join(util.BackupBaseDir, backup.Spec.BackupFileName)
 
 	err = os.Mkdir(tmpBackupPath, os.ModePerm)
