@@ -115,9 +115,14 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 
 	// first restore CRDs
-	if err := h.restoreCRDs(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1", transformerMap, created); err != nil {
+	//_, err = os.Stat(filepath.Join(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1"))
+	//if err == nil {
+	if err := h.restoreCRDs(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1", transformerMap, created, true); err != nil {
 		return restore, fmt.Errorf("error restoring CRD: %v", err)
 	}
+	//}
+	//
+	//os.Stat(filepath.Join(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1beta1"))
 
 	// generate adjacency lists for dependents and ownerRefs
 	if err := h.generateDependencyGraph(backupPath, transformerMap, ownerToDependentsList, &toRestore, numOwnerReferences); err != nil {
@@ -144,25 +149,69 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	return restore, nil
 }
 
-func (h *handler) restoreCRDs(backupPath, resourceGVK string, transformerMap map[schema.GroupResource]value.Transformer, created map[string]bool) error {
+func (h *handler) restoreCRDs(backupPath, resourceGVK string, transformerMap map[schema.GroupResource]value.Transformer, created map[string]bool, crdApiVersionV1 bool) error {
 	resourceDirPath := path.Join(backupPath, resourceGVK)
 	gvr := getGVR(resourceGVK)
 	gr := gvr.GroupResource()
+	tempGVR := gr.WithVersion("v1beta1")
 	decryptionTransformer, _ := transformerMap[gr]
 	dirContents, err := ioutil.ReadDir(resourceDirPath)
 	if err != nil {
 		return err
 	}
 	for _, resFile := range dirContents {
-		resManifestPath := filepath.Join(resourceDirPath, resFile.Name())
-		err := h.restoreResource(resManifestPath, resFile.Name(), decryptionTransformer, gvr)
+		resConfigPath := filepath.Join(resourceDirPath, resFile.Name())
+		//if crdApiVersionV1 {
+		//	resBytes, err := ioutil.ReadFile(resConfigPath)
+		//	if err != nil {
+		//		fmt.Printf("\nerr readin file %v: %v\n", resConfigPath, err)
+		//		return err
+		//	}
+		//
+		//	fmt.Printf("\nread file %v\n", string(resBytes))
+		//	if decryptionTransformer != nil {
+		//		var encryptedBytes []byte
+		//		if err := json.Unmarshal(resBytes, &encryptedBytes); err != nil {
+		//			return err
+		//		}
+		//		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(resFile.Name()))
+		//		if err != nil {
+		//			return err
+		//		}
+		//		resBytes = decrypted
+		//	}
+		//	var fileMap map[string]interface{}
+		//	err = json.Unmarshal(resBytes, &fileMap)
+		//	if err != nil {
+		//		fmt.Printf("\nerr Unmarshal file %v: %v\n", resConfigPath, err)
+		//		return err
+		//	}
+		//	//spec := fileMap["spec"].(map[string]interface{})
+		//	//if preserveUnknownFields, ok := spec["preserveUnknownFields"].(bool); ok && preserveUnknownFields {
+		//	//	spec["preserveUnknownFields"] = false
+		//	//}
+		//	//fileMap["spec"] = spec
+		//	fileMap["apiVersion"] = "apiextensions.k8s.io/v1beta1"
+		//	writeBytes, err := json.Marshal(fileMap)
+		//	if err != nil {
+		//		fmt.Printf("\nerr marshal file %v: %v\n", resConfigPath, err)
+		//		return fmt.Errorf("error marshaling updated ownerRefs: %v", err)
+		//	}
+		//	fmt.Printf("\nwriting to file: %v\n", string(writeBytes))
+		//	if err := ioutil.WriteFile(resConfigPath, writeBytes, 0777); err != nil {
+		//		fmt.Printf("\nerr WriteFile file %v: %v\n", resConfigPath, err)
+		//		return err
+		//	}
+		//}
+		err := h.restoreResource(resConfigPath, resFile.Name(), decryptionTransformer, tempGVR)
 		if err != nil {
+			panic(err)
 			return fmt.Errorf("restoreCRDs: %v", err)
 		}
 		restoreObjKey := &restoreObj{
 			Name:               strings.TrimSuffix(resFile.Name(), ".json"),
-			ResourceConfigPath: resManifestPath,
-			GVR:                gvr,
+			ResourceConfigPath: resConfigPath,
+			GVR:                tempGVR,
 		}
 		created[restoreObjKey.ResourceConfigPath] = true
 	}
@@ -290,6 +339,7 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, gvr 
 			GVR:                ownerGVR,
 		}
 		if isNamespaced {
+			// if owning object is namespaced, then it has to be the same ns as the current dependent object
 			ownerObj.Namespace = currRestoreObj.Namespace
 		}
 		ownerObjDependents, ok := ownerToDependentsList[ownerObj]
@@ -319,7 +369,7 @@ func (h *handler) createFromAdjacencyList(ownerToDependentsList map[restoreObj][
 			toRestore = toRestore[1:]
 		}
 		if created[curr.ResourceConfigPath] {
-			// cyclic dependency???
+			continue
 		}
 		if err := h.restoreResource(curr.ResourceConfigPath, curr.Name, transformerMap[curr.GVR.GroupResource()], curr.GVR); err != nil {
 			return err
@@ -332,8 +382,8 @@ func (h *handler) createFromAdjacencyList(ownerToDependentsList map[restoreObj][
 				// ready to create
 				// before I add catTempVersion, I update all of its ownerRefs
 				if err := h.updateOwnerRefs(dependent); err != nil {
-					//return err
-					panic(err)
+					return err
+					//panic(err)
 				}
 				toRestore = append(toRestore, dependent)
 			}
@@ -439,6 +489,7 @@ func (h *handler) restoreResource(resConfigPath, aad string, decryptionTransform
 	if err != nil {
 		return err
 	}
+	fmt.Printf("\nrestoreResource: read file bytes: %v\n", string(resBytes))
 	fileMapMetadata := fileMap[metadataMapKey].(map[string]interface{})
 	name := fileMapMetadata["name"].(string)
 	namespace, _ := fileMapMetadata["namespace"].(string)
@@ -449,6 +500,7 @@ func (h *handler) restoreResource(resConfigPath, aad string, decryptionTransform
 	if namespace != "" {
 		dr = h.dynamicClient.Resource(gvr).Namespace(namespace)
 	}
+
 	res, err := dr.Get(h.ctx, name, k8sv1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -459,6 +511,7 @@ func (h *handler) restoreResource(resConfigPath, aad string, decryptionTransform
 		if err != nil {
 			return err
 		}
+		fmt.Printf("\ncreated obj %v:\n", obj.Object)
 		return nil
 	}
 	resMetadata := res.Object[metadataMapKey].(map[string]interface{})
