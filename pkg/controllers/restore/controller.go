@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	lasso "github.com/rancher/lasso/pkg/client"
 	"io/ioutil"
-	"k8s.io/client-go/restmapper"
 
 	//"k8s.io/apimachinery/pkg/api/meta"
 	//"k8s.io/client-go/restmapper"
@@ -24,10 +24,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/client-go/discovery/cached/memory"
 	//"k8s.io/apimachinery/pkg/api/meta"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -49,6 +47,7 @@ type handler struct {
 	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController
 	discoveryClient         discovery.DiscoveryInterface
 	dynamicClient           dynamic.Interface
+	sharedClientFactory     lasso.SharedClientFactory
 }
 
 type restoreObj struct {
@@ -67,7 +66,8 @@ func Register(
 	backups backupControllers.BackupController,
 	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController,
 	clientSet *clientset.Clientset,
-	dynamicInterface dynamic.Interface) {
+	dynamicInterface dynamic.Interface,
+	sharedClientFactory lasso.SharedClientFactory) {
 
 	controller := &handler{
 		ctx:                     ctx,
@@ -76,6 +76,7 @@ func Register(
 		backupEncryptionConfigs: backupEncryptionConfigs,
 		dynamicClient:           dynamicInterface,
 		discoveryClient:         clientSet.Discovery(),
+		sharedClientFactory:     sharedClientFactory,
 	}
 
 	// Register handlers
@@ -143,110 +144,9 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 	return restore, nil
 
-	// now create dependents, for each dependent individual kubectl apply, get owner uid label. Get new obj UID and update
-	dependentDirInfo, err := ioutil.ReadDir(backupPath + "/dependents")
-	if err != nil {
-		return restore, err
-	}
-	fmt.Printf("Now restoring depedents..")
-	var dependentRestoreErr error
-	for _, gvDir := range dependentDirInfo {
-		gvkStr := gvDir.Name()
-		gvkParts := strings.Split(gvkStr, "#")
-		version := gvkParts[1]
-		kindGrp := strings.SplitN(gvkParts[0], ".", 1)
-		kind := kindGrp[0]
-		var grp string
-		if len(kindGrp) > 1 {
-			grp = kindGrp[1]
-		}
-		fmt.Printf("\nrestoring items of gvk %v, %v, %v\n", grp, version, kind)
-		resourceDirPath := filepath.Join(backupPath, "dependents", gvDir.Name())
-		resourceDirInfo, err := ioutil.ReadDir(resourceDirPath)
-		if err != nil {
-			return restore, err
-		}
-		for _, resourceFile := range resourceDirInfo {
-			// read the resource file to get the ownerRef's apiVersion, kind and name.
-			resourceFileName := filepath.Join(resourceDirPath, resourceFile.Name())
-			originalFileContent, err := ioutil.ReadFile(resourceFileName)
-			if err != nil {
-				return restore, err
-			}
-			fileMap := make(map[string]interface{})
-			err = json.Unmarshal(originalFileContent, &fileMap)
-			if err != nil {
-				return restore, err
-			}
-			metadata := fileMap["metadata"].(map[string]interface{})
-			ownerRefs, ok := metadata["ownerReferences"].([]interface{})
-			if !ok {
-				continue
-			}
-			for ind, obj := range ownerRefs {
-				ownerRef := obj.(map[string]interface{})
-				gv, err := schema.ParseGroupVersion(ownerRef["apiVersion"].(string))
-				if err != nil {
-					return restore, err
-				}
-				ownerKind := ownerRef["kind"].(string)
-				// TODO: proper method for getting plural name from kind
-				kind := strings.ToLower(strings.Split(ownerKind, ".")[0]) + "s"
-				gvr := gv.WithResource(kind)
-				dr := h.dynamicClient.Resource(gvr)
-				ownerOldUID := ownerRef["uid"].(string)
-				// TODO: which context to use
-				ctx := context.Background()
-				ownerObj, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", util.OldUIDReferenceLabel, ownerOldUID)})
-				if err != nil {
-					return restore, fmt.Errorf("error listing owner by label: %v", err)
-				}
-				if len(ownerObj.Items) == 0 {
-					logrus.Infof("No %v returned for label %v", kind, fmt.Sprintf("%s=%s", util.OldUIDReferenceLabel, ownerOldUID))
-					logrus.Errorf("Owner of %v could be a dependent itself, to try this again, return err at end")
-					dependentRestoreErr = fmt.Errorf("retry this")
-					continue
-				}
-				newOwnerUID := ownerObj.Items[0].Object["metadata"].(map[string]interface{})["uid"]
-				ownerRef["uid"] = newOwnerUID
-				ownerRefs[ind] = ownerRef
-			}
-			metadata["ownerReferences"] = ownerRefs
-			fileMap["metadata"] = metadata
-			writeBytes, err := json.Marshal(fileMap)
-			if err != nil {
-				return restore, fmt.Errorf("error marshaling updated ownerRefs: %v", err)
-			}
-			err = ioutil.WriteFile(resourceFileName, writeBytes, 0777)
-			if err != nil {
-				return restore, fmt.Errorf("error writing updated ownerRefs to file: %v", err)
-			}
-			// apply doubles data set size because of annotation creation; replace the object; use dynaminClient.Update; kubectl replace of create
-			output, err := exec.Command("kubectl", "apply", "-f", resourceFileName).CombinedOutput()
-			// use dynamic client.Update && client.UpdateStatus for  subsresources
-			// use discovery client to find which resource has status subresource
-			if err != nil {
-				if strings.Contains(string(output), "--validate=false") {
-					logrus.Info("Error during restore, retrying with validate=false")
-					retryop, err := exec.Command("kubectl", "apply", "-f", resourceFileName, "--validate=false").CombinedOutput()
-					if err != nil {
-						return restore, fmt.Errorf("error when restoring %v with validate=false: %v", resourceFileName, string(retryop)+err.Error())
-					} else {
-						logrus.Info("Retry with validate=false succeeded")
-						continue
-					}
-				}
-				return restore, err
-			}
-			err = ioutil.WriteFile(resourceFileName, originalFileContent, 0777)
-			if err != nil {
-				return restore, fmt.Errorf("error writing original ownerRefs to file: %v", err)
-			}
-		}
-	}
-	if dependentRestoreErr != nil {
-		return restore, dependentRestoreErr
-	}
+	//if dependentRestoreErr != nil {
+	//	return restore, dependentRestoreErr
+	//}
 	if err := h.prune(backupPath, restore.Spec.ForcePruneTimeout); err != nil {
 		return restore, fmt.Errorf("error pruning during restore")
 	}
@@ -370,7 +270,6 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, gvr 
 			continue
 		}
 		groupVersion := ownerRefData["apiVersion"].(string)
-
 		gv, err := schema.ParseGroupVersion(groupVersion)
 		if err != nil {
 			logrus.Errorf(" err %v parsing ownerRef apiVersion", err)
@@ -378,9 +277,10 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, gvr 
 		}
 		kind := ownerRefData["kind"].(string)
 		gvk := gv.WithKind(kind)
-		// TODO: find alternative other than UnsafeGuessKindToResource
-		plural, _ := meta.UnsafeGuessKindToResource(gvk)
-		gvr := gv.WithResource(plural.Resource)
+		ownerGVR, _, err := h.sharedClientFactory.ResourceForGVK(gvk)
+		if err != nil {
+			return fmt.Errorf("Error getting resource for gvk %v: %v", gvk, err)
+		}
 
 		var apiGroup, version string
 		split := strings.SplitN(groupVersion, "/", 2)
@@ -391,26 +291,14 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, gvr 
 			version = split[1]
 		}
 		// kind + "." + apigroup + "#" + version
-		ownerDirPath := fmt.Sprintf("%s.%s#%s", plural.Resource, apiGroup, version)
+		ownerDirPath := fmt.Sprintf("%s.%s#%s", ownerGVR.Resource, apiGroup, version)
 		ownerName := ownerRefData["name"].(string)
+		// Store resourceConfigPath of owner Ref because that's what we check for in "Created" map
 		ownerObj := &restoreObj{
 			Name:               ownerName,
 			ResourceConfigPath: filepath.Join(backupPath, ownerDirPath, ownerName+".json"),
-			GVR:                gvr,
+			GVR:                ownerGVR,
 		}
-
-		// if owner is namespaced, it has to be the same ns as the dependent. Add same ns to the owner.
-		// is ns?
-		mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(h.discoveryClient))
-		mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if err != nil {
-			return err
-		}
-		if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
-			// namespaced resources should specify the namespace
-			ownerObj.Namespace = namespace
-		}
-		//
 
 		ownersList = append(ownersList, ownerObj)
 	}
@@ -428,6 +316,7 @@ func (h *handler) createFromAdjacencyList(backupPath string, adjacencyList map[*
 				logrus.Infof("Obj %v has ownerRefs", dependent.Name)
 			}
 			for _, owner := range owners {
+				// TODO: owner at that path deleted? file exists check?
 				if !created[owner.ResourceConfigPath] {
 					canCreate = false
 					break
@@ -459,7 +348,6 @@ func (h *handler) createFromAdjacencyList(backupPath string, adjacencyList map[*
 				ownerReferences, _ := metadata[ownerRefsMapKey].([]interface{})
 				if metadata == nil || ownerReferences == nil {
 					// something went wrong, not updating this ownerRef
-					fmt.Printf("\nunmarshaled currObjContents: %#v\n", currObjContents)
 					logrus.Errorf("Missing ownerRef for %v", dependent.Name)
 					continue
 				}
@@ -477,22 +365,27 @@ func (h *handler) createFromAdjacencyList(backupPath string, adjacencyList map[*
 						return fmt.Errorf("err %v parsing apiversion %v", err, apiversion)
 					}
 					ownerGVK := ownerGV.WithKind(kind)
-					plural, _ := meta.UnsafeGuessKindToResource(ownerGVK)
-					gvr := ownerGV.WithResource(plural.Resource)
+					//plural, _ := meta.UnsafeGuessKindToResource(ownerGVK)
+					//gvr := ownerGV.WithResource(plural.Resource)
 					name, _ := reference["name"].(string)
+
+					ownerGVR, isNamespaced, err := h.sharedClientFactory.ResourceForGVK(ownerGVK)
+					if err != nil {
+						return fmt.Errorf("error getting resource for gvk %v: %v", ownerGVK, err)
+					}
 					ownerObj := &restoreObj{
 						Name: name,
-						GVR:  gvr,
+						GVR:  ownerGVR,
 					}
-					mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(h.discoveryClient))
-					mapping, err := mapper.RESTMapping(ownerGVK.GroupKind(), ownerGVK.Version)
-					if err != nil {
-						return err
-					}
-					if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
-						// namespaced resources should specify the namespace
+					// if owner object is namespaced, it has to be within same namespace, since per definition
+					/*
+						// OwnerReference contains enough information to let you identify an owning
+						// object. An owning object must be in the same namespace as the dependent, or
+						// be cluster-scoped, so there is no namespace field.*/
+					if isNamespaced {
 						ownerObj.Namespace = dependent.Namespace
 					}
+
 					logrus.Infof("Getting new UID for %v ", ownerObj.Name)
 					ownerObjNewUID, err := h.getOwnerNewUID(ownerObj)
 					if err != nil {

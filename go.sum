@@ -293,6 +293,8 @@ github.com/prometheus/procfs v0.0.2/go.mod h1:TjEm7ze935MbeOT/UhFTIMYKhuLP4wbCsT
 github.com/rancher/go-skel v0.0.0-20200527170812-604afb5ab3e5 h1:3d4TS9Z24x1+MXqppukknGNArLnrLX7W9O0FJ4Pdez4=
 github.com/rancher/lasso v0.0.0-20200515155337-a34e1e26ad91 h1:p4VVl0tr6YAeUILFMCn+0DKzbUOS0ah9biSsL7Sy6S4=
 github.com/rancher/lasso v0.0.0-20200515155337-a34e1e26ad91/go.mod h1:G6Vv2aj6xB2YjTVagmu4NkhBvbE8nBcGykHRENH6arI=
+github.com/rancher/rancher v1.6.30 h1:WUHpmooVZtU+hIMPYMsNnDMs+IiyxHYMMTA/iFSW6i8=
+github.com/rancher/rancher v2.2.13+incompatible h1:LzIBmtbHxMl9gpwcwWYPl8Qdl9+bzY2JeSiTAGtochY=
 github.com/rancher/wrangler v0.6.0/go.mod h1:L4HtjPeX8iqLgsxfJgz+JjKMcX2q3qbRXSeTlC/CSd4=
 github.com/rancher/wrangler v0.6.1 h1:7tyLk/FV2zCQkYg5SEtT4lSlsHNwa5yMOa797/VJhiQ=
 github.com/rancher/wrangler v0.6.1/go.mod h1:L4HtjPeX8iqLgsxfJgz+JjKMcX2q3qbRXSeTlC/CSd4=
