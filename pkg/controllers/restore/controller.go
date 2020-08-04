@@ -52,6 +52,7 @@ type restoreObj struct {
 	Namespace          string
 	GVR                schema.GroupVersionResource
 	ResourceConfigPath string
+	Data               *unstructured.Unstructured
 }
 
 //var RestoreObjCreated = make(map[types.UID]map[*restoreObj]bool)
@@ -82,9 +83,9 @@ func Register(
 
 func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, error) {
 	created := make(map[string]bool)
-	ownerToDependentsList := make(map[restoreObj][]restoreObj)
+	ownerToDependentsList := make(map[string][]restoreObj)
 	var toRestore []restoreObj
-	numOwnerReferences := make(map[restoreObj]int)
+	numOwnerReferences := make(map[string]int)
 
 	backupName := restore.Spec.BackupFileName
 
@@ -177,8 +178,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return restore, err
 	}
 
-	if err := h.createFromAdjacencyList(ownerToDependentsList, created, numOwnerReferences, toRestore, transformerMap); err != nil {
-		//panic(err)
+	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore, transformerMap); err != nil {
 		removeDirErr := os.RemoveAll(backupPath)
 		if removeDirErr != nil {
 			return restore, errors.New(err.Error() + removeDirErr.Error())
@@ -206,7 +206,6 @@ func (h *handler) restoreCRDs(backupPath, resourceGVK string, transformerMap map
 	resourceDirPath := path.Join(backupPath, resourceGVK)
 	gvr := getGVR(resourceGVK)
 	gr := gvr.GroupResource()
-	tempGVR := gr.WithVersion("v1beta1")
 	decryptionTransformer, _ := transformerMap[gr]
 	dirContents, err := ioutil.ReadDir(resourceDirPath)
 	if err != nil {
@@ -256,23 +255,44 @@ func (h *handler) restoreCRDs(backupPath, resourceGVK string, transformerMap map
 		//		return err
 		//	}
 		//}
-		err := h.restoreResource(resConfigPath, resFile.Name(), decryptionTransformer, tempGVR)
+		crdContent, err := ioutil.ReadFile(resConfigPath)
 		if err != nil {
-			panic(err)
+			return err
+		}
+		var crdData map[string]interface{}
+		if err := json.Unmarshal(crdContent, &crdData); err != nil {
+			return err
+		}
+		crdName := strings.TrimSuffix(resFile.Name(), ".json")
+		if decryptionTransformer != nil {
+			var encryptedBytes []byte
+			if err := json.Unmarshal(crdContent, &encryptedBytes); err != nil {
+				return err
+			}
+			decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(crdName))
+			if err != nil {
+				return err
+			}
+			crdContent = decrypted
+		}
+		restoreObjKey := restoreObj{
+			Name:               crdName,
+			ResourceConfigPath: resConfigPath,
+			GVR:                gvr,
+			Data:               &unstructured.Unstructured{Object: crdData},
+		}
+		err = h.restoreResource(restoreObjKey, gvr)
+		if err != nil {
 			return fmt.Errorf("restoreCRDs: %v", err)
 		}
-		restoreObjKey := &restoreObj{
-			Name:               strings.TrimSuffix(resFile.Name(), ".json"),
-			ResourceConfigPath: resConfigPath,
-			GVR:                tempGVR,
-		}
+
 		created[restoreObjKey.ResourceConfigPath] = true
 	}
 	return nil
 }
 
 func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[schema.GroupResource]value.Transformer,
-	ownerToDependentsList map[restoreObj][]restoreObj, toRestore *[]restoreObj, numOwnerReferences map[restoreObj]int) error {
+	ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj, numOwnerReferences map[string]int) error {
 	backupEntries, err := ioutil.ReadDir(backupPath)
 	if err != nil {
 		return err
@@ -282,10 +302,7 @@ func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[
 		if backupEntry.Name() == "filters" {
 			continue
 		}
-		//if !backupEntry.IsDir() {
-		//	// only file is filters.json which we read during prune, so continue
-		//	continue
-		//}
+
 		// example catalogs.management.cattle.io#v3
 		resourceGVK := backupEntry.Name()
 		resourceDirPath := path.Join(backupPath, resourceGVK)
@@ -298,7 +315,7 @@ func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[
 
 		for _, resourceFile := range resourceFiles {
 			resManifestPath := filepath.Join(resourceDirPath, resourceFile.Name())
-			if err := h.addToAdjacencyList(backupPath, resManifestPath, resourceFile.Name(), gvr, transformerMap[gr],
+			if err := h.addToOwnersToDependentsList(backupPath, resManifestPath, resourceFile.Name(), gvr, transformerMap[gr],
 				ownerToDependentsList, toRestore, numOwnerReferences); err != nil {
 				return err
 			}
@@ -307,9 +324,9 @@ func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[
 	return nil
 }
 
-func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, gvr schema.GroupVersionResource, decryptionTransformer value.Transformer,
-	ownerToDependentsList map[restoreObj][]restoreObj, toRestore *[]restoreObj, numOwnerReferences map[restoreObj]int) error {
-	logrus.Infof("NOW 2 Processing %v for adjacency list", resConfigPath)
+func (h *handler) addToOwnersToDependentsList(backupPath, resConfigPath, aad string, gvr schema.GroupVersionResource, decryptionTransformer value.Transformer,
+	ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj, numOwnerReferences map[string]int) error {
+	logrus.Infof("Processing %v for adjacency list", resConfigPath)
 	resBytes, err := ioutil.ReadFile(resConfigPath)
 	if err != nil {
 		return err
@@ -345,6 +362,7 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, gvr 
 		Name:               name,
 		ResourceConfigPath: resConfigPath,
 		GVR:                gvr,
+		Data:               &unstructured.Unstructured{Object: fileMap},
 	}
 	if isNamespaced {
 		currRestoreObj.Namespace = namespace
@@ -364,6 +382,7 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, gvr 
 			logrus.Errorf("invalid ownerRef")
 			continue
 		}
+
 		groupVersion := ownerRefData["apiVersion"].(string)
 		gv, err := schema.ParseGroupVersion(groupVersion)
 		if err != nil {
@@ -380,11 +399,13 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, gvr 
 		var apiGroup, version string
 		split := strings.SplitN(groupVersion, "/", 2)
 		if len(split) == 1 {
+			// resources under v1 version
 			version = split[0]
 		} else {
 			apiGroup = split[0]
 			version = split[1]
 		}
+		// TODO: check if this object creation is needed
 		// kind + "." + apigroup + "#" + version
 		ownerDirPath := fmt.Sprintf("%s.%s#%s", ownerGVR.Resource, apiGroup, version)
 		ownerName := ownerRefData["name"].(string)
@@ -398,19 +419,20 @@ func (h *handler) addToAdjacencyList(backupPath, resConfigPath, aad string, gvr 
 			// if owning object is namespaced, then it has to be the same ns as the current dependent object
 			ownerObj.Namespace = currRestoreObj.Namespace
 		}
-		ownerObjDependents, ok := ownerToDependentsList[ownerObj]
+		ownerObjDependents, ok := ownerToDependentsList[ownerObj.ResourceConfigPath]
 		if !ok {
-			ownerToDependentsList[ownerObj] = []restoreObj{currRestoreObj}
+			ownerToDependentsList[ownerObj.ResourceConfigPath] = []restoreObj{currRestoreObj}
 		} else {
-			ownerToDependentsList[ownerObj] = append(ownerObjDependents, currRestoreObj)
+			ownerToDependentsList[ownerObj.ResourceConfigPath] = append(ownerObjDependents, currRestoreObj)
 		}
 	}
 
-	numOwnerReferences[currRestoreObj] = numOwners
+	numOwnerReferences[currRestoreObj.ResourceConfigPath] = numOwners
 	return nil
 }
 
-func (h *handler) createFromAdjacencyList(ownerToDependentsList map[restoreObj][]restoreObj, created map[string]bool, numOwnerReferences map[restoreObj]int, toRestore []restoreObj, transformerMap map[schema.GroupResource]value.Transformer) error {
+func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]restoreObj, created map[string]bool,
+	numOwnerReferences map[string]int, toRestore []restoreObj, transformerMap map[schema.GroupResource]value.Transformer) error {
 	numTotalDependents := 0
 	for _, dependents := range ownerToDependentsList {
 		numTotalDependents += len(dependents)
@@ -422,27 +444,23 @@ func (h *handler) createFromAdjacencyList(ownerToDependentsList map[restoreObj][
 		if len(toRestore) == 1 {
 			toRestore = []restoreObj{}
 		} else {
-			// https://github.com/golang/go/wiki/SliceTricks#delete
 			toRestore = toRestore[1:]
 		}
 		if created[curr.ResourceConfigPath] {
 			continue
 		}
-		if err := h.restoreResource(curr.ResourceConfigPath, curr.Name, transformerMap[curr.GVR.GroupResource()], curr.GVR); err != nil {
+		if err := h.restoreResource(curr, curr.GVR); err != nil {
+			// save error return at end after trying everything from toRestore
 			return err
 		}
-		for _, dependent := range ownerToDependentsList[curr] {
+		for _, dependent := range ownerToDependentsList[curr.ResourceConfigPath] {
 			// example, curr = catTemplate, dependent=catTempVer
 			// check numOwnerReferences[dependent] is 0
-			numOwnerReferences[dependent]--
-			if numOwnerReferences[dependent] == 0 {
+			if numOwnerReferences[dependent.ResourceConfigPath] > 0 {
+				numOwnerReferences[dependent.ResourceConfigPath]--
+			}
+			if numOwnerReferences[dependent.ResourceConfigPath] == 0 {
 				logrus.Infof("dependent %v is now ready to create", dependent.Name)
-				// ready to create
-				// before I add catTempVersion, I update all of its ownerRefs
-				if err := h.updateOwnerRefs(dependent); err != nil {
-					// save error return at end after trying everything from toRestore
-					return err
-				}
 				toRestore = append(toRestore, dependent)
 			}
 		}
@@ -453,25 +471,7 @@ func (h *handler) createFromAdjacencyList(ownerToDependentsList map[restoreObj][
 	return nil
 }
 
-func (h *handler) updateOwnerRefs(dependent restoreObj) error {
-	currObjBytes, err := ioutil.ReadFile(dependent.ResourceConfigPath)
-	if err != nil {
-		return fmt.Errorf("error reading %v: %v", dependent.ResourceConfigPath, err)
-	}
-	logrus.Infof("Unmarshaling for %v since its owners are created", dependent.Name)
-	var currObjContents map[string]interface{}
-	if err := json.Unmarshal(currObjBytes, &currObjContents); err != nil {
-		return fmt.Errorf("error unmarshaling %v: %v", dependent.ResourceConfigPath, err)
-	}
-
-	metadata, _ := currObjContents[metadataMapKey].(map[string]interface{})
-	ownerReferences, _ := metadata[ownerRefsMapKey].([]interface{})
-	if metadata == nil || ownerReferences == nil {
-		// something went wrong, not updating this ownerRef
-		logrus.Errorf("Missing ownerRef for %v", dependent.Name)
-		return nil
-	}
-	logrus.Infof("looping ownerRefs for %v since its owners are created", dependent.Name)
+func (h *handler) updateOwnerRefs(ownerReferences []interface{}, namespace string) error {
 	for ind, ownerRef := range ownerReferences {
 		reference := ownerRef.(map[string]interface{})
 		apiversion, _ := reference["apiVersion"].(string)
@@ -479,7 +479,6 @@ func (h *handler) updateOwnerRefs(dependent restoreObj) error {
 		if apiversion == "" || kind == "" {
 			continue
 		}
-		logrus.Infof("Parsing gv for ownerRef for %v ", dependent.Name)
 		ownerGV, err := schema.ParseGroupVersion(apiversion)
 		if err != nil {
 			return fmt.Errorf("err %v parsing apiversion %v", err, apiversion)
@@ -501,7 +500,7 @@ func (h *handler) updateOwnerRefs(dependent restoreObj) error {
 			// object. An owning object must be in the same namespace as the dependent, or
 			// be cluster-scoped, so there is no namespace field.*/
 		if isNamespaced {
-			ownerObj.Namespace = dependent.Namespace
+			ownerObj.Namespace = namespace
 		}
 
 		logrus.Infof("Getting new UID for %v ", ownerObj.Name)
@@ -512,51 +511,30 @@ func (h *handler) updateOwnerRefs(dependent restoreObj) error {
 		reference["uid"] = ownerObjNewUID
 		ownerReferences[ind] = reference
 	}
-	metadata[ownerRefsMapKey] = ownerReferences
-	currObjContents[metadataMapKey] = metadata
-	writeBytes, err := json.Marshal(currObjContents)
-	if err != nil {
-		return fmt.Errorf("error marshaling updated ownerRefs: %v", err)
-	}
-	err = ioutil.WriteFile(dependent.ResourceConfigPath, writeBytes, 0777)
-	if err != nil {
-		return fmt.Errorf("error writing updated ownerRefs to file: %v", err)
-	}
 	return nil
 }
 
-func (h *handler) restoreResource(resConfigPath, aad string, decryptionTransformer value.Transformer, gvr schema.GroupVersionResource) error {
-	logrus.Infof("Restoring from %v", resConfigPath)
-	resBytes, err := ioutil.ReadFile(resConfigPath)
-	if err != nil {
-		return err
-	}
-	if decryptionTransformer != nil {
-		var encryptedBytes []byte
-		if err := json.Unmarshal(resBytes, &encryptedBytes); err != nil {
-			return err
-		}
-		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(aad))
-		if err != nil {
-			return err
-		}
-		resBytes = decrypted
-	}
-	fileMap := make(map[string]interface{})
-	err = json.Unmarshal(resBytes, &fileMap)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("\nrestoreResource: read file bytes: %v\n", string(resBytes))
+func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVersionResource) error {
+	logrus.Infof("Restoring %v", currRestoreObj.Name)
+
+	fileMap := currRestoreObj.Data.Object
+	obj := currRestoreObj.Data
+
+	//fmt.Printf("\nrestoreResource: read file bytes: %v\n", string(resBytes))
 	fileMapMetadata := fileMap[metadataMapKey].(map[string]interface{})
 	name := fileMapMetadata["name"].(string)
 	namespace, _ := fileMapMetadata["namespace"].(string)
-	obj := &unstructured.Unstructured{Object: fileMap}
 	// TODO: subresources
 	var dr dynamic.ResourceInterface
 	dr = h.dynamicClient.Resource(gvr)
 	if namespace != "" {
 		dr = h.dynamicClient.Resource(gvr).Namespace(namespace)
+	}
+	ownerReferences, _ := fileMapMetadata[ownerRefsMapKey].([]interface{})
+	if ownerReferences != nil {
+		if err := h.updateOwnerRefs(ownerReferences, namespace); err != nil {
+			return err
+		}
 	}
 
 	res, err := dr.Get(h.ctx, name, k8sv1.GetOptions{})
