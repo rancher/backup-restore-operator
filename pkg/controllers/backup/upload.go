@@ -2,6 +2,7 @@ package backup
 
 import (
 	"fmt"
+	"io/ioutil"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"os"
@@ -14,13 +15,17 @@ import (
 
 func (h *handler) uploadToS3(backup *v1.Backup, tmpBackupPath, gzipFile string) error {
 	// for objectstore, if folder name exists, use that as path, else use backupBase
+	tmpBackupGzipFilepath, err := ioutil.TempDir("", "uploadpath")
+	if err != nil {
+		return err
+	}
 	if backup.Spec.ObjectStore.Folder != "" {
-		if err := os.Mkdir(filepath.Join(util.BackupBaseDir, backup.Spec.ObjectStore.Folder), os.ModePerm); err != nil {
+		if err := os.Mkdir(filepath.Join(tmpBackupGzipFilepath, backup.Spec.ObjectStore.Folder), os.ModePerm); err != nil {
 			return err
 		}
 		gzipFile = fmt.Sprintf("%s/%s", backup.Spec.ObjectStore.Folder, gzipFile)
 	}
-	if err := util.CreateTarAndGzip(tmpBackupPath, util.BackupBaseDir, gzipFile); err != nil {
+	if err := util.CreateTarAndGzip(tmpBackupPath, tmpBackupGzipFilepath, gzipFile); err != nil {
 		return err
 	}
 	gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
@@ -48,8 +53,9 @@ func (h *handler) uploadToS3(backup *v1.Backup, tmpBackupPath, gzipFile string) 
 	if err != nil {
 		return err
 	}
-	if err := util.UploadBackupFile(s3Client, backup.Spec.ObjectStore.BucketName, gzipFile, filepath.Join(util.BackupBaseDir, gzipFile)); err != nil {
+	if err := util.UploadBackupFile(s3Client, backup.Spec.ObjectStore.BucketName, gzipFile, filepath.Join(tmpBackupGzipFilepath, gzipFile)); err != nil {
 		return err
 	}
-	return nil
+	err = os.RemoveAll(tmpBackupGzipFilepath)
+	return err
 }
