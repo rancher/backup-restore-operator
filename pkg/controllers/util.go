@@ -10,10 +10,6 @@ import (
 	"path/filepath"
 )
 
-const (
-	BackupBaseDir = "baseBackup"
-)
-
 func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 	gzipFile, err := os.Create(filepath.Join(targetGzipPath, targetGzipFile))
 	if err != nil {
@@ -26,6 +22,9 @@ func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 	tw := tar.NewWriter(gw)
 	defer tw.Close()
 	walkFunc := func(currPath string, info os.FileInfo, err error) error {
+		if currPath == backupPath {
+			return nil
+		}
 		if err != nil {
 			return fmt.Errorf("error in walkFunc for %v: %v", currPath, err)
 		}

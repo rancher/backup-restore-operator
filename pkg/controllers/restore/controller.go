@@ -3,6 +3,7 @@ package restore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -77,7 +78,6 @@ func Register(
 
 	// Register handlers
 	restores.OnChange(ctx, "restore", controller.OnRestoreChange)
-	//backups.OnRemove(ctx, controllerRemoveName, controller.OnEksConfigRemoved)
 }
 
 func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, error) {
@@ -87,38 +87,82 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	numOwnerReferences := make(map[restoreObj]int)
 
 	backupName := restore.Spec.BackupFileName
-	backupPath := filepath.Join(util.BackupBaseDir, backupName)
-	// if local, backup tar.gz must be added to the "Local" path
+
+	backupPath, err := ioutil.TempDir("", strings.TrimSuffix(backupName, ".tar.gz"))
+	if err != nil {
+		return restore, err
+	}
+	logrus.Infof("Temporary path for un-tar/gzip backup data during restore: %v", backupPath)
+
 	if restore.Spec.Local != "" {
+		// if local, backup tar.gz must be added to the "Local" path
 		backupFilePath := filepath.Join(restore.Spec.Local, backupName)
-		if err := util.LoadFromTarGzip(backupFilePath); err != nil {
+		if err := util.LoadFromTarGzip(backupFilePath, backupPath); err != nil {
+			removeDirErr := os.RemoveAll(backupPath)
+			if removeDirErr != nil {
+				return restore, errors.New(err.Error() + removeDirErr.Error())
+			}
 			return restore, err
 		}
 	} else if restore.Spec.ObjectStore != nil {
-		if err := h.downloadFromS3(restore); err != nil {
+		backupFilePath, err := h.downloadFromS3(restore)
+		if err != nil {
+			removeDirErr := os.RemoveAll(backupPath)
+			if removeDirErr != nil {
+				return restore, errors.New(err.Error() + removeDirErr.Error())
+			}
+			removeFileErr := os.Remove(backupFilePath)
+			if removeFileErr != nil {
+				return restore, errors.New(err.Error() + removeFileErr.Error())
+			}
 			return restore, err
 		}
-		backupFilePath := filepath.Join(util.BackupBaseDir, backupName)
-		if err := util.LoadFromTarGzip(backupFilePath); err != nil {
+		if err := util.LoadFromTarGzip(backupFilePath, backupPath); err != nil {
+			removeDirErr := os.RemoveAll(backupPath)
+			if removeDirErr != nil {
+				return restore, errors.New(err.Error() + removeDirErr.Error())
+			}
+			removeFileErr := os.Remove(backupFilePath)
+			if removeFileErr != nil {
+				return restore, errors.New(err.Error() + removeFileErr.Error())
+			}
 			return restore, err
+		}
+		// remove the downloaded gzip file from s3 as contents are untar/unzipped at the temp location by this point
+		removeFileErr := os.Remove(backupFilePath)
+		if removeFileErr != nil {
+			return restore, errors.New(err.Error() + removeFileErr.Error())
 		}
 	}
 	backupPath = strings.TrimSuffix(backupPath, ".tar.gz")
-
+	logrus.Infof("Untar/Ungzip backup at %v", backupPath)
 	config, err := h.backupEncryptionConfigs.Get(restore.Spec.EncryptionConfigNamespace, restore.Spec.EncryptionConfigName, k8sv1.GetOptions{})
 	if err != nil {
+		removeDirErr := os.RemoveAll(backupPath)
+		if removeDirErr != nil {
+			return restore, errors.New(err.Error() + removeDirErr.Error())
+		}
 		return restore, err
 	}
 	transformerMap, err := util.GetEncryptionTransformers(config)
 	if err != nil {
+		removeDirErr := os.RemoveAll(backupPath)
+		if removeDirErr != nil {
+			return restore, errors.New(err.Error() + removeDirErr.Error())
+		}
 		return restore, err
 	}
 
 	// first restore CRDs
 	//_, err = os.Stat(filepath.Join(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1"))
 	//if err == nil {
+	//TODO: no writes
 	if err := h.restoreCRDs(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1", transformerMap, created, true); err != nil {
-		return restore, fmt.Errorf("error restoring CRD: %v", err)
+		removeDirErr := os.RemoveAll(backupPath)
+		if removeDirErr != nil {
+			return restore, errors.New(err.Error() + removeDirErr.Error())
+		}
+		return restore, err
 	}
 	//}
 	//
@@ -126,15 +170,24 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 	// generate adjacency lists for dependents and ownerRefs
 	if err := h.generateDependencyGraph(backupPath, transformerMap, ownerToDependentsList, &toRestore, numOwnerReferences); err != nil {
+		removeDirErr := os.RemoveAll(backupPath)
+		if removeDirErr != nil {
+			return restore, errors.New(err.Error() + removeDirErr.Error())
+		}
 		return restore, err
 	}
 
 	if err := h.createFromAdjacencyList(ownerToDependentsList, created, numOwnerReferences, toRestore, transformerMap); err != nil {
-		panic(err)
+		//panic(err)
+		removeDirErr := os.RemoveAll(backupPath)
+		if removeDirErr != nil {
+			return restore, errors.New(err.Error() + removeDirErr.Error())
+		}
 		return restore, err
 	}
 
-	return restore, nil
+	err = os.RemoveAll(backupPath)
+	return restore, err
 
 	//if dependentRestoreErr != nil {
 	//	return restore, dependentRestoreErr
@@ -226,10 +279,13 @@ func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[
 	}
 
 	for _, backupEntry := range backupEntries {
-		if !backupEntry.IsDir() {
-			// only file is filters.json which we read during prune, so continue
+		if backupEntry.Name() == "filters" {
 			continue
 		}
+		//if !backupEntry.IsDir() {
+		//	// only file is filters.json which we read during prune, so continue
+		//	continue
+		//}
 		// example catalogs.management.cattle.io#v3
 		resourceGVK := backupEntry.Name()
 		resourceDirPath := path.Join(backupPath, resourceGVK)
@@ -366,6 +422,7 @@ func (h *handler) createFromAdjacencyList(ownerToDependentsList map[restoreObj][
 		if len(toRestore) == 1 {
 			toRestore = []restoreObj{}
 		} else {
+			// https://github.com/golang/go/wiki/SliceTricks#delete
 			toRestore = toRestore[1:]
 		}
 		if created[curr.ResourceConfigPath] {
@@ -376,14 +433,15 @@ func (h *handler) createFromAdjacencyList(ownerToDependentsList map[restoreObj][
 		}
 		for _, dependent := range ownerToDependentsList[curr] {
 			// example, curr = catTemplate, dependent=catTempVer
+			// check numOwnerReferences[dependent] is 0
 			numOwnerReferences[dependent]--
 			if numOwnerReferences[dependent] == 0 {
 				logrus.Infof("dependent %v is now ready to create", dependent.Name)
 				// ready to create
 				// before I add catTempVersion, I update all of its ownerRefs
 				if err := h.updateOwnerRefs(dependent); err != nil {
+					// save error return at end after trying everything from toRestore
 					return err
-					//panic(err)
 				}
 				toRestore = append(toRestore, dependent)
 			}
@@ -511,7 +569,6 @@ func (h *handler) restoreResource(resConfigPath, aad string, decryptionTransform
 		if err != nil {
 			return err
 		}
-		fmt.Printf("\ncreated obj %v:\n", obj.Object)
 		return nil
 	}
 	resMetadata := res.Object[metadataMapKey].(map[string]interface{})

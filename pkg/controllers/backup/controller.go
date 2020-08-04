@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/rancher/wrangler/pkg/slice"
@@ -70,68 +71,78 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	//h.discoveryClient.ServerGroupsAndResources()
 	config, err := h.backupEncryptionConfigs.Get(backup.Spec.EncryptionConfigNamespace, backup.Spec.EncryptionConfigName, k8sv1.GetOptions{})
 	if err != nil {
-		if err := os.RemoveAll(tmpBackupPath); err != nil {
-			return backup, err
+		removeDirErr := os.RemoveAll(tmpBackupPath)
+		if removeDirErr != nil {
+			return backup, errors.New(err.Error() + removeDirErr.Error())
 		}
 		return backup, err
 	}
 	transformerMap, err := util.GetEncryptionTransformers(config)
 	if err != nil {
-		if err := os.RemoveAll(tmpBackupPath); err != nil {
-			return backup, err
+		removeDirErr := os.RemoveAll(tmpBackupPath)
+		if removeDirErr != nil {
+			return backup, errors.New(err.Error() + removeDirErr.Error())
 		}
 		return backup, err
 	}
 
 	template, err := h.backupTemplates.Get("default", backup.Spec.BackupTemplate, k8sv1.GetOptions{})
 	if err != nil {
-		if err := os.RemoveAll(tmpBackupPath); err != nil {
-			return backup, err
+		removeDirErr := os.RemoveAll(tmpBackupPath)
+		if removeDirErr != nil {
+			return backup, errors.New(err.Error() + removeDirErr.Error())
 		}
 		return backup, err
 	}
 	err = h.gatherResources(template.BackupFilters, tmpBackupPath, transformerMap)
 	if err != nil {
-		if err := os.RemoveAll(tmpBackupPath); err != nil {
-			return backup, err
+		removeDirErr := os.RemoveAll(tmpBackupPath)
+		if removeDirErr != nil {
+			return backup, errors.New(err.Error() + removeDirErr.Error())
 		}
 		return backup, err
 	}
 	filters, err := json.Marshal(template.BackupFilters)
 	if err != nil {
-		if err := os.RemoveAll(tmpBackupPath); err != nil {
-			return backup, err
+		removeDirErr := os.RemoveAll(tmpBackupPath)
+		if removeDirErr != nil {
+			return backup, errors.New(err.Error() + removeDirErr.Error())
 		}
 		return backup, err
 	}
-	filterFile, err := os.Create(filepath.Join(tmpBackupPath, filepath.Base("filters.json")))
+	filtersPath := filepath.Join(tmpBackupPath, "filters")
+	err = os.Mkdir(filtersPath, os.ModePerm)
 	if err != nil {
-		if err := os.RemoveAll(tmpBackupPath); err != nil {
-			return backup, err
+		removeDirErr := os.RemoveAll(tmpBackupPath)
+		if removeDirErr != nil {
+			return backup, errors.New(err.Error() + removeDirErr.Error())
 		}
-		return backup, fmt.Errorf("error creating filters file: %v", err)
 	}
-	defer filterFile.Close()
-	if _, err := filterFile.Write(filters); err != nil {
-		if err := os.RemoveAll(tmpBackupPath); err != nil {
-			return backup, err
+	err = ioutil.WriteFile(filepath.Join(filtersPath, "filters.json"), filters, os.ModePerm)
+	if err != nil {
+		removeDirErr := os.RemoveAll(tmpBackupPath)
+		if removeDirErr != nil {
+			return backup, errors.New(err.Error() + removeDirErr.Error())
 		}
-		return backup, fmt.Errorf("error writing JSON to filters file: %v", err)
+		return backup, err
 	}
+
 	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
 	gzipFile := backup.Spec.BackupFileName + ".tar.gz"
 	if backup.Spec.Local != "" {
 		// for local, to send backup tar to given local path, use that as the path when creating compressed file
 		if err := util.CreateTarAndGzip(tmpBackupPath, backup.Spec.Local, gzipFile); err != nil {
-			if err := os.RemoveAll(tmpBackupPath); err != nil {
-				return backup, err
+			removeDirErr := os.RemoveAll(tmpBackupPath)
+			if removeDirErr != nil {
+				return backup, errors.New(err.Error() + removeDirErr.Error())
 			}
 			return backup, err
 		}
 	} else if backup.Spec.ObjectStore != nil {
 		if err := h.uploadToS3(backup, tmpBackupPath, gzipFile); err != nil {
-			if err := os.RemoveAll(tmpBackupPath); err != nil {
-				return backup, err
+			removeDirErr := os.RemoveAll(tmpBackupPath)
+			if removeDirErr != nil {
+				return backup, errors.New(err.Error() + removeDirErr.Error())
 			}
 			return backup, err
 		}

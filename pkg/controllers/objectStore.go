@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/minio/minio-go/v6"
@@ -136,7 +137,8 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 	}
 	// if folder is included, strip it so it doesnt end up in a folder on the host itself
 	targetFilename := path.Base(filename)
-	targetFileLocation := fmt.Sprintf("%s/%s", BackupBaseDir, targetFilename)
+	targetFileLocation := filepath.Join(os.TempDir(), targetFilename)
+	log.Infof("Temporary location of backup file from s3: %v", targetFileLocation)
 	var object *minio.Object
 	var err error
 	for retries := 0; retries <= s3ServerRetries; retries++ {
@@ -163,7 +165,7 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 		return "", fmt.Errorf("changing permission of the locally downloaded snapshot failed")
 	}
 
-	return targetFilename, nil
+	return targetFileLocation, nil
 }
 
 func setTransportCA(tr http.RoundTripper, endpointCA string) (http.RoundTripper, error) {

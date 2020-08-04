@@ -14,7 +14,6 @@ import (
 )
 
 func (h *handler) uploadToS3(backup *v1.Backup, tmpBackupPath, gzipFile string) error {
-	// for objectstore, if folder name exists, use that as path, else use backupBase
 	tmpBackupGzipFilepath, err := ioutil.TempDir("", "uploadpath")
 	if err != nil {
 		return err
