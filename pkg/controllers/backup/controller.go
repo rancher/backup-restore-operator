@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/rancher/wrangler/pkg/condition"
+	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/sirupsen/logrus"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -53,53 +55,67 @@ func Register(
 
 	// Register handlers
 	backups.OnChange(ctx, "backups", controller.OnBackupChange)
-	//backups.OnRemove(ctx, controllerRemoveName, controller.OnEksConfigRemoved)
 }
 
 func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error) {
 	if condition.Cond(v1.BackupConditionReady).IsTrue(backup) && condition.Cond(v1.BackupConditionUploaded).IsTrue(backup) {
 		return backup, nil
 	}
-	_, err := os.Stat(util.BackupBaseDir)
-	if os.IsNotExist(err) {
-		err := os.Mkdir(util.BackupBaseDir, os.ModePerm)
-		if err != nil {
-			return backup, fmt.Errorf("error creating backup dir: %v", err)
-		}
-	}
-	// TODO: use temp dir os.TempDir()
-	var tmpBackupPath = filepath.Join(util.BackupBaseDir, backup.Spec.BackupFileName)
-
-	err = os.Mkdir(tmpBackupPath, os.ModePerm)
+	// empty dir defaults to os.TempDir
+	tmpBackupPath, err := ioutil.TempDir("", backup.Spec.BackupFileName)
 	if err != nil {
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
+	logrus.Infof("Temporary backup path is %v", tmpBackupPath)
 	//h.discoveryClient.ServerGroupsAndResources()
 	config, err := h.backupEncryptionConfigs.Get(backup.Spec.EncryptionConfigNamespace, backup.Spec.EncryptionConfigName, k8sv1.GetOptions{})
 	if err != nil {
+		if err := os.RemoveAll(tmpBackupPath); err != nil {
+			return backup, err
+		}
 		return backup, err
 	}
 	transformerMap, err := util.GetEncryptionTransformers(config)
 	if err != nil {
+		if err := os.RemoveAll(tmpBackupPath); err != nil {
+			return backup, err
+		}
 		return backup, err
 	}
 
 	template, err := h.backupTemplates.Get("default", backup.Spec.BackupTemplate, k8sv1.GetOptions{})
 	if err != nil {
+		if err := os.RemoveAll(tmpBackupPath); err != nil {
+			return backup, err
+		}
 		return backup, err
 	}
 	err = h.gatherResources(template.BackupFilters, tmpBackupPath, transformerMap)
-
+	if err != nil {
+		if err := os.RemoveAll(tmpBackupPath); err != nil {
+			return backup, err
+		}
+		return backup, err
+	}
 	filters, err := json.Marshal(template.BackupFilters)
 	if err != nil {
+		if err := os.RemoveAll(tmpBackupPath); err != nil {
+			return backup, err
+		}
 		return backup, err
 	}
 	filterFile, err := os.Create(filepath.Join(tmpBackupPath, filepath.Base("filters.json")))
 	if err != nil {
+		if err := os.RemoveAll(tmpBackupPath); err != nil {
+			return backup, err
+		}
 		return backup, fmt.Errorf("error creating filters file: %v", err)
 	}
 	defer filterFile.Close()
 	if _, err := filterFile.Write(filters); err != nil {
+		if err := os.RemoveAll(tmpBackupPath); err != nil {
+			return backup, err
+		}
 		return backup, fmt.Errorf("error writing JSON to filters file: %v", err)
 	}
 	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
@@ -107,10 +123,16 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if backup.Spec.Local != "" {
 		// for local, to send backup tar to given local path, use that as the path when creating compressed file
 		if err := util.CreateTarAndGzip(tmpBackupPath, backup.Spec.Local, gzipFile); err != nil {
+			if err := os.RemoveAll(tmpBackupPath); err != nil {
+				return backup, err
+			}
 			return backup, err
 		}
 	} else if backup.Spec.ObjectStore != nil {
 		if err := h.uploadToS3(backup, tmpBackupPath, gzipFile); err != nil {
+			if err := os.RemoveAll(tmpBackupPath); err != nil {
+				return backup, err
+			}
 			return backup, err
 		}
 	}
@@ -164,8 +186,16 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath string, 
 
 func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv1.APIResource, error) {
 	var resourceList []k8sv1.APIResource
+	//var resources []*k8sv1.APIResourceList
+	//var err error
 	groupVersion := filter.ApiGroup
 
+	//if groupVersion == "*" {
+	//	_, resources, err = h.discoveryClient.ServerGroupsAndResources()
+	//	if err != nil {
+	//		return resourceList, err
+	//	}
+	//}
 	resources, err := h.discoveryClient.ServerResourcesForGroupVersion(groupVersion)
 	if err != nil {
 		return resourceList, err
@@ -189,6 +219,19 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 			resourceList = append(resourceList, res)
 		}
 	}
+
+	// add the resources from Kinds field to this list
+	if len(filter.Kinds) > 0 {
+		resourceTypesToRetrieve := make(map[string]bool)
+		for _, res := range resourceList {
+			resourceTypesToRetrieve[res.Name] = true
+		}
+		for _, res := range resources.APIResources {
+			if slice.ContainsString(filter.Kinds, res.Name) && !resourceTypesToRetrieve[res.Name] {
+				resourceList = append(resourceList, res)
+			}
+		}
+	}
 	return resourceList, nil
 }
 
@@ -199,21 +242,24 @@ func (h *handler) gatherObjectsForResource(res k8sv1.APIResource, gv schema.Grou
 	var dr dynamic.ResourceInterface
 	dr = h.dynamicClient.Resource(gvr)
 
-	// TODO: use single version to get consistent backup
-	if len(filter.ResourceNames) > 0 {
+	// if resource names or namespaces are provided, first filter using those as selectors
+	if len(filter.ResourceNames) > 0 || len(filter.Namespaces) > 0 {
 		for _, ns := range filter.ResourceNames {
 			fieldSelector += fmt.Sprintf("metadata.name=%s,", ns)
 		}
-	}
-	// filter based on namespaces if those fields are given
-	if len(filter.Namespaces) > 0 {
 		for _, ns := range filter.Namespaces {
 			fieldSelector += fmt.Sprintf("metadata.namespace=%s,", ns)
 		}
+
+		strings.TrimRight(fieldSelector, ",")
+		filteredObjectsList, err := dr.List(h.ctx, k8sv1.ListOptions{FieldSelector: fieldSelector})
+		if err != nil {
+			return err
+		}
+		filteredObjects = filteredObjectsList.Items
 	}
 
-	strings.TrimRight(fieldSelector, ",")
-	// resObjects are the objects from those namespaces and with those names after fieldSelectors applied
+	// resourceVersion - if unset, Return data at the most recent resource version. The returned data must be consistent (i.e. served from etcd via a quorum read).
 	resObjects, err := dr.List(h.ctx, k8sv1.ListOptions{FieldSelector: fieldSelector})
 	if err != nil {
 		return err
@@ -284,7 +330,7 @@ func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res
 			}
 		}
 
-		for _, field := range []string{"uid", "resourceVersion", "generation", "creationTimestamp"} {
+		for _, field := range []string{"uid", "generation", "creationTimestamp", "selfLink", "resourceVersion"} {
 			delete(metadata, field)
 		}
 
@@ -299,11 +345,6 @@ func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res
 		if err := createResourceDir(resourcePath); err != nil {
 			return err
 		}
-		//if res.Namespaced {
-		//	ns := metadata["namespace"].(string)
-		//	// prepend resource file name with the namespace, separated by `#` since no k8s resource can contain # in name
-		//	objName = fmt.Sprintf("%s#%s", ns, objName)
-		//}
 
 		err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
 		if err != nil {

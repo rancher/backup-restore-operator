@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 )
 
@@ -24,25 +25,34 @@ func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 	// writes to tw will be written to gw
 	tw := tar.NewWriter(gw)
 	defer tw.Close()
-	walkFunc := func(path string, info os.FileInfo, err error) error {
-		if info.Name() == BackupBaseDir {
-			return nil
-		}
+	walkFunc := func(currPath string, info os.FileInfo, err error) error {
 		if err != nil {
-			return fmt.Errorf("error in walkFunc for %v: %v", path, err)
+			return fmt.Errorf("error in walkFunc for %v: %v", currPath, err)
 		}
 		hdr, err := tar.FileInfoHeader(info, "")
 		if err != nil {
 			return fmt.Errorf("error creating header for %v: %v", info.Name(), err)
 		}
-		hdr.Name = path
+		if info.IsDir() {
+			hdr.Name = filepath.Base(currPath)
+			if err := tw.WriteHeader(hdr); err != nil {
+				return fmt.Errorf("error writing header for %v: %v", info.Name(), err)
+			}
+			return nil
+		}
+		// for example, for /var/tmp/authconfigs.management.cattle.io#v3/adfs.json,
+		// containingDirFullPath = /var/tmp/authconfigs.management.cattle.io#v3
+		containingDirFullPath := path.Dir(currPath)
+		// containingDirBasePath = authconfigs.management.cattle.io#v3
+		containingDirBasePath := filepath.Base(containingDirFullPath)
+		hdr.Name = filepath.Join(containingDirBasePath, filepath.Base(currPath))
 		if err := tw.WriteHeader(hdr); err != nil {
 			return fmt.Errorf("error writing header for %v: %v", info.Name(), err)
 		}
 		if info.IsDir() {
 			return nil
 		}
-		fInfo, err := os.Open(path)
+		fInfo, err := os.Open(currPath)
 		if err != nil {
 			return fmt.Errorf("error opening %v: %v", info.Name(), err)
 		}
@@ -60,7 +70,7 @@ func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 }
 
 // https://medium.com/@skdomino/taring-untaring-files-in-go-6b07cf56bc07
-func LoadFromTarGzip(tarGzFilePath string) error {
+func LoadFromTarGzip(tarGzFilePath, tmpBackupPath string) error {
 	r, err := os.Open(tarGzFilePath)
 	if err != nil {
 		return fmt.Errorf("error opening tar.gz backup fike %v", err)
@@ -81,20 +91,20 @@ func LoadFromTarGzip(tarGzFilePath string) error {
 			return err
 		}
 		if tarContent.Typeflag == tar.TypeDir {
-			if _, err := os.Stat(tarContent.Name); err != nil {
+			if _, err := os.Stat(filepath.Join(tmpBackupPath, tarContent.Name)); err != nil {
 				if os.IsNotExist(err) {
-					err := os.Mkdir(tarContent.Name, os.ModePerm)
+					err := os.Mkdir(filepath.Join(tmpBackupPath, tarContent.Name), os.ModePerm)
 					if err != nil {
 						return fmt.Errorf("error creating dir %v", err)
+
 					}
 				}
 			}
 		} else if tarContent.Typeflag == tar.TypeReg {
-			file, err := os.OpenFile(tarContent.Name, os.O_CREATE|os.O_RDWR, os.FileMode(tarContent.Mode))
+			file, err := os.OpenFile(filepath.Join(tmpBackupPath, tarContent.Name), os.O_CREATE|os.O_RDWR, os.FileMode(tarContent.Mode))
 			if err != nil {
 				return err
 			}
-
 			if _, err := io.Copy(file, tarball); err != nil {
 				return err
 			}
