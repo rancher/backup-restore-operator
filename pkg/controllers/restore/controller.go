@@ -158,6 +158,8 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	//_, err = os.Stat(filepath.Join(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1"))
 	//if err == nil {
 	//TODO: no writes
+	startTime := time.Now()
+	fmt.Printf("\nStart time: %v\n", startTime)
 	if err := h.restoreCRDs(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1", transformerMap, created, true); err != nil {
 		removeDirErr := os.RemoveAll(backupPath)
 		if removeDirErr != nil {
@@ -165,6 +167,9 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		}
 		return restore, err
 	}
+	timeForRestoringCRDs := time.Since(startTime)
+	fmt.Printf("\ntime taken to restore CRDs: %v\n", timeForRestoringCRDs)
+	doneRestoringCRDTime := time.Now()
 	//}
 	//
 	//os.Stat(filepath.Join(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1beta1"))
@@ -177,15 +182,19 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		}
 		return restore, err
 	}
+	timeForGeneratingGraph := time.Since(doneRestoringCRDTime)
+	fmt.Printf("\ntime taken to generate graph: %v\n", timeForGeneratingGraph)
+	doneGeneratingGraphTime := time.Now()
 
-	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore, transformerMap); err != nil {
+	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore); err != nil {
 		removeDirErr := os.RemoveAll(backupPath)
 		if removeDirErr != nil {
 			return restore, errors.New(err.Error() + removeDirErr.Error())
 		}
 		return restore, err
 	}
-
+	timeForRestoringResources := time.Since(doneGeneratingGraphTime)
+	fmt.Printf("\ntime taken to restore resources: %v\n", timeForRestoringResources)
 	err = os.RemoveAll(backupPath)
 	return restore, err
 
@@ -432,7 +441,7 @@ func (h *handler) addToOwnersToDependentsList(backupPath, resConfigPath, aad str
 }
 
 func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]restoreObj, created map[string]bool,
-	numOwnerReferences map[string]int, toRestore []restoreObj, transformerMap map[schema.GroupResource]value.Transformer) error {
+	numOwnerReferences map[string]int, toRestore []restoreObj) error {
 	numTotalDependents := 0
 	for _, dependents := range ownerToDependentsList {
 		numTotalDependents += len(dependents)
@@ -455,7 +464,6 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		}
 		for _, dependent := range ownerToDependentsList[curr.ResourceConfigPath] {
 			// example, curr = catTemplate, dependent=catTempVer
-			// check numOwnerReferences[dependent] is 0
 			if numOwnerReferences[dependent.ResourceConfigPath] > 0 {
 				numOwnerReferences[dependent.ResourceConfigPath]--
 			}
