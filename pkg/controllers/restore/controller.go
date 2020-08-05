@@ -532,7 +532,6 @@ func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVer
 	fileMapMetadata := fileMap[metadataMapKey].(map[string]interface{})
 	name := fileMapMetadata["name"].(string)
 	namespace, _ := fileMapMetadata["namespace"].(string)
-	// TODO: subresources
 	var dr dynamic.ResourceInterface
 	dr = h.dynamicClient.Resource(gvr)
 	if namespace != "" {
@@ -564,6 +563,14 @@ func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVer
 	if err != nil {
 		return fmt.Errorf("restoreResource: err updating resource %v", err)
 	}
+	_, hasStatusSubresource := res.Object["status"]
+	if hasStatusSubresource {
+		_, err := dr.UpdateStatus(h.ctx, obj, k8sv1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("restoreResource: err updating status resource %v", err)
+		}
+	}
+
 	fmt.Printf("\nSuccessfully restored %v\n", name)
 	return nil
 }
