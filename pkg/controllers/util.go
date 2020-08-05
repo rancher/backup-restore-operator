@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 )
 
 func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
@@ -112,3 +113,74 @@ func LoadFromTarGzip(tarGzFilePath, tmpBackupPath string) error {
 		}
 	}
 }
+
+func GetObjectQueue(l interface{}, capacity int) chan interface{} {
+	s := reflect.ValueOf(l)
+	c := make(chan interface{}, capacity)
+
+	for i := 0; i < s.Len(); i++ {
+		c <- s.Index(i).Interface()
+	}
+	return c
+}
+
+func ErrList(e []error) error {
+	if len(e) > 0 {
+		return fmt.Errorf("%v", e)
+	}
+	return nil
+}
+
+//func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]restoreObj, created map[string]bool,
+//	numOwnerReferences map[string]int, toRestore []restoreObj) error {
+//	//var errgrp errgroup.Group
+//	numTotalDependents := 0
+//	for _, dependents := range ownerToDependentsList {
+//		numTotalDependents += len(dependents)
+//	}
+//	//totalToRestore := numTotalDependents + len(toRestore)
+//	countRestored := 0
+
+//resourcesToRestoreQueue := util.GetObjectQueue(toRestore, totalToRestore)
+//for w := 0; w < 50; w++ {
+//	errgrp.Go(func() error {
+//		var errList []error
+//		for currObj := range resourcesToRestoreQueue {
+//			curr := currObj.(restoreObj)
+//			if created[curr.ResourceConfigPath] {
+//				continue
+//			}
+//			err := h.restoreResource(curr, curr.GVR)
+//			if err != nil {
+//				logrus.Errorf("error %v restoring resource %v", err, curr.Name)
+//				errList = append(errList, err)
+//				continue
+//			}
+//			for _, dependent := range ownerToDependentsList[curr.ResourceConfigPath] {
+//				// example, curr = catTemplate, dependent=catTempVer
+//				if numOwnerReferences[dependent.ResourceConfigPath] > 0 {
+//					numOwnerReferences[dependent.ResourceConfigPath]--
+//				}
+//				if numOwnerReferences[dependent.ResourceConfigPath] == 0 {
+//					logrus.Infof("dependent %v is now ready to create", dependent.Name)
+//					fmt.Printf("\nlen of resourcesToRestoreQueue before adding dep: %v\n", len(resourcesToRestoreQueue))
+//					resourcesToRestoreQueue <- dependent
+//					logrus.Infof("added dependent to channel")
+//				}
+//			}
+//			if len(resourcesToRestoreQueue) == 0 {
+//				logrus.Infof("Time after everything's started to process: %v", time.Now())
+//			}
+//			created[curr.ResourceConfigPath] = true
+//			countRestored++
+//		}
+//		return util.ErrList(errList)
+//	})
+//}
+//fmt.Printf("\nHere after all goroutines have finished\n")
+//err := errgrp.Wait()
+//if err != nil {
+//	return err
+//}
+//close(resourcesToRestoreQueue)
+//}
