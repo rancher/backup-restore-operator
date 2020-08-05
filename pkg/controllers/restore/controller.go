@@ -159,26 +159,27 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	//if err == nil {
 	startTime := time.Now()
 	fmt.Printf("\nStart time: %v\n", startTime)
-	if err := h.restoreCRDs(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1", transformerMap, created, true); err != nil {
+	if err := h.restoreCRDs(backupPath, transformerMap, created); err != nil {
+		logrus.Errorf("\nerror during restoreCRDs: %v\n", err)
 		removeDirErr := os.RemoveAll(backupPath)
 		if removeDirErr != nil {
 			return restore, errors.New(err.Error() + removeDirErr.Error())
 		}
+		panic(err)
 		return restore, err
 	}
 	timeForRestoringCRDs := time.Since(startTime)
 	fmt.Printf("\ntime taken to restore CRDs: %v\n", timeForRestoringCRDs)
 	doneRestoringCRDTime := time.Now()
-	//}
-	//
-	//os.Stat(filepath.Join(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1beta1"))
 
 	// generate adjacency lists for dependents and ownerRefs
 	if err := h.generateDependencyGraph(backupPath, transformerMap, ownerToDependentsList, &toRestore, numOwnerReferences); err != nil {
+		logrus.Errorf("\nerror during generateDependencyGraph: %v\n", err)
 		removeDirErr := os.RemoveAll(backupPath)
 		if removeDirErr != nil {
 			return restore, errors.New(err.Error() + removeDirErr.Error())
 		}
+		panic(err)
 		return restore, err
 	}
 	timeForGeneratingGraph := time.Since(doneRestoringCRDTime)
@@ -186,10 +187,12 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	doneGeneratingGraphTime := time.Now()
 	logrus.Infof("No-goroutines-2 time right before starting to create from graph: %v", doneGeneratingGraphTime)
 	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore); err != nil {
+		logrus.Errorf("\nerror during createFromDependencyGraph: %v\n", err)
 		removeDirErr := os.RemoveAll(backupPath)
 		if removeDirErr != nil {
 			return restore, errors.New(err.Error() + removeDirErr.Error())
 		}
+		panic(err)
 		return restore, err
 	}
 	timeForRestoringResources := time.Since(doneGeneratingGraphTime)
@@ -211,91 +214,54 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	return restore, nil
 }
 
-func (h *handler) restoreCRDs(backupPath, resourceGVK string, transformerMap map[schema.GroupResource]value.Transformer, created map[string]bool, crdApiVersionV1 bool) error {
-	resourceDirPath := path.Join(backupPath, resourceGVK)
-	gvr := getGVR(resourceGVK)
-	gr := gvr.GroupResource()
-	decryptionTransformer, _ := transformerMap[gr]
-	dirContents, err := ioutil.ReadDir(resourceDirPath)
-	if err != nil {
-		return err
-	}
-	for _, resFile := range dirContents {
-		resConfigPath := filepath.Join(resourceDirPath, resFile.Name())
-		//if crdApiVersionV1 {
-		//	resBytes, err := ioutil.ReadFile(resConfigPath)
-		//	if err != nil {
-		//		fmt.Printf("\nerr readin file %v: %v\n", resConfigPath, err)
-		//		return err
-		//	}
-		//
-		//	fmt.Printf("\nread file %v\n", string(resBytes))
-		//	if decryptionTransformer != nil {
-		//		var encryptedBytes []byte
-		//		if err := json.Unmarshal(resBytes, &encryptedBytes); err != nil {
-		//			return err
-		//		}
-		//		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(resFile.Name()))
-		//		if err != nil {
-		//			return err
-		//		}
-		//		resBytes = decrypted
-		//	}
-		//	var fileMap map[string]interface{}
-		//	err = json.Unmarshal(resBytes, &fileMap)
-		//	if err != nil {
-		//		fmt.Printf("\nerr Unmarshal file %v: %v\n", resConfigPath, err)
-		//		return err
-		//	}
-		//	//spec := fileMap["spec"].(map[string]interface{})
-		//	//if preserveUnknownFields, ok := spec["preserveUnknownFields"].(bool); ok && preserveUnknownFields {
-		//	//	spec["preserveUnknownFields"] = false
-		//	//}
-		//	//fileMap["spec"] = spec
-		//	fileMap["apiVersion"] = "apiextensions.k8s.io/v1beta1"
-		//	writeBytes, err := json.Marshal(fileMap)
-		//	if err != nil {
-		//		fmt.Printf("\nerr marshal file %v: %v\n", resConfigPath, err)
-		//		return fmt.Errorf("error marshaling updated ownerRefs: %v", err)
-		//	}
-		//	fmt.Printf("\nwriting to file: %v\n", string(writeBytes))
-		//	if err := ioutil.WriteFile(resConfigPath, writeBytes, 0777); err != nil {
-		//		fmt.Printf("\nerr WriteFile file %v: %v\n", resConfigPath, err)
-		//		return err
-		//	}
-		//}
-		crdContent, err := ioutil.ReadFile(resConfigPath)
+func (h *handler) restoreCRDs(backupPath string, transformerMap map[schema.GroupResource]value.Transformer, created map[string]bool) error {
+	for _, resourceGVK := range []string{"customresourcedefinitions.apiextensions.k8s.io#v1", "customresourcedefinitions.apiextensions.k8s.io#v1beta1"} {
+		resourceDirPath := path.Join(backupPath, resourceGVK)
+		if _, err := os.Stat(resourceDirPath); err != nil && os.IsNotExist(err) {
+			continue
+		}
+		gvr := getGVR(resourceGVK)
+		gr := gvr.GroupResource()
+		decryptionTransformer, _ := transformerMap[gr]
+		dirContents, err := ioutil.ReadDir(resourceDirPath)
 		if err != nil {
 			return err
 		}
-		var crdData map[string]interface{}
-		if err := json.Unmarshal(crdContent, &crdData); err != nil {
-			return err
-		}
-		crdName := strings.TrimSuffix(resFile.Name(), ".json")
-		if decryptionTransformer != nil {
-			var encryptedBytes []byte
-			if err := json.Unmarshal(crdContent, &encryptedBytes); err != nil {
-				return err
-			}
-			decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(crdName))
+		for _, resFile := range dirContents {
+			resConfigPath := filepath.Join(resourceDirPath, resFile.Name())
+			crdContent, err := ioutil.ReadFile(resConfigPath)
 			if err != nil {
 				return err
 			}
-			crdContent = decrypted
-		}
-		restoreObjKey := restoreObj{
-			Name:               crdName,
-			ResourceConfigPath: resConfigPath,
-			GVR:                gvr,
-			Data:               &unstructured.Unstructured{Object: crdData},
-		}
-		err = h.restoreResource(restoreObjKey, gvr)
-		if err != nil {
-			return fmt.Errorf("restoreCRDs: %v", err)
-		}
+			var crdData map[string]interface{}
+			if err := json.Unmarshal(crdContent, &crdData); err != nil {
+				return err
+			}
+			crdName := strings.TrimSuffix(resFile.Name(), ".json")
+			if decryptionTransformer != nil {
+				var encryptedBytes []byte
+				if err := json.Unmarshal(crdContent, &encryptedBytes); err != nil {
+					return err
+				}
+				decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(crdName))
+				if err != nil {
+					return err
+				}
+				crdContent = decrypted
+			}
+			restoreObjKey := restoreObj{
+				Name:               crdName,
+				ResourceConfigPath: resConfigPath,
+				GVR:                gvr,
+				Data:               &unstructured.Unstructured{Object: crdData},
+			}
+			err = h.restoreResource(restoreObjKey, gvr)
+			if err != nil {
+				return fmt.Errorf("restoreCRDs: %v", err)
+			}
 
-		created[restoreObjKey.ResourceConfigPath] = true
+			created[restoreObjKey.ResourceConfigPath] = true
+		}
 	}
 	return nil
 }
@@ -563,13 +529,14 @@ func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVer
 	if err != nil {
 		return fmt.Errorf("restoreResource: err updating resource %v", err)
 	}
-	_, hasStatusSubresource := res.Object["status"]
-	if hasStatusSubresource {
-		_, err := dr.UpdateStatus(h.ctx, obj, k8sv1.UpdateOptions{})
-		if err != nil {
-			return fmt.Errorf("restoreResource: err updating status resource %v", err)
-		}
-	}
+
+	//_, hasStatusSubresource := res.Object["status"]
+	//if hasStatusSubresource {
+	//	_, err := dr.UpdateStatus(h.ctx, obj, k8sv1.UpdateOptions{})
+	//	if err != nil {
+	//		return fmt.Errorf("restoreResource: err updating status resource %v", err)
+	//	}
+	//}
 
 	fmt.Printf("\nSuccessfully restored %v\n", name)
 	return nil
