@@ -157,7 +157,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	// first restore CRDs
 	//_, err = os.Stat(filepath.Join(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1"))
 	//if err == nil {
-	//TODO: no writes
 	startTime := time.Now()
 	fmt.Printf("\nStart time: %v\n", startTime)
 	if err := h.restoreCRDs(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1", transformerMap, created, true); err != nil {
@@ -448,7 +447,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		numTotalDependents += len(dependents)
 	}
 	countRestored := 0
-
+	var errList []error
 	for len(toRestore) > 0 {
 		curr := toRestore[0]
 		if len(toRestore) == 1 {
@@ -457,12 +456,12 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 			toRestore = toRestore[1:]
 		}
 		if created[curr.ResourceConfigPath] {
-			fmt.Printf("\nSay what!! %v is created??\n", curr.ResourceConfigPath)
+			logrus.Infof("Resource %v is already created", curr.ResourceConfigPath)
 			continue
 		}
 		if err := h.restoreResource(curr, curr.GVR); err != nil {
-			// save error return at end after trying everything from toRestore
-			return err
+			errList = append(errList, err)
+			continue
 		}
 		for _, dependent := range ownerToDependentsList[curr.ResourceConfigPath] {
 			// example, curr = catTemplate, dependent=catTempVer
@@ -478,7 +477,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		countRestored++
 	}
 	fmt.Printf("\nTotal restored resources final: %v\n", countRestored)
-	return nil
+	return util.ErrList(errList)
 }
 
 func (h *handler) updateOwnerRefs(ownerReferences []interface{}, namespace string) error {
