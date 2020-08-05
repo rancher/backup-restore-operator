@@ -42,6 +42,8 @@ func main() {
 		logrus.Fatalf("failed to find kubeconfig: %v", err)
 	}
 
+	kubeConfig.QPS = 150
+	kubeConfig.Burst = 150
 	backups, err := backupper.NewFactoryFromConfig(kubeConfig)
 	if err != nil {
 		logrus.Fatalf("Error building sample controllers: %s", err.Error())
