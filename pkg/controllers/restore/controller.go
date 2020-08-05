@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -185,7 +186,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	timeForGeneratingGraph := time.Since(doneRestoringCRDTime)
 	fmt.Printf("\ntime taken to generate graph: %v\n", timeForGeneratingGraph)
 	doneGeneratingGraphTime := time.Now()
-
+	logrus.Infof("Fin time right before starting to create from graph: %v", doneGeneratingGraphTime)
 	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore); err != nil {
 		removeDirErr := os.RemoveAll(backupPath)
 		if removeDirErr != nil {
@@ -201,6 +202,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	//if dependentRestoreErr != nil {
 	//	return restore, dependentRestoreErr
 	//}
+
 	if err := h.prune(backupPath, restore.Spec.ForcePruneTimeout); err != nil {
 		return restore, fmt.Errorf("error pruning during restore")
 	}
@@ -442,39 +444,83 @@ func (h *handler) addToOwnersToDependentsList(backupPath, resConfigPath, aad str
 
 func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]restoreObj, created map[string]bool,
 	numOwnerReferences map[string]int, toRestore []restoreObj) error {
+	var errgrp errgroup.Group
 	numTotalDependents := 0
 	for _, dependents := range ownerToDependentsList {
 		numTotalDependents += len(dependents)
 	}
-	fmt.Printf("\ntotal objects to create: numTotalDependents+toRestore fin: %v\n", numTotalDependents+len(toRestore))
+	totalToRestore := numTotalDependents + len(toRestore)
 	countRestored := 0
-	for len(toRestore) > 0 {
-		curr := toRestore[0]
-		if len(toRestore) == 1 {
-			toRestore = []restoreObj{}
-		} else {
-			toRestore = toRestore[1:]
-		}
-		if created[curr.ResourceConfigPath] {
-			continue
-		}
-		if err := h.restoreResource(curr, curr.GVR); err != nil {
-			// save error return at end after trying everything from toRestore
-			return err
-		}
-		for _, dependent := range ownerToDependentsList[curr.ResourceConfigPath] {
-			// example, curr = catTemplate, dependent=catTempVer
-			if numOwnerReferences[dependent.ResourceConfigPath] > 0 {
-				numOwnerReferences[dependent.ResourceConfigPath]--
+
+	resourcesToRestoreQueue := util.GetObjectQueue(toRestore, totalToRestore)
+	for w := 0; w < 50; w++ {
+		errgrp.Go(func() error {
+			var errList []error
+			for currObj := range resourcesToRestoreQueue {
+				curr := currObj.(restoreObj)
+				if created[curr.ResourceConfigPath] {
+					continue
+				}
+				err := h.restoreResource(curr, curr.GVR)
+				if err != nil {
+					logrus.Errorf("error %v restoring resource %v", err, curr.Name)
+					errList = append(errList, err)
+					continue
+				}
+				for _, dependent := range ownerToDependentsList[curr.ResourceConfigPath] {
+					// example, curr = catTemplate, dependent=catTempVer
+					if numOwnerReferences[dependent.ResourceConfigPath] > 0 {
+						numOwnerReferences[dependent.ResourceConfigPath]--
+					}
+					if numOwnerReferences[dependent.ResourceConfigPath] == 0 {
+						logrus.Infof("dependent %v is now ready to create", dependent.Name)
+						fmt.Printf("\nlen of resourcesToRestoreQueue before adding dep: %v\n", len(resourcesToRestoreQueue))
+						resourcesToRestoreQueue <- dependent
+						logrus.Infof("added dependent to channel")
+					}
+				}
+				if len(resourcesToRestoreQueue) == 0 {
+					logrus.Infof("Time after everything's started to process: %v", time.Now())
+				}
+				created[curr.ResourceConfigPath] = true
+				countRestored++
 			}
-			if numOwnerReferences[dependent.ResourceConfigPath] == 0 {
-				logrus.Infof("dependent %v is now ready to create", dependent.Name)
-				toRestore = append(toRestore, dependent)
-			}
-		}
-		created[curr.ResourceConfigPath] = true
-		countRestored++
+			return util.ErrList(errList)
+		})
 	}
+	fmt.Printf("\nHere after all goroutines have finished\n")
+	err := errgrp.Wait()
+	if err != nil {
+		return err
+	}
+	close(resourcesToRestoreQueue)
+	//for len(toRestore) > 0 {
+	//	curr := toRestore[0]
+	//	if len(toRestore) == 1 {
+	//		toRestore = []restoreObj{}
+	//	} else {
+	//		toRestore = toRestore[1:]
+	//	}
+	//	if created[curr.ResourceConfigPath] {
+	//		continue
+	//	}
+	//	if err := h.restoreResource(curr, curr.GVR); err != nil {
+	//		// save error return at end after trying everything from toRestore
+	//		return err
+	//	}
+	//	for _, dependent := range ownerToDependentsList[curr.ResourceConfigPath] {
+	//		// example, curr = catTemplate, dependent=catTempVer
+	//		if numOwnerReferences[dependent.ResourceConfigPath] > 0 {
+	//			numOwnerReferences[dependent.ResourceConfigPath]--
+	//		}
+	//		if numOwnerReferences[dependent.ResourceConfigPath] == 0 {
+	//			logrus.Infof("dependent %v is now ready to create", dependent.Name)
+	//			toRestore = append(toRestore, dependent)
+	//		}
+	//	}
+	//	created[curr.ResourceConfigPath] = true
+	//	countRestored++
+	//}
 	fmt.Printf("\nTotal restored resources final: %v\n", countRestored)
 	return nil
 }
@@ -528,7 +574,6 @@ func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVer
 	fileMap := currRestoreObj.Data.Object
 	obj := currRestoreObj.Data
 
-	//fmt.Printf("\nrestoreResource: read file bytes: %v\n", string(resBytes))
 	fileMapMetadata := fileMap[metadataMapKey].(map[string]interface{})
 	name := fileMapMetadata["name"].(string)
 	namespace, _ := fileMapMetadata["namespace"].(string)
