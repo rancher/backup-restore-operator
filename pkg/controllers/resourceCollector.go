@@ -1,6 +1,8 @@
-package backup
+package controllers
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
 	"github.com/sirupsen/logrus"
@@ -9,12 +11,22 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
-func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+type ResourceHandler struct {
+	DiscoveryClient discovery.DiscoveryInterface
+	DynamicClient   dynamic.Interface
+}
+
+func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.BackupFilter, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+	var resourceVersion string
 	for _, filter := range filters {
 		resourceList, err := h.gatherResourcesForGroupVersion(filter)
 		if err != nil {
@@ -28,10 +40,28 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath string, 
 
 		for _, res := range resourceList {
 			if skipBackup(res) {
+				fmt.Printf("\nskipping backup for %#v\n", res)
 				continue
 			}
-			err := h.gatherAndWriteObjectsForResource(res, gv, filter, backupPath, transformerMap)
+			fmt.Printf("\ncurr res: %#v\n", res)
+			if resourceVersion == "" {
+				gvr := gv.WithResource(res.Name)
+				var dr dynamic.ResourceInterface
+				dr = h.DynamicClient.Resource(gvr)
+				resList, err := dr.List(ctx, k8sv1.ListOptions{})
+				if err != nil {
+					return err
+				}
+				resourceVersion = resList.GetResourceVersion()
+				logrus.Infof("resourceVersion first try using func: %v\n", resourceVersion)
+				logrus.Infof("resourceVersion first try using func: %v\n", resList.Object["metadata"])
+			}
+
+			filteredObjects, err := h.gatherAndWriteObjectsForResource(ctx, res, gv, filter, resourceVersion)
 			if err != nil {
+				return err
+			}
+			if err := h.writeBackupObjects(filteredObjects, res, gv, backupPath, transformerMap); err != nil {
 				return err
 			}
 		}
@@ -39,7 +69,7 @@ func (h *handler) gatherResources(filters []v1.BackupFilter, backupPath string, 
 	return nil
 }
 
-func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv1.APIResource, error) {
+func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv1.APIResource, error) {
 	var resourceList, resourceListFromRegex, resourceListFromNames []k8sv1.APIResource
 	groupVersion := filter.ApiGroup
 
@@ -50,7 +80,7 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 	//		return resourceList, err
 	//	}
 	//}
-	resources, err := h.discoveryClient.ServerResourcesForGroupVersion(groupVersion)
+	resources, err := h.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
 	if err != nil {
 		return resourceList, err
 	}
@@ -96,33 +126,33 @@ func (h *handler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv
 	return resourceList, nil
 }
 
-func (h *handler) gatherAndWriteObjectsForResource(res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+func (h *ResourceHandler) gatherAndWriteObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, resourceVersion string) ([]unstructured.Unstructured, error) {
 	var filteredByNamespace, filteredObjects []unstructured.Unstructured
 
 	gvr := gv.WithResource(res.Name)
 	var dr dynamic.ResourceInterface
-	dr = h.dynamicClient.Resource(gvr)
+	dr = h.DynamicClient.Resource(gvr)
 
-	filteredByName, err := h.filterByNameAndLabel(dr, filter)
+	filteredByName, err := h.filterByNameAndLabel(ctx, dr, filter, resourceVersion)
 	if err != nil {
-		return err
+		return filteredObjects, err
 	}
 
 	if res.Namespaced {
 		if len(filter.Namespaces) > 0 || filter.NamespaceRegex != "" {
 			filteredByNamespace, err = h.filterByNamespace(filter, filteredByName)
 			if err != nil {
-				return err
+				return filteredObjects, err
 			}
 			filteredObjects = filteredByNamespace
-			return h.writeBackupObjects(filteredObjects, res, gv, backupPath, transformerMap)
+			return filteredObjects, nil
 		}
 	}
 	filteredObjects = filteredByName
-	return h.writeBackupObjects(filteredObjects, res, gv, backupPath, transformerMap)
+	return filteredObjects, nil
 }
 
-func (h *handler) filterByNameAndLabel(dr dynamic.ResourceInterface, filter v1.BackupFilter) ([]unstructured.Unstructured, error) {
+func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.BackupFilter, resourceVersion string) ([]unstructured.Unstructured, error) {
 	var filteredByName, filteredByResourceNames []unstructured.Unstructured
 	var fieldSelector, labelSelector string
 	// first get all objects of this resource type
@@ -134,11 +164,14 @@ func (h *handler) filterByNameAndLabel(dr dynamic.ResourceInterface, filter v1.B
 		labelSelector = labels.SelectorFromSet(labelMap).String()
 	}
 
-	resourceObjectsList, err := dr.List(h.ctx, k8sv1.ListOptions{LabelSelector: labelSelector})
-	// TODO: get resourceVersion and do another call for List same for all resources; check err for resourceVersion
+	logrus.Infof("trying list with resourceversion %v", resourceVersion)
+	//resourceObjectsList, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: labelSelector, ResourceVersion: resourceVersion})
+	resourceObjectsList, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
 		return filteredByName, err
 	}
+	logrus.Infof("[%v] list resourceObjectsList: %v, org resourceVersion: %v", time.Now(), resourceObjectsList.GetResourceVersion(), resourceVersion)
+
 	filteredByNameMap := make(map[*unstructured.Unstructured]bool)
 
 	if len(filter.ResourceNames) == 0 && filter.ResourceNameRegex == "" {
@@ -173,10 +206,13 @@ func (h *handler) filterByNameAndLabel(dr dynamic.ResourceInterface, filter v1.B
 			fieldSelector += fmt.Sprintf("metadata.name=%s,", name)
 		}
 		strings.TrimRight(fieldSelector, ",")
-		filteredObjectsList, err := dr.List(h.ctx, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector})
+		//filteredObjectsList, err := dr.List(ctx, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector,
+		//	ResourceVersion: resourceVersion})
+		filteredObjectsList, err := dr.List(ctx, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector})
 		if err != nil {
 			return filteredByName, err
 		}
+		logrus.Infof("list filteredObjectsList: %v", filteredObjectsList.GetResourceVersion())
 		filteredByResourceNames = filteredObjectsList.Items
 
 		if len(filteredByResourceNames) == 0 {
@@ -197,7 +233,7 @@ func (h *handler) filterByNameAndLabel(dr dynamic.ResourceInterface, filter v1.B
 	return filteredByName, nil
 }
 
-func (h *handler) filterByNamespace(filter v1.BackupFilter, filteredByName []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
+func (h *ResourceHandler) filterByNamespace(filter v1.BackupFilter, filteredByName []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
 	var filteredByNamespace, filteredByNamespaceRegex, filteredObjects []unstructured.Unstructured
 
 	filteredByNsMap := make(map[*unstructured.Unstructured]bool)
@@ -251,4 +287,115 @@ func (h *handler) filterByNamespace(filter v1.BackupFilter, filteredByName []uns
 	}
 	filteredObjects = append(filteredByNamespace, filteredByNamespaceRegex...)
 	return filteredObjects, nil
+}
+
+func (h *ResourceHandler) writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+	for _, resObj := range resObjects {
+		metadata := resObj.Object["metadata"].(map[string]interface{})
+		// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
+		if _, deletionTs := metadata["deletionTimestamp"]; deletionTs {
+			if _, finSet := metadata["finalizers"]; !finSet {
+				// no finalizers set, don't backup object
+				continue
+			}
+		}
+
+		objName := metadata["name"].(string)
+
+		// TODO: decide whether to store deletionTimestamp or not
+		// TODO: check if generation is needed
+		for _, field := range []string{"uid", "creationTimestamp", "selfLink", "resourceVersion"} {
+			delete(metadata, field)
+		}
+
+		gr := schema.ParseGroupResource(res.Name + "." + res.Group)
+		encryptionTransformer := transformerMap[gr]
+		additionalAuthenticatedData := objName
+		//if res.Namespaced {
+		//	additionalAuthenticatedData = metadata["namespace"].(string) + "/" + additionalAuthenticatedData
+		//}
+
+		resourcePath := backupPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
+		if err := createResourceDir(resourcePath); err != nil {
+			return err
+		}
+
+		err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createResourceDir(path string) error {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		err = os.Mkdir(path, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("error creating temp dir: %v", err)
+		}
+	}
+	return nil
+}
+
+func writeToBackup(resource map[string]interface{}, backupPath, filename string, transformer value.Transformer, additionalAuthenticatedData string) error {
+	f, err := os.Create(filepath.Join(backupPath, filepath.Base(filename+".json")))
+	if err != nil {
+		return fmt.Errorf("error creating temp file: %v", err)
+	}
+	defer f.Close()
+
+	resourceBytes, err := json.Marshal(resource)
+	if err != nil {
+		return fmt.Errorf("error converting resource to JSON: %v", err)
+	}
+	if transformer != nil {
+		encrypted, err := transformer.TransformToStorage(resourceBytes, value.DefaultContext([]byte(additionalAuthenticatedData)))
+		if err != nil {
+			return fmt.Errorf("error converting resource to JSON: %v", err)
+		}
+		resourceBytes, err = json.Marshal(encrypted)
+		if err != nil {
+			return fmt.Errorf("error converting encrypted resource to JSON: %v", err)
+		}
+	}
+	if _, err := f.Write(resourceBytes); err != nil {
+		return fmt.Errorf("error writing JSON to file: %v", err)
+	}
+
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("error closing file: %v", err)
+	}
+	return nil
+}
+
+func skipBackup(res k8sv1.APIResource) bool {
+	if !canListResource(res.Verbs) {
+		logrus.Debugf("Cannot list resource %v, not backing up", res)
+		return true
+	}
+	if !canUpdateResource(res.Verbs) {
+		logrus.Debugf("Cannot update resource %v, not backing up", res)
+		return true
+	}
+	return false
+}
+
+func canListResource(verbs k8sv1.Verbs) bool {
+	for _, v := range verbs {
+		if v == "list" {
+			return true
+		}
+	}
+	return false
+}
+
+func canUpdateResource(verbs k8sv1.Verbs) bool {
+	for _, v := range verbs {
+		if v == "update" || v == "patch" {
+			return true
+		}
+	}
+	return false
 }

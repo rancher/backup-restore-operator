@@ -11,9 +11,10 @@ import (
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
+	//k8scorev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	//"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
@@ -67,15 +68,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 	logrus.Infof("Temporary backup path is %v", tmpBackupPath)
 	//h.discoveryClient.ServerGroupsAndResources()
-	config, err := h.backupEncryptionConfigs.Get(backup.Spec.EncryptionConfigNamespace, backup.Spec.EncryptionConfigName, k8sv1.GetOptions{})
-	if err != nil {
-		removeDirErr := os.RemoveAll(tmpBackupPath)
-		if removeDirErr != nil {
-			return backup, errors.New(err.Error() + removeDirErr.Error())
-		}
-		return backup, err
-	}
-	transformerMap, err := util.GetEncryptionTransformers(config)
+	transformerMap, err := h.getEncryptionTransformers(backup)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
@@ -84,7 +77,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, err
 	}
 
-	template, err := h.backupTemplates.Get("default", backup.Spec.BackupTemplate, k8sv1.GetOptions{})
+	template, err := h.backupTemplates.Get(backup.Namespace, backup.Spec.BackupTemplate, k8sv1.GetOptions{})
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
@@ -94,7 +87,12 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 	resourceCollectionStartTime := time.Now()
 	logrus.Infof("Started gathering resources at %v", resourceCollectionStartTime)
-	err = h.gatherResources(template.BackupFilters, tmpBackupPath, transformerMap)
+	rh := util.ResourceHandler{
+		DiscoveryClient: h.discoveryClient,
+		DynamicClient:   h.dynamicClient,
+	}
+	err = rh.GatherResources(h.ctx, template.BackupFilters, tmpBackupPath, transformerMap)
+	//err = h.gatherResources(template.BackupFilters, tmpBackupPath, transformerMap)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
@@ -161,124 +159,13 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	return backup, err
 }
 
-func (h *handler) writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
-	for _, resObj := range resObjects {
-		metadata := resObj.Object["metadata"].(map[string]interface{})
-		// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
-		if _, deletionTs := metadata["deletionTimestamp"]; deletionTs {
-			if _, finSet := metadata["finalizers"]; !finSet {
-				// no finalizers set, don't backup object
-				continue
-			}
-		}
-
-		currObjLabels := metadata["labels"]
-		objName := metadata["name"].(string)
-		if resObj.Object["metadata"].(map[string]interface{})["uid"] != nil {
-			oidLabel := map[string]string{util.OldUIDReferenceLabel: resObj.Object["metadata"].(map[string]interface{})["uid"].(string)}
-			if currObjLabels == nil {
-				metadata["labels"] = oidLabel
-			} else {
-				currLabels := currObjLabels.(map[string]interface{})
-				currLabels[util.OldUIDReferenceLabel] = resObj.Object["metadata"].(map[string]interface{})["uid"].(string)
-				metadata["labels"] = currLabels
-			}
-		}
-
-		// TODO: decide whether to store deletionTimestamp or not
-		// TOTO:generation
-		for _, field := range []string{"uid", "creationTimestamp", "selfLink", "resourceVersion"} {
-			delete(metadata, field)
-		}
-
-		gr := schema.ParseGroupResource(res.Name + "." + res.Group)
-		encryptionTransformer := transformerMap[gr]
-		additionalAuthenticatedData := objName
-		//if res.Namespaced {
-		//	additionalAuthenticatedData = metadata["namespace"].(string) + "/" + additionalAuthenticatedData
-		//}
-
-		resourcePath := backupPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
-		if err := createResourceDir(resourcePath); err != nil {
-			return err
-		}
-
-		err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func skipBackup(res k8sv1.APIResource) bool {
-	if !canListResource(res.Verbs) {
-		logrus.Debugf("Cannot list resource %v, not backing up", res)
-		return true
-	}
-	if !canUpdateResource(res.Verbs) {
-		logrus.Debugf("Cannot update resource %v, not backing up\n", res)
-		return true
-	}
-	return false
-}
-
-func createResourceDir(path string) error {
-	_, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		err = os.Mkdir(path, os.ModePerm)
-		if err != nil {
-			return fmt.Errorf("error creating temp dir: %v", err)
-		}
-	}
-	return nil
-}
-
-func writeToBackup(resource map[string]interface{}, backupPath, filename string, transformer value.Transformer, additionalAuthenticatedData string) error {
-	f, err := os.Create(filepath.Join(backupPath, filepath.Base(filename+".json")))
+func (h *handler) getEncryptionTransformers(backup *v1.Backup) (map[schema.GroupResource]value.Transformer, error) {
+	var transformerMap map[schema.GroupResource]value.Transformer
+	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
+	// TODO: change secret ns to the chart's ns
+	config, err := h.backupEncryptionConfigs.Get("default", backup.Spec.EncryptionConfigName, k8sv1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("error creating temp file: %v", err)
+		return transformerMap, err
 	}
-	defer f.Close()
-
-	resourceBytes, err := json.Marshal(resource)
-	if err != nil {
-		return fmt.Errorf("error converting resource to JSON: %v", err)
-	}
-	if transformer != nil {
-		encrypted, err := transformer.TransformToStorage(resourceBytes, value.DefaultContext([]byte(additionalAuthenticatedData)))
-		if err != nil {
-			return fmt.Errorf("error converting resource to JSON: %v", err)
-		}
-		resourceBytes, err = json.Marshal(encrypted)
-		if err != nil {
-			return fmt.Errorf("error converting encrypted resource to JSON: %v", err)
-		}
-	}
-	if _, err := f.Write(resourceBytes); err != nil {
-		return fmt.Errorf("error writing JSON to file: %v", err)
-	}
-
-	if err := f.Close(); err != nil {
-		return fmt.Errorf("error closing file: %v", err)
-	}
-	return nil
-}
-
-func canListResource(verbs k8sv1.Verbs) bool {
-	for _, v := range verbs {
-		if v == "list" {
-			return true
-		}
-	}
-	return false
-}
-
-func canUpdateResource(verbs k8sv1.Verbs) bool {
-	for _, v := range verbs {
-		if v == "update" || v == "patch" {
-			return true
-		}
-	}
-	return false
+	return util.GetEncryptionTransformers(config)
 }
