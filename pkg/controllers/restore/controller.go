@@ -7,10 +7,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -18,7 +16,6 @@ import (
 	util "github.com/mrajashree/backup/pkg/controllers"
 	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
 	lasso "github.com/rancher/lasso/pkg/client"
-	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -197,15 +194,15 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 	timeForRestoringResources := time.Since(doneGeneratingGraphTime)
 	fmt.Printf("\ntime taken to restore resources: %v\n", timeForRestoringResources)
-	err = os.RemoveAll(backupPath)
-	return restore, err
+	//err = os.RemoveAll(backupPath)
 
 	//if dependentRestoreErr != nil {
 	//	return restore, dependentRestoreErr
 	//}
 
-	if err := h.prune(backupPath, restore.Spec.ForcePruneTimeout); err != nil {
-		return restore, fmt.Errorf("error pruning during restore")
+	if err := h.prune(strings.TrimSuffix(backupName, ".tar.gz"), backupPath, restore.Spec.ForcePruneTimeout, transformerMap); err != nil {
+		panic(err)
+		return restore, fmt.Errorf("error pruning during restore: %v", err)
 	}
 	logrus.Infof("Done restoring")
 	if err := os.RemoveAll(backupPath); err != nil {
@@ -509,7 +506,6 @@ func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVer
 			return err
 		}
 	}
-
 	res, err := dr.Get(h.ctx, name, k8sv1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -522,6 +518,7 @@ func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVer
 		}
 		return nil
 	}
+	//fmt.Printf("res: %#v\n", res.Object)
 	resMetadata := res.Object[metadataMapKey].(map[string]interface{})
 	resourceVersion := resMetadata["resourceVersion"].(string)
 	obj.Object[metadataMapKey].(map[string]interface{})["resourceVersion"] = resourceVersion
@@ -529,11 +526,13 @@ func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVer
 	if err != nil {
 		return fmt.Errorf("restoreResource: err updating resource %v", err)
 	}
-
+	//h.discoveryClient.ServerResourcesForGroupVersion()
+	//h.discoveryClient.
 	//_, hasStatusSubresource := res.Object["status"]
 	//if hasStatusSubresource {
 	//	_, err := dr.UpdateStatus(h.ctx, obj, k8sv1.UpdateOptions{})
 	//	if err != nil {
+	//		logrus.Errorf("NOOO error in update status: %v", err)
 	//		return fmt.Errorf("restoreResource: err updating status resource %v", err)
 	//	}
 	//}
@@ -572,9 +571,10 @@ func getGVR(resourceGVK string) schema.GroupVersionResource {
 	return gvr
 }
 
-func (h *handler) prune(backupPath string, pruneTimeout int) error {
+func (h *handler) prune(backupName, backupPath string, pruneTimeout int, transformerMap map[schema.GroupResource]value.Transformer) error {
 	// prune
-	filtersBytes, err := ioutil.ReadFile(filepath.Join(backupPath, "filters.json"))
+	fmt.Printf("\nin prune!!\n")
+	filtersBytes, err := ioutil.ReadFile(filepath.Join(backupPath, "filters", "filters.json"))
 	if err != nil {
 		return fmt.Errorf("error reading backup fitlers file: %v", err)
 	}
@@ -582,189 +582,54 @@ func (h *handler) prune(backupPath string, pruneTimeout int) error {
 	if err := json.Unmarshal(filtersBytes, &backupFilters); err != nil {
 		return fmt.Errorf("error unmarshaling backup filters file: %v", err)
 	}
-	resourceToPrune := make(map[string]map[string]bool)
-	resourceToPruneNamespaced := make(map[string]map[string]bool)
-	for _, filter := range backupFilters {
-		groupVersion := filter.ApiGroup
-		resources := filter.Kinds
-		for _, res := range resources {
-			var fieldSelector string
-			var filteredObjects []unstructured.Unstructured
-
-			gv, _ := schema.ParseGroupVersion(groupVersion)
-			gvr := gv.WithResource(res)
-			var dr dynamic.ResourceInterface
-			dr = h.dynamicClient.Resource(gvr)
-
-			// filter based on namespaces if given
-			if len(filter.Namespaces) > 0 {
-				for _, ns := range filter.Namespaces {
-					fieldSelector += fmt.Sprintf("metadata.namespace=%s,", ns)
-				}
-			}
-
-			resObjects, err := dr.List(context.Background(), k8sv1.ListOptions{FieldSelector: fieldSelector})
-			if err != nil {
-				return err
-			}
-
-			if filter.NamespaceRegex != "" {
-				for _, resObj := range resObjects.Items {
-					metadata := resObj.Object["metadata"].(map[string]interface{})
-					namespace := metadata["namespace"].(string)
-					nsMatched, err := regexp.MatchString(filter.NamespaceRegex, namespace)
-					if err != nil {
-						return err
-					}
-					if !nsMatched {
-						// resource does not match up to filter, ignore it
-						continue
-					}
-					filteredObjects = append(filteredObjects, resObj)
-				}
-			} else {
-				filteredObjects = resObjects.Items
-			}
-
-			for _, obj := range filteredObjects {
-				metadata := obj.Object["metadata"].(map[string]interface{})
-				name := metadata["name"].(string)
-				namespace, _ := metadata["namespace"].(string)
-				// resource doesn't match to this filter, so ignore it
-				// TODO: check if exact name match logic makes sense
-				if len(filter.ResourceNames) > 0 && !slice.ContainsString(filter.ResourceNames, name) {
-					continue
-				}
-				if filter.ResourceNameRegex != "" {
-					nameMatched, err := regexp.MatchString(filter.ResourceNameRegex, name)
-					if err != nil {
-						return err
-					}
-					// resource doesn't match to this filter, so ignore it
-					// for instance for rancher, we want to inlude all p-xxxx ns, so if the ns is totally different, ignore it
-					if !nameMatched {
-						continue
-					}
-				}
-
-				// resource matches to this filter, check if it exists in the backup
-				// first check if it's a CRD or a namespace
-				var backupObjectPaths []string
-				for _, path := range []string{"customresourcedefinitions", "namespaces"} {
-					objBackupPath := filepath.Join(backupPath, path)
-					backupObjectPaths = append(backupObjectPaths, objBackupPath)
-				}
-				for _, path := range []string{"owners", "dependents"} {
-					objBackupPath := filepath.Join(backupPath, path, res+"."+gv.Group+"#"+gv.Version)
-					backupObjectPaths = append(backupObjectPaths, objBackupPath)
-				}
-				exists := false
-				for _, path := range backupObjectPaths {
-					fileName := name + ".json"
-					_, err := os.Stat(filepath.Join(path, fileName))
-					if err == nil || os.IsExist(err) {
-						exists = true
-						// check if this resource was marked for deletion for a previous filter
-						if namespace != "" {
-							if _, ok := resourceToPruneNamespaced[res][namespace+"/"+name]; ok {
-								// remove it from the map of resources to be pruned
-								delete(resourceToPruneNamespaced[res], namespace+"/"+name)
-							}
-						} else {
-							if _, ok := resourceToPrune[res][name]; ok {
-								delete(resourceToPrune[res], name)
-							}
-						}
-						continue
-					}
-				}
-				if !exists {
-					if namespace != "" {
-						if _, ok := resourceToPruneNamespaced[res][namespace+"/"+name]; !ok {
-							resourceToPruneNamespaced[res] = map[string]bool{namespace + "/" + name: true}
-						}
-
-					} else {
-						if _, ok := resourceToPrune[res][name]; !ok {
-							resourceToPrune[res] = map[string]bool{name: true}
-						}
-					}
-				}
-			}
-			logrus.Infof("done gathering prune resourceNames for res %v", res)
-		}
+	rh := util.ResourceHandler{
+		DiscoveryClient: h.discoveryClient,
+		DynamicClient:   h.dynamicClient,
 	}
-
-	fmt.Printf("\nneed to delete following resources: %v\n", resourceToPrune)
-	fmt.Printf("\nneed to delete following namespaced resources: %v\n", resourceToPruneNamespaced)
-	go func(ctx context.Context, resourceToPrune map[string]map[string]bool, resourceToPruneNamespaced map[string]map[string]bool, pruneTimeout int) {
-		// workers group parallel deletion
-		deleteResources(resourceToPrune, resourceToPruneNamespaced, false)
-		logrus.Infof("Done trying delete -1")
-		//time.Sleep(time.Duration(pruneTimeout) * time.Second)
-		time.Sleep(2 * time.Second)
-		logrus.Infof("Ensuring resources to prune are deleted")
-		deleteResources(resourceToPrune, resourceToPruneNamespaced, true)
-	}(h.ctx, resourceToPrune, resourceToPruneNamespaced, pruneTimeout)
-	return nil
-}
-
-func deleteResources(resourceToPrune map[string]map[string]bool, resourceToPruneNamespaced map[string]map[string]bool, removeFinalizers bool) {
-	for resource, names := range resourceToPrune {
-		for name := range names {
-			if removeFinalizers {
-				getCMDOp, err := exec.Command("kubectl", "get", resource, name).CombinedOutput()
-				if err != nil && strings.Contains(string(getCMDOp), "NotFound") {
-					logrus.Infof("Error getting %v, must have been deleted", name)
-					continue
-				}
-				logrus.Infof("Removing finalizer from %v", name)
-				removeFinalizerOp, err := exec.Command("kubectl", "patch", resource, name, "-p", `{"metadata":{"finalizers":null}}`).CombinedOutput()
-				if err != nil {
-					logrus.Errorf("Error removing finalizer on %v: %v", name, string(removeFinalizerOp)+err.Error())
-					continue
-				}
-				logrus.Infof("Removed finalizer from %v", name)
-			}
-			out, err := exec.Command("kubectl", "delete", resource, name).CombinedOutput()
-			if err != nil {
-				if strings.Contains(string(out), "NotFound") {
-					logrus.Debugf("Resource %v already deleted", name)
-					continue
-				}
-				logrus.Errorf("\nError deleting resource %v: %v\n", name, string(out)+"\n"+err.Error())
-			}
-		}
+	pruneDirPath, err := ioutil.TempDir("", fmt.Sprintf("prune-%s", backupName))
+	if err != nil {
+		return err
 	}
+	logrus.Infof("Prune dir path is %s", pruneDirPath)
 
-	for resource, names := range resourceToPruneNamespaced {
-		for nsName := range names {
-			split := strings.SplitN(nsName, "/", 2)
-			ns := split[0]
-			name := split[1]
-			if removeFinalizers {
-				getCMDOp, err := exec.Command("kubectl", "get", resource, name, "-n", ns).CombinedOutput()
-				if err != nil && strings.Contains(string(getCMDOp), "NotFound") {
-					logrus.Infof("Error getting %v from namespace %v, must have been deleted", name, ns)
-					continue
-				}
-				logrus.Infof("Removing finalizer from %v", name)
-				removeFinalizerOp, err := exec.Command("kubectl", "patch", resource, name, "-p", `{"metadata":{"finalizers":null}}`, "-n", ns).CombinedOutput()
-				if err != nil {
-					logrus.Errorf("Error removing finalizer on %v: %v", name, string(removeFinalizerOp)+err.Error())
-					continue
-				}
-				logrus.Infof("Removed finalizer from %v", name)
-			}
-			// not supposed to be here, so delete this resource
-			out, err := exec.Command("kubectl", "delete", resource, name, "-n", ns).CombinedOutput()
-			if err != nil {
-				if strings.Contains(string(out), "NotFound") {
-					logrus.Debugf("Resource %v already deleted", name)
-					continue
-				}
-				logrus.Errorf("\nError deleting namespaced resource %v: %v\n", name, string(out)+"\n"+err.Error())
-			}
-		}
+	if err := rh.GatherResources(h.ctx, backupFilters, pruneDirPath, transformerMap); err != nil {
+		return err
 	}
+	logrus.Infof("Comparing prune and backup dirs")
+	// compare pruneDirPath and backupPath contents, to find any extra files in pruneDirPath, and mark them for deletion
+	resourcesToDelete := []string{}
+	walkFunc := func(currPath string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		// check if this file exists in backupPath or not
+		// for example, for /var/tmp/authconfigs.management.cattle.io#v3/adfs.json,
+		// containingDirFullPath = /var/tmp/authconfigs.management.cattle.io#v3
+		containingDirFullPath := path.Dir(currPath)
+		// containingDirBasePath = authconfigs.management.cattle.io#v3
+		containingDirBasePath := filepath.Base(containingDirFullPath)
+		// currFileName = authconfigs.management.cattle.io#v3/adfs.json => removes the path upto the dir for groupversion
+		currFileName := filepath.Join(containingDirBasePath, filepath.Base(currPath))
+
+		if _, err := os.Stat(filepath.Join(backupPath, currFileName)); os.IsNotExist(err) {
+			// read this file, form dynamic client, mark object for deletion
+			//gvr := getGVR(containingDirBasePath)
+
+			//var dr dynamic.ResourceInterface
+			//logrus.Infof("Need to delete %v", currFileName)
+			//schema.FromAPIVersionAndKind()
+			//isNamespaced, err := lasso.IsNamespaced(gvr, meta.NewDefaultRESTMapper([]schema.GroupVersion{gvr.GroupVersion()}))
+			//if err != nil {
+			//	logrus.Errorf("Error finding if %v is namespaced", currFileName)
+			//}
+			//			if isNamespaced {
+			//namespacedResourcesToDelete
+			//			}
+			resourcesToDelete = append(resourcesToDelete, currFileName)
+		}
+		return nil
+	}
+	err = filepath.Walk(pruneDirPath, walkFunc)
+	logrus.Infof("Now Need to delete %v", resourcesToDelete)
+	return err
 }
