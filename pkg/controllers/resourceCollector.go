@@ -40,10 +40,9 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.Back
 
 		for _, res := range resourceList {
 			if skipBackup(res) {
-				fmt.Printf("\nskipping backup for %#v\n", res)
+				//fmt.Printf("\nskipping backup for %#v\n", res)
 				continue
 			}
-			fmt.Printf("\ncurr res: %#v\n", res)
 			if resourceVersion == "" {
 				gvr := gv.WithResource(res.Name)
 				var dr dynamic.ResourceInterface
