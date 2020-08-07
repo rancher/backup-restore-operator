@@ -29,7 +29,7 @@ import (
 type handler struct {
 	ctx                     context.Context
 	backups                 backupControllers.BackupController
-	backupTemplates         backupControllers.BackupTemplateController
+	resourceSets            backupControllers.ResourceSetController
 	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController
 	secrets                 v1core.SecretController
 	namespaces              v1core.NamespaceController
@@ -40,7 +40,7 @@ type handler struct {
 func Register(
 	ctx context.Context,
 	backups backupControllers.BackupController,
-	backupTemplates backupControllers.BackupTemplateController,
+	backupTemplates backupControllers.ResourceSetController,
 	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController,
 	secrets v1core.SecretController,
 	namespaces v1core.NamespaceController,
@@ -50,7 +50,7 @@ func Register(
 	controller := &handler{
 		ctx:                     ctx,
 		backups:                 backups,
-		backupTemplates:         backupTemplates,
+		resourceSets:            backupTemplates,
 		backupEncryptionConfigs: backupEncryptionConfigs,
 		secrets:                 secrets,
 		namespaces:              namespaces,
@@ -104,7 +104,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, err
 	}
 
-	template, err := h.backupTemplates.Get(backup.Namespace, backup.Spec.BackupTemplate, k8sv1.GetOptions{})
+	resourceSetTemplate, err := h.resourceSets.Get(backup.Namespace, backup.Spec.ResourceSetName, k8sv1.GetOptions{})
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
@@ -118,8 +118,8 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
 	}
-	resourcesWithStatusSubresource, err := rh.GatherResources(h.ctx, template.BackupFilters, tmpBackupPath, transformerMap)
-	//err = h.gatherResources(template.BackupFilters, tmpBackupPath, transformerMap)
+	resourcesWithStatusSubresource, err := rh.GatherResources(h.ctx, resourceSetTemplate.ResourceSelectors, tmpBackupPath, transformerMap)
+	//err = h.gatherResources(template.ResourceSelectors, tmpBackupPath, transformerMap)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
@@ -129,7 +129,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 	timeTakenToCollectResources := time.Since(resourceCollectionStartTime)
 	logrus.Infof("time taken to collect resources: %v", timeTakenToCollectResources)
-	filters, err := json.Marshal(template.BackupFilters)
+	filters, err := json.Marshal(resourceSetTemplate.ResourceSelectors)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
@@ -185,8 +185,8 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			}
 			return backup, err
 		}
-	} else if storageLocation.ObjectStore != nil {
-		if err := h.uploadToS3(storageLocation.ObjectStore, tmpBackupPath, gzipFile); err != nil {
+	} else if storageLocation.S3 != nil {
+		if err := h.uploadToS3(storageLocation.S3, tmpBackupPath, gzipFile); err != nil {
 			removeDirErr := os.RemoveAll(tmpBackupPath)
 			if removeDirErr != nil {
 				return backup, errors.New(err.Error() + removeDirErr.Error())

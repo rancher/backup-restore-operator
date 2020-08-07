@@ -85,9 +85,8 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	var toRestore []restoreObj
 	numOwnerReferences := make(map[string]int)
 	resourcesWithStatusSubresource := make(map[string]bool)
-	//namespacedGVR := make(map[schema.GroupVersionResource]bool)
 
-	backupName := restore.Spec.BackupFileName
+	backupName := restore.Spec.BackupFilename
 
 	backupPath, err := ioutil.TempDir("", strings.TrimSuffix(backupName, ".tar.gz"))
 	if err != nil {
@@ -95,9 +94,13 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 	logrus.Infof("Temporary path for un-tar/gzip backup data during restore: %v", backupPath)
 
-	if restore.Spec.Local != "" {
+	backupLocation := restore.Spec.StorageLocation
+	if backupLocation == nil {
+		return restore, fmt.Errorf("Specify backup location during restore")
+	}
+	if backupLocation.Local != "" {
 		// if local, backup tar.gz must be added to the "Local" path
-		backupFilePath := filepath.Join(restore.Spec.Local, backupName)
+		backupFilePath := filepath.Join(backupLocation.Local, backupName)
 		if err := util.LoadFromTarGzip(backupFilePath, backupPath); err != nil {
 			removeDirErr := os.RemoveAll(backupPath)
 			if removeDirErr != nil {
@@ -105,7 +108,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			}
 			return restore, err
 		}
-	} else if restore.Spec.ObjectStore != nil {
+	} else if backupLocation.S3 != nil {
 		backupFilePath, err := h.downloadFromS3(restore)
 		if err != nil {
 			removeDirErr := os.RemoveAll(backupPath)
@@ -137,7 +140,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 	backupPath = strings.TrimSuffix(backupPath, ".tar.gz")
 	logrus.Infof("Untar/Ungzip backup at %v", backupPath)
-	config, err := h.backupEncryptionConfigs.Get(restore.Spec.EncryptionConfigNamespace, restore.Spec.EncryptionConfigName, k8sv1.GetOptions{})
+	config, err := h.backupEncryptionConfigs.Get("default", restore.Spec.EncryptionConfigName, k8sv1.GetOptions{})
 	if err != nil {
 		removeDirErr := os.RemoveAll(backupPath)
 		if removeDirErr != nil {
@@ -205,9 +208,12 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	timeForRestoringResources := time.Since(doneGeneratingGraphTime)
 	fmt.Printf("\ntime taken to restore resources: %v\n", timeForRestoringResources)
 
-	if err := h.prune(strings.TrimSuffix(backupName, ".tar.gz"), backupPath, restore.Spec.ForcePruneTimeout, transformerMap); err != nil {
-		return restore, fmt.Errorf("error pruning during restore: %v", err)
+	if restore.Spec.Prune {
+		if err := h.prune(strings.TrimSuffix(backupName, ".tar.gz"), backupPath, restore.Spec.DeleteTimeout, transformerMap); err != nil {
+			return restore, fmt.Errorf("error pruning during restore: %v", err)
+		}
 	}
+
 	logrus.Infof("Done restoring")
 	if err := os.RemoveAll(backupPath); err != nil {
 		return restore, err

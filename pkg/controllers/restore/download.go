@@ -11,12 +11,12 @@ import (
 )
 
 func (h *handler) downloadFromS3(restore *v1.Restore) (string, error) {
-	objStore := restore.Spec.ObjectStore
+	objStore := restore.Spec.StorageLocation.S3
 	gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 	secrets := h.dynamicClient.Resource(gvr)
-	secretNs, secretName := "default", objStore.Credentials
-	if strings.Contains(objStore.Credentials, "/") {
-		split := strings.SplitN(objStore.Credentials, "/", 2)
+	secretNs, secretName := "default", objStore.CredentialSecretName
+	if strings.Contains(objStore.CredentialSecretName, "/") {
+		split := strings.SplitN(objStore.CredentialSecretName, "/", 2)
 		if len(split) != 2 {
 			return "", fmt.Errorf("invalid credentials secret info")
 		}
@@ -33,11 +33,11 @@ func (h *handler) downloadFromS3(restore *v1.Restore) (string, error) {
 	}
 	accessKey, _ := s3SecretData["accessKey"].(string)
 	secretKey, _ := s3SecretData["secretKey"].(string)
-	s3Client, err := util.SetS3Service(restore.Spec.ObjectStore, accessKey, secretKey, false)
+	s3Client, err := util.SetS3Service(objStore, accessKey, secretKey, false)
 	if err != nil {
 		return "", err
 	}
-	prefix := restore.Spec.BackupFileName
+	prefix := restore.Spec.BackupFilename
 	if len(prefix) == 0 {
 		return "", fmt.Errorf("empty backup name")
 	}

@@ -1,0 +1,25 @@
+apiVersion: backupper.cattle.io/v1
+kind: BackupEncryptionConfig
+metadata:
+  name: testconfig
+  namespace: default
+resources:
+  - resources:
+      - secrets
+    providers:
+      - aescbc:
+          keys:
+            - name: key1
+              secret: c2VjcmV0IGlzIHNlY3VyZQ==
+---
+apiVersion: backupper.cattle.io/v1
+kind: Backup
+metadata:
+  name: test-recurring-backup
+  namespace: default
+spec:
+  storageLocation:
+    local: test-backup-location-local
+  resourceSetName: ecm-resource-set
+  encryptionConfigName: testconfig
+  schedule: "@every 1m"

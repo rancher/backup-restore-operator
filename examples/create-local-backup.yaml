@@ -12,20 +12,13 @@ resources:
           - name: key1
             secret: c2VjcmV0IGlzIHNlY3VyZQ==
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: backupper
----
 apiVersion: backupper.cattle.io/v1
 kind: Backup
 metadata:
-  name: test-tgz-backup
+  name: test-mcm-backup
   namespace: default
 spec:
-  backupFileName: tgz-backup
-  backupStorageLocation:
+  storageLocation:
     local: test-backup-location-local
-  backupTemplate: mcm-backup-template
+  resourceSetName: ecm-resource-set
   encryptionConfigName: testconfig
-  encryptionConfigNamespace: default

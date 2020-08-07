@@ -26,7 +26,7 @@ const (
 	contentType     = "application/gzip"
 )
 
-func SetS3Service(bc *v1.ObjectStore, accessKey, secretKey string, useSSL bool) (*minio.Client, error) {
+func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool) (*minio.Client, error) {
 	// Initialize minio client object.
 	log.WithFields(log.Fields{
 		"s3-endpoint":    bc.Endpoint,

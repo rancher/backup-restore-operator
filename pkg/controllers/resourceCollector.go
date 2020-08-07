@@ -24,7 +24,7 @@ type ResourceHandler struct {
 	DynamicClient   dynamic.Interface
 }
 
-func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.BackupFilter, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) (map[string]bool, error) {
+func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.ResourceSelector, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) (map[string]bool, error) {
 	var resourceVersion string
 	resourcesWithStatusSubresource := make(map[string]bool)
 	for _, filter := range filters {
@@ -34,7 +34,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.Back
 				return resourcesWithStatusSubresource, err
 			}
 			for _, apigroup := range groupsList {
-				filters = append(filters, v1.BackupFilter{ApiGroup: apigroup.PreferredVersion.GroupVersion})
+				filters = append(filters, v1.ResourceSelector{ApiGroup: apigroup.PreferredVersion.GroupVersion})
 			}
 		}
 	}
@@ -88,7 +88,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.Back
 	return resourcesWithStatusSubresource, nil
 }
 
-func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv1.APIResource, error) {
+func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelector) ([]k8sv1.APIResource, error) {
 	var resourceList, resourceListFromRegex, resourceListFromNames []k8sv1.APIResource
 	groupVersion := filter.ApiGroup
 
@@ -141,7 +141,7 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.BackupFilter)
 	return resourceList, nil
 }
 
-func (h *ResourceHandler) gatherAndWriteObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.BackupFilter, resourceVersion string) ([]unstructured.Unstructured, error) {
+func (h *ResourceHandler) gatherAndWriteObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.ResourceSelector, resourceVersion string) ([]unstructured.Unstructured, error) {
 	var filteredByNamespace, filteredObjects []unstructured.Unstructured
 
 	gvr := gv.WithResource(res.Name)
@@ -167,7 +167,7 @@ func (h *ResourceHandler) gatherAndWriteObjectsForResource(ctx context.Context, 
 	return filteredObjects, nil
 }
 
-func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.BackupFilter, resourceVersion string) ([]unstructured.Unstructured, error) {
+func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector, resourceVersion string) ([]unstructured.Unstructured, error) {
 	var filteredByName, filteredByResourceNames []unstructured.Unstructured
 	var fieldSelector, labelSelector string
 	// first get all objects of this resource type
@@ -219,6 +219,7 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 			fieldSelector += fmt.Sprintf("metadata.name=%s,", name)
 		}
 		strings.TrimRight(fieldSelector, ",")
+		// TODO: set resourceVersion later when it becomes clear how to use it
 		//filteredObjectsList, err := dr.List(ctx, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector,
 		//	ResourceVersion: resourceVersion})
 		filteredObjectsList, err := dr.List(ctx, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector})
@@ -246,7 +247,7 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 	return filteredByName, nil
 }
 
-func (h *ResourceHandler) filterByNamespace(filter v1.BackupFilter, filteredByName []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
+func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filteredByName []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
 	var filteredByNamespace, filteredByNamespaceRegex, filteredObjects []unstructured.Unstructured
 
 	filteredByNsMap := make(map[*unstructured.Unstructured]bool)

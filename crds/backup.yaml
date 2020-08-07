@@ -15,11 +15,13 @@ spec:
       properties:
         spec:
           properties:
-            backupSchedule:
-              type: string
-            backupTemplate:
-              type: string
             encryptionConfigName:
+              type: string
+            resourceSetName:
+              type: string
+            retention:
+              type: integer
+            schedule:
               type: string
             storageLocation:
               nullable: true
@@ -31,7 +33,7 @@ spec:
                   properties:
                     bucketName:
                       type: string
-                    credentials:
+                    credentialSecretName:
                       type: string
                     endpoint:
                       type: string
@@ -39,6 +41,8 @@ spec:
                       type: string
                     folder:
                       type: string
+                    insecureTLSSkipVerify:
+                      type: boolean
                     region:
                       type: string
                   type: object
@@ -64,6 +68,10 @@ spec:
                 type: object
               nullable: true
               type: array
+            lastSnapshotTs:
+              type: string
+            numSnapshots:
+              type: integer
             summary:
               type: string
           type: object

@@ -18,14 +18,12 @@ metadata:
   name: restore-s3-demo
   namespace: default
 spec:
-  backupFileName: backup-demo.tar.gz
-  backupStorageLocation:
+  backupFilename: backup-demo-upload.tar.gz
+  storageLocation:
     s3objectStore:
-      credentials: default/creds
+      credentialSecretName: default/creds
       bucketName: rajashree-backup-test
       folder: ecm1
       region: us-west-2
       endpoint: s3.us-west-2.amazonaws.com
-  backupTemplate: mcm-backup-template
   encryptionConfigName: testconfig
-  encryptionConfigNamespace: default

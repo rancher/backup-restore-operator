@@ -15,9 +15,16 @@ spec:
       properties:
         spec:
           properties:
-            backupFileName:
+            backupFilename:
               type: string
-            backupStorageLocation:
+            deleteTimeout:
+              type: integer
+            encryptionConfigName:
+              type: string
+            prune:
+              type: boolean
+            storageLocation:
+              nullable: true
               properties:
                 local:
                   type: string
@@ -26,7 +33,7 @@ spec:
                   properties:
                     bucketName:
                       type: string
-                    credentials:
+                    credentialSecretName:
                       type: string
                     endpoint:
                       type: string
@@ -34,18 +41,35 @@ spec:
                       type: string
                     folder:
                       type: string
+                    insecureTLSSkipVerify:
+                      type: boolean
                     region:
                       type: string
                   type: object
               type: object
-            encryptionConfigName:
+          type: object
+        status:
+          properties:
+            conditions:
+              items:
+                properties:
+                  lastTransitionTime:
+                    type: string
+                  lastUpdateTime:
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  status:
+                    type: string
+                  type:
+                    type: string
+                type: object
+              nullable: true
+              type: array
+            summary:
               type: string
-            encryptionConfigNamespace:
-              type: string
-            forcePruneTimeout:
-              type: integer
-            pruneRestore:
-              type: boolean
           type: object
       type: object
   version: v1

@@ -15,10 +15,13 @@ require (
 	github.com/rancher/lasso v0.0.0-20200515155337-a34e1e26ad91
 	github.com/rancher/wrangler v0.6.2-0.20200622171942-7224e49a2407
 	github.com/rancher/wrangler-api v0.6.1-0.20200515193802-dcf70881b087
+	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.5.0
 	github.com/urfave/cli v1.22.2 // indirect
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/tools v0.0.0-20191017205301-920acffc3e65 // indirect
 	google.golang.org/appengine v1.6.1 // indirect
+	k8s.io/api v0.18.0
 	k8s.io/apiextensions-apiserver v0.18.0
 	k8s.io/apimachinery v0.18.0
 	k8s.io/apiserver v0.18.0

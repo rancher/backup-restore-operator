@@ -25,7 +25,10 @@ import (
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
 	"github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/lasso/pkg/controller"
+	"github.com/rancher/wrangler/pkg/apply"
+	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/rancher/wrangler/pkg/generic"
+	"github.com/rancher/wrangler/pkg/kv"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,7 +58,7 @@ type RestoreController interface {
 type RestoreClient interface {
 	Create(*v1.Restore) (*v1.Restore, error)
 	Update(*v1.Restore) (*v1.Restore, error)
-
+	UpdateStatus(*v1.Restore) (*v1.Restore, error)
 	Delete(namespace, name string, options *metav1.DeleteOptions) error
 	Get(namespace, name string, options metav1.GetOptions) (*v1.Restore, error)
 	List(namespace string, opts metav1.ListOptions) (*v1.RestoreList, error)
@@ -184,6 +187,11 @@ func (c *restoreController) Update(obj *v1.Restore) (*v1.Restore, error) {
 	return result, c.client.Update(context.TODO(), obj.Namespace, obj, result, metav1.UpdateOptions{})
 }
 
+func (c *restoreController) UpdateStatus(obj *v1.Restore) (*v1.Restore, error) {
+	result := &v1.Restore{}
+	return result, c.client.UpdateStatus(context.TODO(), obj.Namespace, obj, result, metav1.UpdateOptions{})
+}
+
 func (c *restoreController) Delete(namespace, name string, options *metav1.DeleteOptions) error {
 	if options == nil {
 		options = &metav1.DeleteOptions{}
@@ -253,4 +261,104 @@ func (c *restoreCache) GetByIndex(indexName, key string) (result []*v1.Restore, 
 		result = append(result, obj.(*v1.Restore))
 	}
 	return result, nil
+}
+
+type RestoreStatusHandler func(obj *v1.Restore, status v1.RestoreStatus) (v1.RestoreStatus, error)
+
+type RestoreGeneratingHandler func(obj *v1.Restore, status v1.RestoreStatus) ([]runtime.Object, v1.RestoreStatus, error)
+
+func RegisterRestoreStatusHandler(ctx context.Context, controller RestoreController, condition condition.Cond, name string, handler RestoreStatusHandler) {
+	statusHandler := &restoreStatusHandler{
+		client:    controller,
+		condition: condition,
+		handler:   handler,
+	}
+	controller.AddGenericHandler(ctx, name, FromRestoreHandlerToHandler(statusHandler.sync))
+}
+
+func RegisterRestoreGeneratingHandler(ctx context.Context, controller RestoreController, apply apply.Apply,
+	condition condition.Cond, name string, handler RestoreGeneratingHandler, opts *generic.GeneratingHandlerOptions) {
+	statusHandler := &restoreGeneratingHandler{
+		RestoreGeneratingHandler: handler,
+		apply:                    apply,
+		name:                     name,
+		gvk:                      controller.GroupVersionKind(),
+	}
+	if opts != nil {
+		statusHandler.opts = *opts
+	}
+	controller.OnChange(ctx, name, statusHandler.Remove)
+	RegisterRestoreStatusHandler(ctx, controller, condition, name, statusHandler.Handle)
+}
+
+type restoreStatusHandler struct {
+	client    RestoreClient
+	condition condition.Cond
+	handler   RestoreStatusHandler
+}
+
+func (a *restoreStatusHandler) sync(key string, obj *v1.Restore) (*v1.Restore, error) {
+	if obj == nil {
+		return obj, nil
+	}
+
+	origStatus := obj.Status.DeepCopy()
+	obj = obj.DeepCopy()
+	newStatus, err := a.handler(obj, obj.Status)
+	if err != nil {
+		// Revert to old status on error
+		newStatus = *origStatus.DeepCopy()
+	}
+
+	if a.condition != "" {
+		if errors.IsConflict(err) {
+			a.condition.SetError(&newStatus, "", nil)
+		} else {
+			a.condition.SetError(&newStatus, "", err)
+		}
+	}
+	if !equality.Semantic.DeepEqual(origStatus, &newStatus) {
+		var newErr error
+		obj.Status = newStatus
+		obj, newErr = a.client.UpdateStatus(obj)
+		if err == nil {
+			err = newErr
+		}
+	}
+	return obj, err
+}
+
+type restoreGeneratingHandler struct {
+	RestoreGeneratingHandler
+	apply apply.Apply
+	opts  generic.GeneratingHandlerOptions
+	gvk   schema.GroupVersionKind
+	name  string
+}
+
+func (a *restoreGeneratingHandler) Remove(key string, obj *v1.Restore) (*v1.Restore, error) {
+	if obj != nil {
+		return obj, nil
+	}
+
+	obj = &v1.Restore{}
+	obj.Namespace, obj.Name = kv.RSplit(key, "/")
+	obj.SetGroupVersionKind(a.gvk)
+
+	return nil, generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
+		WithOwner(obj).
+		WithSetID(a.name).
+		ApplyObjects()
+}
+
+func (a *restoreGeneratingHandler) Handle(obj *v1.Restore, status v1.RestoreStatus) (v1.RestoreStatus, error) {
+	objs, newStatus, err := a.RestoreGeneratingHandler(obj, status)
+	if err != nil {
+		return newStatus, err
+	}
+
+	return newStatus, generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
+		WithOwner(obj).
+		WithSetID(a.name).
+		ApplyObjects(objs...)
 }

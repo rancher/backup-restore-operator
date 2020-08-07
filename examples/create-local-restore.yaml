@@ -17,9 +17,9 @@ kind: Restore
 metadata:
   name: my-restore
 spec:
-  backupFileName: tgz-backup.tar.gz
+  backupFilename: default-test-mcm-backup-e70fb183-275f-4563-9c22-3ff440a8a7a2-2020-08-07T13-36-32-07-00.tar.gz
   encryptionConfigName: testconfig
-  encryptionConfigNamespace: default
-  forcePruneTimeout: 60
-  backupStorageLocation:
+  prune: true
+  deleteTimeout: 5
+  storageLocation:
     local: test-backup-location-local

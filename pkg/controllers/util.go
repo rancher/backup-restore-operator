@@ -11,7 +11,10 @@ import (
 	"reflect"
 )
 
-const WorkerThreads = 25
+const (
+	ChartNamespace = "cattle-resources-system"
+	WorkerThreads  = 25
+)
 
 func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 	gzipFile, err := os.Create(filepath.Join(targetGzipPath, targetGzipFile))

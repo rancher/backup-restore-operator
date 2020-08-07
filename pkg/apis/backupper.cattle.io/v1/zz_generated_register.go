@@ -30,7 +30,7 @@ import (
 var (
 	BackupResourceName                 = "backups"
 	BackupEncryptionConfigResourceName = "backupencryptionconfigs"
-	BackupTemplateResourceName         = "backuptemplates"
+	ResourceSetResourceName            = "resourcesets"
 	RestoreResourceName                = "restores"
 )
 
@@ -59,8 +59,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&BackupList{},
 		&BackupEncryptionConfig{},
 		&BackupEncryptionConfigList{},
-		&BackupTemplate{},
-		&BackupTemplateList{},
+		&ResourceSet{},
+		&ResourceSetList{},
 		&Restore{},
 		&RestoreList{},
 	)

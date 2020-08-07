@@ -13,7 +13,7 @@ import (
 	util "github.com/mrajashree/backup/pkg/controllers"
 )
 
-func (h *handler) uploadToS3(objectStore *v1.ObjectStore, tmpBackupPath, gzipFile string) error {
+func (h *handler) uploadToS3(objectStore *v1.S3ObjectStore, tmpBackupPath, gzipFile string) error {
 	tmpBackupGzipFilepath, err := ioutil.TempDir("", "uploadpath")
 	if err != nil {
 		return err
@@ -29,9 +29,9 @@ func (h *handler) uploadToS3(objectStore *v1.ObjectStore, tmpBackupPath, gzipFil
 	}
 	gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 	secrets := h.dynamicClient.Resource(gvr)
-	secretNs, secretName := "default", objectStore.Credentials
-	if strings.Contains(objectStore.Credentials, "/") {
-		split := strings.SplitN(objectStore.Credentials, "/", 2)
+	secretNs, secretName := "default", objectStore.CredentialSecretName
+	if strings.Contains(objectStore.CredentialSecretName, "/") {
+		split := strings.SplitN(objectStore.CredentialSecretName, "/", 2)
 		if len(split) != 2 {
 			return fmt.Errorf("invalid credentials secret info")
 		}

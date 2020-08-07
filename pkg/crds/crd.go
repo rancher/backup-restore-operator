@@ -36,7 +36,7 @@ func List() []crd.CRD {
 		newCRD(&backupper.Backup{}, func(c crd.CRD) crd.CRD {
 			return c
 		}),
-		newCRD(&backupper.BackupTemplate{}, func(c crd.CRD) crd.CRD {
+		newCRD(&backupper.ResourceSet{}, func(c crd.CRD) crd.CRD {
 			return c
 		}),
 		newCRD(&backupper.BackupEncryptionConfig{}, func(c crd.CRD) crd.CRD {

@@ -1,19 +1,19 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: backuptemplates.backupper.cattle.io
+  name: resourcesets.backupper.cattle.io
 spec:
   group: backupper.cattle.io
   names:
-    kind: BackupTemplate
-    plural: backuptemplates
+    kind: ResourceSet
+    plural: resourcesets
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
       properties:
-        backupFilters:
+        resourceSelectors:
           items:
             properties:
               apiGroup:
@@ -26,7 +26,29 @@ spec:
               kindsRegex:
                 type: string
               labelSelectors:
-                type: string
+                nullable: true
+                properties:
+                  matchExpressions:
+                    items:
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          type: string
+                        values:
+                          items:
+                            type: string
+                          nullable: true
+                          type: array
+                      type: object
+                    nullable: true
+                    type: array
+                  matchLabels:
+                    additionalProperties:
+                      type: string
+                    nullable: true
+                    type: object
+                type: object
               namespaceRegex:
                 type: string
               namespaces:
@@ -34,8 +56,6 @@ spec:
                   type: string
                 nullable: true
                 type: array
-              prune:
-                type: boolean
               resourceNameRegex:
                 type: string
               resourceNames:

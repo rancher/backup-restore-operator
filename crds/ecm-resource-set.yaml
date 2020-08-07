@@ -1,8 +1,8 @@
 apiVersion: backupper.cattle.io/v1
-kind: BackupTemplate
+kind: ResourceSet
 metadata:
-  name: mcm-backup-template
-backupFilters:
+  name: ecm-resource-set
+resourceSelectors:
   - apiGroup: "v1"
     kindsRegex: "^namespaces$"
     resourceNameRegex: "^cattle-|^p-|^c-|^local$|^user-|^u-"
@@ -13,11 +13,14 @@ backupFilters:
     kindsRegex: "^roles$|^rolebindings$"
     namespaceRegex: "^cattle-|^p-|^c-|^local$|^user-|^u-"
   - apiGroup: "rbac.authorization.k8s.io/v1"
-    kindsRegex: "^clusterroles$|^clusterrolebindings$"
+    kindsRegex: "^clusterrolebindings$"
     resourceNameRegex: "^cattle-|^clusterrolebinding-|^globaladmin-user-|^grb-u-"
-  - apiGroup: "apiextensions.k8s.io/v1"
-    kindsRegex: "^customresourcedefinitions$"
-    resourceNameRegex: "management.cattle.io$|^project.cattle.io$"
+  - apiGroup: "rbac.authorization.k8s.io/v1"
+    kindsRegex: "^clusterroles$"
+    resourceNameRegex: "^cattle-|^p-|^c-|^local-|^user-|^u-|^project-|^create-ns$"
+  - apiGroup: "apiextensions.k8s.io/v1beta1"
+    kindsRegex: "."
+    resourceNameRegex: "management.cattle.io$|project.cattle.io$"
   - apiGroup: "management.cattle.io/v3"
     kindsRegex: "."
   - apiGroup: "project.cattle.io/v3"

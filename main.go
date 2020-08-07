@@ -74,7 +74,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Error generating shared client factory: %s", err.Error())
 	}
-	backup.Register(ctx, backups.Backupper().V1().Backup(), backups.Backupper().V1().BackupTemplate(),
+	backup.Register(ctx, backups.Backupper().V1().Backup(), backups.Backupper().V1().ResourceSet(),
 		backups.Backupper().V1().BackupEncryptionConfig(),
 		core.Core().V1().Secret(),
 		core.Core().V1().Namespace(),
@@ -82,6 +82,7 @@ func main() {
 	restore.Register(ctx, backups.Backupper().V1().Restore(), backups.Backupper().V1().Backup(),
 		backups.Backupper().V1().BackupEncryptionConfig(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
 
+	backup.StartRecurringBackupsDaemon(ctx, backups.Backupper().V1().Backup(), "")
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
 	}

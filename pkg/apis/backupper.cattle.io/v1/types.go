@@ -18,22 +18,23 @@ type Backup struct {
 
 type BackupSpec struct {
 	StorageLocation      *StorageLocation `json:"storageLocation"`
-	BackupTemplate       string           `json:"backupTemplate"`
+	ResourceSetName      string           `json:"resourceSetName"`
 	EncryptionConfigName string           `json:"encryptionConfigName"`
-	BackupSchedule       string           `json:"backupSchedule"`
+	Schedule             string           `json:"schedule"`
+	Retention            int              `json:"retention"`
 }
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-type BackupTemplate struct {
+type ResourceSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	BackupFilters []BackupFilter `json:"backupFilters"`
+	ResourceSelectors []ResourceSelector `json:"resourceSelectors"`
 }
 
-type BackupFilter struct {
+type ResourceSelector struct {
 	ApiGroup          string                `json:"apiGroup"`
 	Kinds             []string              `json:"kinds"`
 	KindsRegex        string                `json:"kindsRegex"`
@@ -45,27 +46,31 @@ type BackupFilter struct {
 }
 
 var (
-	BackupConditionReady    string
-	BackupConditionUploaded string
+	BackupConditionReady     = "Ready"
+	BackupConditionUploaded  = "Uploaded"
+	BackupConditionTriggered = "Triggered"
 )
 
 type BackupStatus struct {
-	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	Summary    string                              `json:"summary,omitempty"`
+	Conditions     []genericcondition.GenericCondition `json:"conditions,omitempty"`
+	LastSnapshotTS string                              `json:"lastSnapshotTs"`
+	NumSnapshots   int                                 `json:"numSnapshots"`
+	Summary        string                              `json:"summary,omitempty"`
 }
 
 type StorageLocation struct {
-	ObjectStore *ObjectStore `json:"s3objectStore"`
-	Local       string       `json:"local"`
+	S3    *S3ObjectStore `json:"s3objectStore"`
+	Local string         `json:"local"`
 }
 
-type ObjectStore struct {
-	Endpoint    string `json:"endpoint"`
-	EndpointCA  string `json:"endpointCa"`
-	Credentials string `json:"credentials"`
-	BucketName  string `json:"bucketName"`
-	Region      string `json:"region"`
-	Folder      string `json:"folder"`
+type S3ObjectStore struct {
+	Endpoint              string `json:"endpoint"`
+	EndpointCA            string `json:"endpointCa"`
+	InsecureTLSSkipVerify bool   `json:"insecureTLSSkipVerify"`
+	CredentialSecretName  string `json:"credentialSecretName"`
+	BucketName            string `json:"bucketName"`
+	Region                string `json:"region"`
+	Folder                string `json:"folder"`
 }
 
 // +genclient
@@ -75,14 +80,19 @@ type Restore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec RestoreSpec `json:"spec"`
+	Spec   RestoreSpec   `json:"spec"`
+	Status RestoreStatus `json:"status"`
 }
 
 type RestoreSpec struct {
-	BackupFileName            string `json:"backupFileName"`
-	StorageLocation           `json:"backupStorageLocation"`
-	PruneRestore              bool   `json:"pruneRestore"`
-	ForcePruneTimeout         int    `json:"forcePruneTimeout"`
-	EncryptionConfigName      string `json:"encryptionConfigName"`
-	EncryptionConfigNamespace string `json:"encryptionConfigNamespace"`
+	BackupFilename       string           `json:"backupFilename"`
+	StorageLocation      *StorageLocation `json:"storageLocation"`
+	Prune                bool             `json:"prune"`
+	DeleteTimeout        int              `json:"deleteTimeout"`
+	EncryptionConfigName string           `json:"encryptionConfigName"`
+}
+
+type RestoreStatus struct {
+	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
+	Summary    string                              `json:"summary,omitempty"`
 }

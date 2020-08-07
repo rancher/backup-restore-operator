@@ -33,7 +33,7 @@ func (h *handler) prune(backupName, backupPath string, pruneTimeout int, transfo
 	if err != nil {
 		return fmt.Errorf("error reading backup fitlers file: %v", err)
 	}
-	var backupFilters []v1.BackupFilter
+	var backupFilters []v1.ResourceSelector
 	if err := json.Unmarshal(filtersBytes, &backupFilters); err != nil {
 		return fmt.Errorf("error unmarshaling backup filters file: %v", err)
 	}
