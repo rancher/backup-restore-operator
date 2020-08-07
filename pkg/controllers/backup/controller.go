@@ -5,26 +5,25 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
 	util "github.com/mrajashree/backup/pkg/controllers"
 	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
+	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/sirupsen/logrus"
-	"io/ioutil"
-	"strings"
 
-	//k8scorev1 "k8s.io/api/core/v1"
-	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	//"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 type handler struct {
@@ -68,17 +67,26 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, nil
 	}
 	if condition.Cond(v1.BackupConditionReady).IsTrue(backup) && condition.Cond(v1.BackupConditionUploaded).IsTrue(backup) {
-		return backup, nil
+		if backup.Spec.Schedule == "" {
+			// one time backup
+			return backup, nil
+		}
+		// else recurring
+		if !condition.Cond(v1.BackupConditionTriggered).IsTrue(backup) {
+			// not triggered yet
+			return backup, nil
+		}
 	}
 
 	kubeSystemNS, err := h.namespaces.Get("kube-system", k8sv1.GetOptions{})
 	if err != nil {
 		return backup, err
 	}
-	currTS := time.Now().Format(time.RFC3339)
+
+	currSnapshotTS := time.Now().Format(time.RFC3339)
 	// on OS X writing file with `:` converts colon to forward slash
-	currTS = strings.Replace(currTS, ":", "-", -1)
-	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, kubeSystemNS.UID, currTS)
+	currTSForFilename := strings.Replace(currSnapshotTS, ":", "-", -1)
+	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, kubeSystemNS.UID, currTSForFilename)
 
 	// empty dir defaults to os.TempDir
 	tmpBackupPath, err := ioutil.TempDir("", backupFileName)
@@ -86,7 +94,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
 	logrus.Infof("Temporary backup path is %v", tmpBackupPath)
-	//h.discoveryClient.ServerGroupsAndResources()
+
 	transformerMap, err := h.getEncryptionTransformers(backup)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
@@ -186,10 +194,18 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return backup, err
 		}
 	}
-	condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
 	if err := os.RemoveAll(tmpBackupPath); err != nil {
 		return backup, err
 	}
+
+	condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
+	if condition.Cond(v1.BackupConditionTriggered).IsTrue(backup) {
+		// not triggered yet
+		condition.Cond(v1.BackupConditionTriggered).SetStatusBool(backup, false)
+	}
+
+	backup.Status.LastSnapshotTS = currSnapshotTS
+	backup.Status.NumSnapshots++
 	if updBackup, err := h.backups.UpdateStatus(backup); err != nil {
 		return updBackup, err
 	}
