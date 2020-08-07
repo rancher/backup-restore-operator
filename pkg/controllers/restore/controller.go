@@ -206,7 +206,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	fmt.Printf("\ntime taken to restore resources: %v\n", timeForRestoringResources)
 
 	if err := h.prune(strings.TrimSuffix(backupName, ".tar.gz"), backupPath, restore.Spec.ForcePruneTimeout, transformerMap); err != nil {
-		panic(err)
 		return restore, fmt.Errorf("error pruning during restore: %v", err)
 	}
 	logrus.Infof("Done restoring")
@@ -604,100 +603,4 @@ func getGVR(resourceGVK string) schema.GroupVersionResource {
 	gr := schema.ParseGroupResource(resource + "." + group)
 	gvr := gr.WithVersion(version)
 	return gvr
-}
-
-func (h *handler) prune(backupName, backupPath string, pruneTimeout int, transformerMap map[schema.GroupResource]value.Transformer) error {
-	// prune
-	filtersBytes, err := ioutil.ReadFile(filepath.Join(backupPath, "filters", "filters.json"))
-	if err != nil {
-		return fmt.Errorf("error reading backup fitlers file: %v", err)
-	}
-	var backupFilters []v1.BackupFilter
-	if err := json.Unmarshal(filtersBytes, &backupFilters); err != nil {
-		return fmt.Errorf("error unmarshaling backup filters file: %v", err)
-	}
-	rh := util.ResourceHandler{
-		DiscoveryClient: h.discoveryClient,
-		DynamicClient:   h.dynamicClient,
-	}
-	pruneDirPath, err := ioutil.TempDir("", fmt.Sprintf("prune-%s", backupName))
-	if err != nil {
-		return err
-	}
-	logrus.Infof("Prune dir path is %s", pruneDirPath)
-
-	if _, err := rh.GatherResources(h.ctx, backupFilters, pruneDirPath, transformerMap); err != nil {
-		return err
-	}
-	logrus.Infof("Comparing prune and backup dirs")
-	// compare pruneDirPath and backupPath contents, to find any extra files in pruneDirPath, and mark them for deletion
-	namespacedResourcesToDelete := make(map[string]schema.GroupVersionResource)
-	resourcesToDelete := make(map[string]schema.GroupVersionResource)
-	walkFunc := func(currPath string, info os.FileInfo, err error) error {
-		if info.IsDir() {
-			return nil
-		}
-		// check if this file exists in backupPath or not
-		// for example, for /var/tmp/authconfigs.management.cattle.io#v3/adfs.json,
-		// containingDirFullPath = /var/tmp/authconfigs.management.cattle.io#v3
-		containingDirFullPath := path.Dir(currPath)
-		// containingDirBasePath = authconfigs.management.cattle.io#v3
-		containingDirBasePath := filepath.Base(containingDirFullPath)
-		// currFileName = authconfigs.management.cattle.io#v3/adfs.json => removes the path upto the dir for groupversion
-		currFileName := filepath.Join(containingDirBasePath, filepath.Base(currPath))
-		// if this file does not exist in the backup, it was created after taking backup, so delete it
-		if _, err := os.Stat(filepath.Join(backupPath, currFileName)); os.IsNotExist(err) {
-			gvr := getGVR(containingDirBasePath)
-			isNamespaced, err := lasso.IsNamespaced(gvr, h.restmapper)
-			if err != nil {
-				logrus.Errorf("Error finding if %v is namespaced: %v", currFileName, err)
-			}
-			if isNamespaced {
-				// use entire path as key, as we need to read this file to get the namespace
-				namespacedResourcesToDelete[currPath] = gvr
-			} else {
-				// use only the filename without json ext as we can delete this resource without reading the file
-				resourcesToDelete[strings.TrimSuffix(filepath.Base(currPath), ".json")] = gvr
-			}
-
-		}
-		return nil
-	}
-	err = filepath.Walk(pruneDirPath, walkFunc)
-	if err != nil {
-		return err
-	}
-	logrus.Infof("Now Need to delete namespaced %v", namespacedResourcesToDelete)
-	logrus.Infof("Now Need to delete clusterscoped %v", resourcesToDelete)
-
-	for resourceName, gvr := range resourcesToDelete {
-		dr := h.dynamicClient.Resource(gvr)
-		if err := dr.Delete(h.ctx, resourceName, k8sv1.DeleteOptions{}); err != nil {
-			return err
-		}
-	}
-
-	for resourceFile, gvr := range namespacedResourcesToDelete {
-		resourceBytes, err := ioutil.ReadFile(resourceFile)
-		if err != nil {
-			return err
-		}
-		var resourceContents map[string]interface{}
-		if err := json.Unmarshal(resourceBytes, &resourceContents); err != nil {
-			return err
-		}
-		metadata := resourceContents[metadataMapKey].(map[string]interface{})
-		resourceName, nameFound := metadata["name"].(string)
-		namespace, nsFound := metadata["namespace"].(string)
-		if !nameFound || !nsFound {
-			return fmt.Errorf("cannot delete resource as namespace not found")
-		}
-		dr := h.dynamicClient.Resource(gvr).Namespace(namespace)
-		if err := dr.Delete(h.ctx, resourceName, k8sv1.DeleteOptions{}); err != nil {
-			return err
-		}
-	}
-
-	err = os.RemoveAll(pruneDirPath)
-	return err
 }

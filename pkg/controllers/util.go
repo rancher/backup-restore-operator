@@ -11,6 +11,8 @@ import (
 	"reflect"
 )
 
+const WorkerThreads = 25
+
 func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 	gzipFile, err := os.Create(filepath.Join(targetGzipPath, targetGzipFile))
 	if err != nil {
@@ -178,9 +180,9 @@ func ErrList(e []error) error {
 //	})
 //}
 //fmt.Printf("\nHere after all goroutines have finished\n")
+//close(resourcesToRestoreQueue)
 //err := errgrp.Wait()
 //if err != nil {
 //	return err
 //}
-//close(resourcesToRestoreQueue)
 //}

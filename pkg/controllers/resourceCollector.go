@@ -17,7 +17,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 )
 
 type ResourceHandler struct {
@@ -170,13 +169,12 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 		labelSelector = labels.SelectorFromSet(labelMap).String()
 	}
 
-	logrus.Infof("trying list with resourceversion %v", resourceVersion)
 	//resourceObjectsList, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: labelSelector, ResourceVersion: resourceVersion})
 	resourceObjectsList, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
 		return filteredByName, err
 	}
-	logrus.Infof("[%v] list resourceObjectsList: %v, org resourceVersion: %v", time.Now(), resourceObjectsList.GetResourceVersion(), resourceVersion)
+	//logrus.Infof("[%v] list resourceObjectsList: %v, org resourceVersion: %v", time.Now(), resourceObjectsList.GetResourceVersion(), resourceVersion)
 
 	filteredByNameMap := make(map[*unstructured.Unstructured]bool)
 
