@@ -100,6 +100,9 @@ func (h *handler) prune(backupName, backupPath string, pruneTimeout int, transfo
 	logrus.Infof("Now Need to delete clusterscoped %v", resourcesToDelete)
 
 	if err := h.pruneResources(resourcesToDelete, namespacedResourcesToDelete, pruneTimeout, transformerMap); err != nil {
+		if removeErr := os.RemoveAll(pruneDirPath); removeErr != nil {
+			return removeErr
+		}
 		return err
 	}
 	err = os.RemoveAll(pruneDirPath)
@@ -113,7 +116,6 @@ func (h *handler) pruneResources(resourcesToDelete, namespacedResourcesToDelete 
 	go h.pruneClusterScopedResources(resourcesToDelete, pruneTimeout, clusterScopedResourceDeletionError)
 	cErr := <-clusterScopedResourceDeletionError
 	if cErr != nil {
-		fmt.Printf("\nreturning error %v\n", cErr)
 		return cErr
 	}
 

@@ -9,10 +9,6 @@ import (
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
-const (
-	OldUIDReferenceLabel = "backupper.cattle.io/old-uid"
-)
-
 func GetEncryptionTransformers(config *v1.BackupEncryptionConfig) (map[schema.GroupResource]value.Transformer, error) {
 	resourceToPrefixTransformer := map[schema.GroupResource][]value.PrefixTransformer{}
 

@@ -12,13 +12,14 @@ import (
 	"github.com/mrajashree/backup/pkg/controllers/restore"
 	"github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io"
 	lasso "github.com/rancher/lasso/pkg/client"
+	"github.com/rancher/lasso/pkg/mapper"
 	"github.com/rancher/wrangler/pkg/kubeconfig"
+	"github.com/rancher/wrangler/pkg/ratelimit"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/rancher/wrangler/pkg/start"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/dynamic"
-	//"github.com/rancher/wrangler/pkg/start"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -37,33 +38,38 @@ func main() {
 	ctx := signals.SetupSignalHandler(context.Background())
 	fmt.Printf("kubeconfig: %v\n", KubeConfig)
 
-	kubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
+	restKubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
 	if err != nil {
 		logrus.Fatalf("failed to find kubeconfig: %v", err)
 	}
 
-	kubeConfig.QPS = 150
-	kubeConfig.Burst = 150
-	backups, err := backupper.NewFactoryFromConfig(kubeConfig)
+	restKubeConfig.RateLimiter = ratelimit.None
+
+	restmapper, err := mapper.New(restKubeConfig)
+	if err != nil {
+		logrus.Fatalf("Error building rest mapper: %s", err.Error())
+	}
+
+	backups, err := backupper.NewFactoryFromConfig(restKubeConfig)
 	if err != nil {
 		logrus.Fatalf("Error building sample controllers: %s", err.Error())
 	}
 
-	clientSet, err := clientset.NewForConfig(kubeConfig)
+	clientSet, err := clientset.NewForConfig(restKubeConfig)
 	if err != nil {
 		logrus.Fatalf("Error getting clientSet: %s", err.Error())
 	}
 
-	dynamicInterace, err := dynamic.NewForConfig(kubeConfig)
+	dynamicInterace, err := dynamic.NewForConfig(restKubeConfig)
 	if err != nil {
 		logrus.Fatalf("Error generating dynamic client: %s", err.Error())
 	}
-	sharedClientFactory, err := lasso.NewSharedClientFactoryForConfig(kubeConfig)
+	sharedClientFactory, err := lasso.NewSharedClientFactoryForConfig(restKubeConfig)
 	if err != nil {
 		logrus.Fatalf("Error generating shared client factory: %s", err.Error())
 	}
 	backup.Register(ctx, backups.Backupper().V1().Backup(), backups.Backupper().V1().BackupTemplate(), backups.Backupper().V1().BackupEncryptionConfig(), clientSet, dynamicInterace)
-	restore.Register(ctx, backups.Backupper().V1().Restore(), backups.Backupper().V1().Backup(), backups.Backupper().V1().BackupEncryptionConfig(), clientSet, dynamicInterace, sharedClientFactory)
+	restore.Register(ctx, backups.Backupper().V1().Restore(), backups.Backupper().V1().Backup(), backups.Backupper().V1().BackupEncryptionConfig(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
 
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
