@@ -28,11 +28,25 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.Back
 	var resourceVersion string
 	resourcesWithStatusSubresource := make(map[string]bool)
 	for _, filter := range filters {
+		if filter.ApiGroup == "*" {
+			groupsList, _, err := h.DiscoveryClient.ServerGroupsAndResources()
+			if err != nil {
+				return resourcesWithStatusSubresource, err
+			}
+			for _, apigroup := range groupsList {
+				filters = append(filters, v1.BackupFilter{ApiGroup: apigroup.PreferredVersion.GroupVersion})
+			}
+		}
+	}
+
+	for _, filter := range filters {
+		if filter.ApiGroup == "*" {
+			continue
+		}
 		resourceList, err := h.gatherResourcesForGroupVersion(filter)
 		if err != nil {
 			return resourcesWithStatusSubresource, err
 		}
-
 		gv, err := schema.ParseGroupVersion(filter.ApiGroup)
 		if err != nil {
 			return resourcesWithStatusSubresource, err
@@ -78,16 +92,12 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.BackupFilter)
 	var resourceList, resourceListFromRegex, resourceListFromNames []k8sv1.APIResource
 	groupVersion := filter.ApiGroup
 
-	// TODO: accept all groupVersions in one filter
-	//if groupVersion == "*" {
-	//	_, resources, err = h.discoveryClient.ServerGroupsAndResources()
-	//	if err != nil {
-	//		return resourceList, err
-	//	}
-	//}
 	resources, err := h.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
 	if err != nil {
 		return resourceList, err
+	}
+	if filter.KindsRegex == "" && len(filter.Kinds) == 0 {
+		return resources.APIResources, nil
 	}
 
 	// resources list has all resources under given groupVersion, first filter based on KindsRegex
@@ -175,7 +185,6 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 		return filteredByName, err
 	}
 	//logrus.Infof("[%v] list resourceObjectsList: %v, org resourceVersion: %v", time.Now(), resourceObjectsList.GetResourceVersion(), resourceVersion)
-
 	filteredByNameMap := make(map[*unstructured.Unstructured]bool)
 
 	if len(filter.ResourceNames) == 0 && filter.ResourceNameRegex == "" {
