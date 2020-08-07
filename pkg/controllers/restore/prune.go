@@ -210,31 +210,36 @@ func (h *handler) deleteNamespacedResources(resourcesToDelete []resourceInfo, re
 
 				resourceBytes, err := ioutil.ReadFile(resource.path)
 				if err != nil {
-					return err
+					errList = append(errList, err)
+					continue
 				}
 
 				decryptionTransformer, decrypted := transformerMap[resource.gvr.GroupResource()]
 				if decrypted {
 					var encryptedBytes []byte
 					if err := json.Unmarshal(resourceBytes, &encryptedBytes); err != nil {
-						return err
+						errList = append(errList, err)
+						continue
 					}
 					decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(resource.name))
 					if err != nil {
-						return err
+						errList = append(errList, err)
+						continue
 					}
 					resourceBytes = decrypted
 				}
 
 				var resourceContents map[string]interface{}
 				if err := json.Unmarshal(resourceBytes, &resourceContents); err != nil {
-					return err
+					errList = append(errList, err)
+					continue
 				}
 				metadata := resourceContents[metadataMapKey].(map[string]interface{})
 				resourceName, nameFound := metadata["name"].(string)
 				namespace, nsFound := metadata["namespace"].(string)
 				if !nameFound || !nsFound {
-					return fmt.Errorf("cannot delete resource as namespace not found")
+					errList = append(errList, fmt.Errorf("cannot delete resource as namespace not found"))
+					continue
 				}
 				dr := h.dynamicClient.Resource(resource.gvr).Namespace(namespace)
 
