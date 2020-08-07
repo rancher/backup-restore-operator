@@ -91,7 +91,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
 	}
-	err = rh.GatherResources(h.ctx, template.BackupFilters, tmpBackupPath, transformerMap)
+	resourcesWithStatusSubresource, err := rh.GatherResources(h.ctx, template.BackupFilters, tmpBackupPath, transformerMap)
 	//err = h.gatherResources(template.BackupFilters, tmpBackupPath, transformerMap)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
@@ -118,7 +118,27 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return backup, errors.New(err.Error() + removeDirErr.Error())
 		}
 	}
+
 	err = ioutil.WriteFile(filepath.Join(filtersPath, "filters.json"), filters, os.ModePerm)
+	if err != nil {
+		removeDirErr := os.RemoveAll(tmpBackupPath)
+		if removeDirErr != nil {
+			return backup, errors.New(err.Error() + removeDirErr.Error())
+		}
+		return backup, err
+	}
+
+	subresources, err := json.Marshal(resourcesWithStatusSubresource)
+	if err != nil {
+		panic(err)
+		removeDirErr := os.RemoveAll(tmpBackupPath)
+		if removeDirErr != nil {
+			return backup, errors.New(err.Error() + removeDirErr.Error())
+		}
+		return backup, err
+
+	}
+	err = ioutil.WriteFile(filepath.Join(filtersPath, "statussubresource.json"), subresources, os.ModePerm)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {

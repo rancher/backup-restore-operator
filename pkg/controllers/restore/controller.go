@@ -54,9 +54,6 @@ type restoreObj struct {
 	Data               *unstructured.Unstructured
 }
 
-//var RestoreObjCreated = make(map[types.UID]map[*restoreObj]bool)
-//var RestoreObjAdjacencyList = make(map[types.UID]map[*restoreObj][]restoreObj)
-
 func Register(
 	ctx context.Context,
 	restores backupControllers.RestoreController,
@@ -87,6 +84,8 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	ownerToDependentsList := make(map[string][]restoreObj)
 	var toRestore []restoreObj
 	numOwnerReferences := make(map[string]int)
+	resourcesWithStatusSubresource := make(map[string]bool)
+	//namespacedGVR := make(map[schema.GroupVersionResource]bool)
 
 	backupName := restore.Spec.BackupFileName
 
@@ -156,8 +155,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 
 	// first restore CRDs
-	//_, err = os.Stat(filepath.Join(backupPath, "customresourcedefinitions.apiextensions.k8s.io#v1"))
-	//if err == nil {
 	startTime := time.Now()
 	fmt.Printf("\nStart time: %v\n", startTime)
 	if err := h.restoreCRDs(backupPath, transformerMap, created); err != nil {
@@ -173,6 +170,15 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	fmt.Printf("\ntime taken to restore CRDs: %v\n", timeForRestoringCRDs)
 	doneRestoringCRDTime := time.Now()
 
+	if err := h.findResourcesWithStatusSubresource(backupPath, resourcesWithStatusSubresource); err != nil {
+		removeDirErr := os.RemoveAll(backupPath)
+		if removeDirErr != nil {
+			return restore, errors.New(err.Error() + removeDirErr.Error())
+		}
+		return restore, err
+	}
+	fmt.Printf("\nsubresource graph: %v\n", resourcesWithStatusSubresource)
+
 	// generate adjacency lists for dependents and ownerRefs
 	if err := h.generateDependencyGraph(backupPath, transformerMap, ownerToDependentsList, &toRestore, numOwnerReferences); err != nil {
 		logrus.Errorf("\nerror during generateDependencyGraph: %v\n", err)
@@ -187,7 +193,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	fmt.Printf("\ntime taken to generate graph: %v\n", timeForGeneratingGraph)
 	doneGeneratingGraphTime := time.Now()
 	logrus.Infof("No-goroutines-2 time right before starting to create from graph: %v", doneGeneratingGraphTime)
-	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore); err != nil {
+	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore, resourcesWithStatusSubresource); err != nil {
 		logrus.Errorf("\nerror during createFromDependencyGraph: %v\n", err)
 		removeDirErr := os.RemoveAll(backupPath)
 		if removeDirErr != nil {
@@ -198,11 +204,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 	timeForRestoringResources := time.Since(doneGeneratingGraphTime)
 	fmt.Printf("\ntime taken to restore resources: %v\n", timeForRestoringResources)
-	//err = os.RemoveAll(backupPath)
-
-	//if dependentRestoreErr != nil {
-	//	return restore, dependentRestoreErr
-	//}
 
 	if err := h.prune(strings.TrimSuffix(backupName, ".tar.gz"), backupPath, restore.Spec.ForcePruneTimeout, transformerMap); err != nil {
 		panic(err)
@@ -256,7 +257,25 @@ func (h *handler) restoreCRDs(backupPath string, transformerMap map[schema.Group
 				GVR:                gvr,
 				Data:               &unstructured.Unstructured{Object: crdData},
 			}
-			err = h.restoreResource(restoreObjKey, gvr)
+			spec := crdData["spec"].(map[string]interface{})
+			hasStatusSubresource := false
+			if gvr.Version == "v1beta1" {
+				subresources, ok := spec["subresources"].(map[string]interface{})
+				if ok {
+					_, hasStatusSubresource = subresources["status"]
+				}
+			} else {
+				versions := spec["versions"].([]interface{})
+				for _, ver := range versions {
+					version := ver.(map[string]interface{})
+					subresources, ok := version["subresources"].(map[string]interface{})
+					if ok {
+						_, hasStatusSubresource = subresources["status"]
+						break
+					}
+				}
+			}
+			err = h.restoreResource(restoreObjKey, gvr, hasStatusSubresource)
 			if err != nil {
 				return fmt.Errorf("restoreCRDs: %v", err)
 			}
@@ -265,6 +284,15 @@ func (h *handler) restoreCRDs(backupPath string, transformerMap map[schema.Group
 		}
 	}
 	return nil
+}
+
+func (h *handler) findResourcesWithStatusSubresource(backupPath string, resourcesWithStatusSubresource map[string]bool) error {
+	fileBytes, err := ioutil.ReadFile(filepath.Join(backupPath, "filters", "statussubresource.json"))
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(fileBytes, &resourcesWithStatusSubresource)
+	return err
 }
 
 func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[schema.GroupResource]value.Transformer,
@@ -408,7 +436,7 @@ func (h *handler) addToOwnersToDependentsList(backupPath, resConfigPath, aad str
 }
 
 func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]restoreObj, created map[string]bool,
-	numOwnerReferences map[string]int, toRestore []restoreObj) error {
+	numOwnerReferences map[string]int, toRestore []restoreObj, resourcesWithStatusSubresource map[string]bool) error {
 	numTotalDependents := 0
 	for _, dependents := range ownerToDependentsList {
 		numTotalDependents += len(dependents)
@@ -426,7 +454,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 			logrus.Infof("Resource %v is already created", curr.ResourceConfigPath)
 			continue
 		}
-		if err := h.restoreResource(curr, curr.GVR); err != nil {
+		if err := h.restoreResource(curr, curr.GVR, resourcesWithStatusSubresource[curr.GVR.String()]); err != nil {
 			errList = append(errList, err)
 			continue
 		}
@@ -490,7 +518,7 @@ func (h *handler) updateOwnerRefs(ownerReferences []interface{}, namespace strin
 	return nil
 }
 
-func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVersionResource) error {
+func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVersionResource, hasStatusSubresource bool) error {
 	logrus.Infof("Restoring %v", currRestoreObj.Name)
 
 	fileMap := currRestoreObj.Data.Object
@@ -516,13 +544,19 @@ func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVer
 			return fmt.Errorf("restoreResource: err getting resource %v", err)
 		}
 		// create and return
-		_, err := dr.Create(h.ctx, obj, k8sv1.CreateOptions{})
+		createdObj, err := dr.Create(h.ctx, obj, k8sv1.CreateOptions{})
 		if err != nil {
 			return err
 		}
+		if hasStatusSubresource {
+			logrus.Infof("Updating status subresource for %#v", currRestoreObj.Name)
+			_, err := dr.UpdateStatus(h.ctx, createdObj, k8sv1.UpdateOptions{})
+			if err != nil {
+				return fmt.Errorf("restoreResource: err updating status resource %v", err)
+			}
+		}
 		return nil
 	}
-	//fmt.Printf("res: %#v\n", res.Object)
 	resMetadata := res.Object[metadataMapKey].(map[string]interface{})
 	resourceVersion := resMetadata["resourceVersion"].(string)
 	obj.Object[metadataMapKey].(map[string]interface{})["resourceVersion"] = resourceVersion
@@ -530,16 +564,13 @@ func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVer
 	if err != nil {
 		return fmt.Errorf("restoreResource: err updating resource %v", err)
 	}
-	//h.discoveryClient.ServerResourcesForGroupVersion()
-	//h.discoveryClient.
-	//_, hasStatusSubresource := res.Object["status"]
-	//if hasStatusSubresource {
-	//	_, err := dr.UpdateStatus(h.ctx, obj, k8sv1.UpdateOptions{})
-	//	if err != nil {
-	//		logrus.Errorf("NOOO error in update status: %v", err)
-	//		return fmt.Errorf("restoreResource: err updating status resource %v", err)
-	//	}
-	//}
+	if hasStatusSubresource {
+		logrus.Infof("Updating status subresource for %#v", currRestoreObj.Name)
+		_, err := dr.UpdateStatus(h.ctx, obj, k8sv1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("restoreResource: err updating status resource %v", err)
+		}
+	}
 
 	fmt.Printf("\nSuccessfully restored %v\n", name)
 	return nil
@@ -577,7 +608,6 @@ func getGVR(resourceGVK string) schema.GroupVersionResource {
 
 func (h *handler) prune(backupName, backupPath string, pruneTimeout int, transformerMap map[schema.GroupResource]value.Transformer) error {
 	// prune
-	fmt.Printf("\nin prune!!\n")
 	filtersBytes, err := ioutil.ReadFile(filepath.Join(backupPath, "filters", "filters.json"))
 	if err != nil {
 		return fmt.Errorf("error reading backup fitlers file: %v", err)
@@ -596,7 +626,7 @@ func (h *handler) prune(backupName, backupPath string, pruneTimeout int, transfo
 	}
 	logrus.Infof("Prune dir path is %s", pruneDirPath)
 
-	if err := rh.GatherResources(h.ctx, backupFilters, pruneDirPath, transformerMap); err != nil {
+	if _, err := rh.GatherResources(h.ctx, backupFilters, pruneDirPath, transformerMap); err != nil {
 		return err
 	}
 	logrus.Infof("Comparing prune and backup dirs")

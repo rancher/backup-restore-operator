@@ -25,22 +25,29 @@ type ResourceHandler struct {
 	DynamicClient   dynamic.Interface
 }
 
-func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.BackupFilter, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.BackupFilter, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) (map[string]bool, error) {
 	var resourceVersion string
+	resourcesWithStatusSubresource := make(map[string]bool)
 	for _, filter := range filters {
 		resourceList, err := h.gatherResourcesForGroupVersion(filter)
 		if err != nil {
-			return err
+			return resourcesWithStatusSubresource, err
 		}
 
 		gv, err := schema.ParseGroupVersion(filter.ApiGroup)
 		if err != nil {
-			return err
+			return resourcesWithStatusSubresource, err
 		}
-
 		for _, res := range resourceList {
+			if strings.Contains(res.Name, "/") {
+				// this is a subresource, check if its a status subsubresource
+				split := strings.SplitN(res.Name, "/", 2)
+				if split[1] == "status" {
+					resourcesWithStatusSubresource[gv.WithResource(split[0]).String()] = true
+				}
+				continue
+			}
 			if skipBackup(res) {
-				//fmt.Printf("\nskipping backup for %#v\n", res)
 				continue
 			}
 			if resourceVersion == "" {
@@ -49,7 +56,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.Back
 				dr = h.DynamicClient.Resource(gvr)
 				resList, err := dr.List(ctx, k8sv1.ListOptions{})
 				if err != nil {
-					return err
+					return resourcesWithStatusSubresource, err
 				}
 				resourceVersion = resList.GetResourceVersion()
 				logrus.Infof("resourceVersion first try using func: %v\n", resourceVersion)
@@ -58,14 +65,14 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.Back
 
 			filteredObjects, err := h.gatherAndWriteObjectsForResource(ctx, res, gv, filter, resourceVersion)
 			if err != nil {
-				return err
+				return resourcesWithStatusSubresource, err
 			}
 			if err := h.writeBackupObjects(filteredObjects, res, gv, backupPath, transformerMap); err != nil {
-				return err
+				return resourcesWithStatusSubresource, err
 			}
 		}
 	}
-	return nil
+	return resourcesWithStatusSubresource, nil
 }
 
 func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.BackupFilter) ([]k8sv1.APIResource, error) {
@@ -288,7 +295,8 @@ func (h *ResourceHandler) filterByNamespace(filter v1.BackupFilter, filteredByNa
 	return filteredObjects, nil
 }
 
-func (h *ResourceHandler) writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource, gv schema.GroupVersion, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+func (h *ResourceHandler) writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource,
+	gv schema.GroupVersion, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
 	for _, resObj := range resObjects {
 		metadata := resObj.Object["metadata"].(map[string]interface{})
 		// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
@@ -371,11 +379,7 @@ func writeToBackup(resource map[string]interface{}, backupPath, filename string,
 
 func skipBackup(res k8sv1.APIResource) bool {
 	if !canListResource(res.Verbs) {
-		logrus.Debugf("Cannot list resource %v, not backing up", res)
-		return true
-	}
-	if !canUpdateResource(res.Verbs) {
-		logrus.Debugf("Cannot update resource %v, not backing up", res)
+		logrus.Infof("WELP Cannot list resource %v, not backing up", res)
 		return true
 	}
 	return false
@@ -384,15 +388,6 @@ func skipBackup(res k8sv1.APIResource) bool {
 func canListResource(verbs k8sv1.Verbs) bool {
 	for _, v := range verbs {
 		if v == "list" {
-			return true
-		}
-	}
-	return false
-}
-
-func canUpdateResource(verbs k8sv1.Verbs) bool {
-	for _, v := range verbs {
-		if v == "update" || v == "patch" {
 			return true
 		}
 	}
