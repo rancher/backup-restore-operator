@@ -15,9 +15,14 @@ spec:
       properties:
         spec:
           properties:
-            backupFileName:
+            backupSchedule:
               type: string
-            backupStorageLocation:
+            backupTemplate:
+              type: string
+            encryptionConfigName:
+              type: string
+            storageLocation:
+              nullable: true
               properties:
                 local:
                   type: string
@@ -38,12 +43,6 @@ spec:
                       type: string
                   type: object
               type: object
-            backupTemplate:
-              type: string
-            encryptionConfigName:
-              type: string
-            encryptionConfigNamespace:
-              type: string
           type: object
         status:
           properties:

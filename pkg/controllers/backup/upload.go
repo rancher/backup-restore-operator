@@ -13,25 +13,25 @@ import (
 	util "github.com/mrajashree/backup/pkg/controllers"
 )
 
-func (h *handler) uploadToS3(backup *v1.Backup, tmpBackupPath, gzipFile string) error {
+func (h *handler) uploadToS3(objectStore *v1.ObjectStore, tmpBackupPath, gzipFile string) error {
 	tmpBackupGzipFilepath, err := ioutil.TempDir("", "uploadpath")
 	if err != nil {
 		return err
 	}
-	if backup.Spec.ObjectStore.Folder != "" {
-		if err := os.Mkdir(filepath.Join(tmpBackupGzipFilepath, backup.Spec.ObjectStore.Folder), os.ModePerm); err != nil {
+	if objectStore.Folder != "" {
+		if err := os.Mkdir(filepath.Join(tmpBackupGzipFilepath, objectStore.Folder), os.ModePerm); err != nil {
 			return err
 		}
-		gzipFile = fmt.Sprintf("%s/%s", backup.Spec.ObjectStore.Folder, gzipFile)
+		gzipFile = fmt.Sprintf("%s/%s", objectStore.Folder, gzipFile)
 	}
 	if err := util.CreateTarAndGzip(tmpBackupPath, tmpBackupGzipFilepath, gzipFile); err != nil {
 		return err
 	}
 	gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 	secrets := h.dynamicClient.Resource(gvr)
-	secretNs, secretName := "default", backup.Spec.ObjectStore.Credentials
-	if strings.Contains(backup.Spec.ObjectStore.Credentials, "/") {
-		split := strings.SplitN(backup.Spec.ObjectStore.Credentials, "/", 2)
+	secretNs, secretName := "default", objectStore.Credentials
+	if strings.Contains(objectStore.Credentials, "/") {
+		split := strings.SplitN(objectStore.Credentials, "/", 2)
 		if len(split) != 2 {
 			return fmt.Errorf("invalid credentials secret info")
 		}
@@ -48,11 +48,11 @@ func (h *handler) uploadToS3(backup *v1.Backup, tmpBackupPath, gzipFile string) 
 	}
 	accessKey, _ := s3SecretData["accessKey"].(string)
 	secretKey, _ := s3SecretData["secretKey"].(string)
-	s3Client, err := util.SetS3Service(backup.Spec.ObjectStore, accessKey, secretKey, false)
+	s3Client, err := util.SetS3Service(objectStore, accessKey, secretKey, false)
 	if err != nil {
 		return err
 	}
-	if err := util.UploadBackupFile(s3Client, backup.Spec.ObjectStore.BucketName, gzipFile, filepath.Join(tmpBackupGzipFilepath, gzipFile)); err != nil {
+	if err := util.UploadBackupFile(s3Client, objectStore.BucketName, gzipFile, filepath.Join(tmpBackupGzipFilepath, gzipFile)); err != nil {
 		return err
 	}
 	err = os.RemoveAll(tmpBackupGzipFilepath)

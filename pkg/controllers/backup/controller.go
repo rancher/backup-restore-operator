@@ -11,7 +11,10 @@ import (
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
+	"strings"
+
 	//k8scorev1 "k8s.io/api/core/v1"
+	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	//"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -29,6 +32,8 @@ type handler struct {
 	backups                 backupControllers.BackupController
 	backupTemplates         backupControllers.BackupTemplateController
 	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController
+	secrets                 v1core.SecretController
+	namespaces              v1core.NamespaceController
 	discoveryClient         discovery.DiscoveryInterface
 	dynamicClient           dynamic.Interface
 }
@@ -38,6 +43,8 @@ func Register(
 	backups backupControllers.BackupController,
 	backupTemplates backupControllers.BackupTemplateController,
 	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController,
+	secrets v1core.SecretController,
+	namespaces v1core.NamespaceController,
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface) {
 
@@ -46,6 +53,8 @@ func Register(
 		backups:                 backups,
 		backupTemplates:         backupTemplates,
 		backupEncryptionConfigs: backupEncryptionConfigs,
+		secrets:                 secrets,
+		namespaces:              namespaces,
 		discoveryClient:         clientSet.Discovery(),
 		dynamicClient:           dynamicInterface,
 	}
@@ -61,8 +70,18 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if condition.Cond(v1.BackupConditionReady).IsTrue(backup) && condition.Cond(v1.BackupConditionUploaded).IsTrue(backup) {
 		return backup, nil
 	}
+
+	kubeSystemNS, err := h.namespaces.Get("kube-system", k8sv1.GetOptions{})
+	if err != nil {
+		return backup, err
+	}
+	currTS := time.Now().Format(time.RFC3339)
+	// on OS X writing file with `:` converts colon to forward slash
+	currTS = strings.Replace(currTS, ":", "-", -1)
+	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, kubeSystemNS.UID, currTS)
+
 	// empty dir defaults to os.TempDir
-	tmpBackupPath, err := ioutil.TempDir("", backup.Spec.BackupFileName)
+	tmpBackupPath, err := ioutil.TempDir("", backupFileName)
 	if err != nil {
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
 	}
@@ -130,7 +149,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 
 	subresources, err := json.Marshal(resourcesWithStatusSubresource)
 	if err != nil {
-		panic(err)
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
 			return backup, errors.New(err.Error() + removeDirErr.Error())
@@ -148,18 +166,19 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 
 	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
-	gzipFile := backup.Spec.BackupFileName + ".tar.gz"
-	if backup.Spec.Local != "" {
+	gzipFile := backupFileName + ".tar.gz"
+	storageLocation := backup.Spec.StorageLocation
+	if storageLocation == nil || storageLocation.Local != "" {
 		// for local, to send backup tar to given local path, use that as the path when creating compressed file
-		if err := util.CreateTarAndGzip(tmpBackupPath, backup.Spec.Local, gzipFile); err != nil {
+		if err := util.CreateTarAndGzip(tmpBackupPath, storageLocation.Local, gzipFile); err != nil {
 			removeDirErr := os.RemoveAll(tmpBackupPath)
 			if removeDirErr != nil {
 				return backup, errors.New(err.Error() + removeDirErr.Error())
 			}
 			return backup, err
 		}
-	} else if backup.Spec.ObjectStore != nil {
-		if err := h.uploadToS3(backup, tmpBackupPath, gzipFile); err != nil {
+	} else if storageLocation.ObjectStore != nil {
+		if err := h.uploadToS3(storageLocation.ObjectStore, tmpBackupPath, gzipFile); err != nil {
 			removeDirErr := os.RemoveAll(tmpBackupPath)
 			if removeDirErr != nil {
 				return backup, errors.New(err.Error() + removeDirErr.Error())
@@ -183,6 +202,11 @@ func (h *handler) getEncryptionTransformers(backup *v1.Backup) (map[schema.Group
 	var transformerMap map[schema.GroupResource]value.Transformer
 	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
 	// TODO: change secret ns to the chart's ns
+	//encryptionConfigSecret, err := h.secrets.Get("default", backup.Spec.EncryptionConfigName, k8sv1.GetOptions{})
+	//if err != nil {
+	//	return transformerMap, err
+	//}
+	//fileName, encryptionConfigBytes := encryptionConfigSecret.Data
 	config, err := h.backupEncryptionConfigs.Get("default", backup.Spec.EncryptionConfigName, k8sv1.GetOptions{})
 	if err != nil {
 		return transformerMap, err

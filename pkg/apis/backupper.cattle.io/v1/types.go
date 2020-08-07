@@ -17,12 +17,10 @@ type Backup struct {
 }
 
 type BackupSpec struct {
-	BackupFileName            string `json:"backupFileName"`
-	BackupStorageLocation     `json:"backupStorageLocation"`
-	BackupTemplate            string `json:"backupTemplate"`
-	EncryptionConfigName      string `json:"encryptionConfigName"`
-	EncryptionConfigNamespace string `json:"encryptionConfigNamespace"`
-	BackupSchedule            string `json:"backupSchedule"`
+	StorageLocation      *StorageLocation `json:"storageLocation"`
+	BackupTemplate       string           `json:"backupTemplate"`
+	EncryptionConfigName string           `json:"encryptionConfigName"`
+	BackupSchedule       string           `json:"backupSchedule"`
 }
 
 // +genclient
@@ -36,15 +34,14 @@ type BackupTemplate struct {
 }
 
 type BackupFilter struct {
-	ApiGroup          string   `json:"apiGroup"`
-	Kinds             []string `json:"kinds"`
-	KindsRegex        string   `json:"kindsRegex"`
-	ResourceNames     []string `json:"resourceNames"`
-	ResourceNameRegex string   `json:"resourceNameRegex"`
-	Namespaces        []string `json:"namespaces"`
-	NamespaceRegex    string   `json:"namespaceRegex"`
-	LabelSelectors    string   `json:"labelSelectors"`
-	Prune             bool     `json:"prune"`
+	ApiGroup          string                `json:"apiGroup"`
+	Kinds             []string              `json:"kinds"`
+	KindsRegex        string                `json:"kindsRegex"`
+	ResourceNames     []string              `json:"resourceNames"`
+	ResourceNameRegex string                `json:"resourceNameRegex"`
+	Namespaces        []string              `json:"namespaces"`
+	NamespaceRegex    string                `json:"namespaceRegex"`
+	LabelSelectors    *metav1.LabelSelector `json:"labelSelectors"`
 }
 
 var (
@@ -57,7 +54,7 @@ type BackupStatus struct {
 	Summary    string                              `json:"summary,omitempty"`
 }
 
-type BackupStorageLocation struct {
+type StorageLocation struct {
 	ObjectStore *ObjectStore `json:"s3objectStore"`
 	Local       string       `json:"local"`
 }
@@ -83,7 +80,7 @@ type Restore struct {
 
 type RestoreSpec struct {
 	BackupFileName            string `json:"backupFileName"`
-	BackupStorageLocation     `json:"backupStorageLocation"`
+	StorageLocation           `json:"backupStorageLocation"`
 	PruneRestore              bool   `json:"pruneRestore"`
 	ForcePruneTimeout         int    `json:"forcePruneTimeout"`
 	EncryptionConfigName      string `json:"encryptionConfigName"`
