@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
+	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/sirupsen/logrus"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -24,59 +25,55 @@ type ResourceHandler struct {
 	DynamicClient   dynamic.Interface
 }
 
-func (h *ResourceHandler) GatherResources(ctx context.Context, filters []v1.ResourceSelector, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) (map[string]bool, error) {
+/*  GatherResources iterates over the ResourceSelectors in the given ResourceSet
+   	Each ResourceSelector can specify only one apigroupversion, example "v1" or "management.cattle.io/v3"
+	ResourceSelector can specify resource types/kinds to backup from this apigroupversion through Kinds and KindsRegex.
+	Resources matching Kinds and KindsRegex both will be backed up
+	ResourceSelector can also specify names of particular resources of this groupversionkind to backup, using ResourceNames and ResourceNamesRegex
+	It can specify namespaces from which to backup these resources through Namespaces and NamespacesRegex
+	And it can provide a labelSelector to backup resources of this gvk+name+ns combination containing some label
+	For each value that has two fields, for regex and an array of exact names GatherResources performs OR
+	But it performs AND for separate selector types, example:
+	apiversion: v1
+	kinds: namespaces
+	resourceNamesRegex: "^cattle-|^p-|^c-|^user-|^u-"
+	resourceNames: "local"
+	All namespaces that match resourceNamesRegex, also local ns is backed up
+*/
+func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors []v1.ResourceSelector, backupPath string,
+	transformerMap map[schema.GroupResource]value.Transformer) (map[string]bool, error) {
+
 	var resourceVersion string
 	resourcesWithStatusSubresource := make(map[string]bool)
-	for _, filter := range filters {
-		if filter.ApiGroup == "*" {
-			groupsList, _, err := h.DiscoveryClient.ServerGroupsAndResources()
-			if err != nil {
-				return resourcesWithStatusSubresource, err
-			}
-			for _, apigroup := range groupsList {
-				filters = append(filters, v1.ResourceSelector{ApiGroup: apigroup.PreferredVersion.GroupVersion})
-			}
-		}
-	}
 
-	for _, filter := range filters {
-		if filter.ApiGroup == "*" {
-			continue
-		}
-		resourceList, err := h.gatherResourcesForGroupVersion(filter)
+	for _, resourceSelector := range resourceSelectors {
+		resourceList, err := h.gatherResourcesForGroupVersion(resourceSelector)
 		if err != nil {
 			return resourcesWithStatusSubresource, err
 		}
-		gv, err := schema.ParseGroupVersion(filter.ApiGroup)
+		gv, err := schema.ParseGroupVersion(resourceSelector.ApiGroup)
 		if err != nil {
 			return resourcesWithStatusSubresource, err
 		}
 		for _, res := range resourceList {
-			if strings.Contains(res.Name, "/") {
-				// this is a subresource, check if its a status subsubresource
-				split := strings.SplitN(res.Name, "/", 2)
-				if split[1] == "status" {
+			// this is a subresource, check if its a status subsubresource
+			split := strings.SplitN(res.Name, "/", 2)
+			if len(split) == 2 {
+				if split[1] == "status" && split[0] != "customresourcedefinitions" && slice.ContainsString(res.Verbs, "update") {
+					// this resource has status subresource and it accepts "update" verb, so we need to call UpdateStatus on it during restore
+					// we need to save names of such objects
 					resourcesWithStatusSubresource[gv.WithResource(split[0]).String()] = true
 				}
+				// no need to save contents of any subresource as they are a part of the resource
 				continue
 			}
+
+			// check for all rancher objects
 			if skipBackup(res) {
 				continue
 			}
-			if resourceVersion == "" {
-				gvr := gv.WithResource(res.Name)
-				var dr dynamic.ResourceInterface
-				dr = h.DynamicClient.Resource(gvr)
-				resList, err := dr.List(ctx, k8sv1.ListOptions{})
-				if err != nil {
-					return resourcesWithStatusSubresource, err
-				}
-				resourceVersion = resList.GetResourceVersion()
-				logrus.Infof("resourceVersion first try using func: %v\n", resourceVersion)
-				logrus.Infof("resourceVersion first try using func: %v\n", resList.Object["metadata"])
-			}
 
-			filteredObjects, err := h.gatherAndWriteObjectsForResource(ctx, res, gv, filter, resourceVersion)
+			filteredObjects, err := h.gatherObjectsForResource(ctx, res, gv, resourceSelector, resourceVersion)
 			if err != nil {
 				return resourcesWithStatusSubresource, err
 			}
@@ -92,18 +89,20 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 	var resourceList, resourceListFromRegex, resourceListFromNames []k8sv1.APIResource
 	groupVersion := filter.ApiGroup
 
+	// first list all resources for given groupversion using discovery API
 	resources, err := h.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
 	if err != nil {
 		return resourceList, err
 	}
 	if filter.KindsRegex == "" && len(filter.Kinds) == 0 {
+		// if no filters for resource kind are given, return entire resource list
 		return resources.APIResources, nil
 	}
 
-	// resources list has all resources under given groupVersion, first filter based on KindsRegex
+	// "resources" list has all resources under given groupVersion, first filter based on KindsRegex
 	if filter.KindsRegex != "" {
 		if filter.KindsRegex == "." {
-			// continue to retrieve everything
+			// "." will match anything, so return entire resource list
 			return resources.APIResources, nil
 		}
 		// else filter out resource with regex match
@@ -123,6 +122,7 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 	// then add the resources from Kinds field to this list
 	if len(filter.Kinds) > 0 {
 		resourceListAfterRegexMatch := make(map[string]bool)
+		// avoid adding same resource twice by checking what's in resourceListFromRegex
 		for _, res := range resourceListFromRegex {
 			resourceListAfterRegexMatch[res.Name] = true
 		}
@@ -136,18 +136,19 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 			}
 		}
 	}
-	// combine both
+	// combine both lists, obtained from regex and from iterating over the kinds list
 	resourceList = append(resourceListFromRegex, resourceListFromNames...)
 	return resourceList, nil
 }
 
-func (h *ResourceHandler) gatherAndWriteObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.ResourceSelector, resourceVersion string) ([]unstructured.Unstructured, error) {
+func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.ResourceSelector, resourceVersion string) ([]unstructured.Unstructured, error) {
 	var filteredByNamespace, filteredObjects []unstructured.Unstructured
 
 	gvr := gv.WithResource(res.Name)
 	var dr dynamic.ResourceInterface
 	dr = h.DynamicClient.Resource(gvr)
 
+	// only resources that match name+namespace+label combination will be backed up, so we can filter in any order
 	filteredByName, err := h.filterByNameAndLabel(ctx, dr, filter, resourceVersion)
 	if err != nil {
 		return filteredObjects, err
@@ -170,7 +171,7 @@ func (h *ResourceHandler) gatherAndWriteObjectsForResource(ctx context.Context, 
 func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector, resourceVersion string) ([]unstructured.Unstructured, error) {
 	var filteredByName, filteredByResourceNames []unstructured.Unstructured
 	var fieldSelector, labelSelector string
-	// first get all objects of this resource type
+
 	if filter.LabelSelectors != nil {
 		labelMap, err := k8sv1.LabelSelectorAsMap(filter.LabelSelectors)
 		if err != nil {
@@ -188,13 +189,13 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 	filteredByNameMap := make(map[*unstructured.Unstructured]bool)
 
 	if len(filter.ResourceNames) == 0 && filter.ResourceNameRegex == "" {
-		// no filters for names of the resource, return all objects from list
+		// no filters for names of the resource, return all objects obtained from the list call
 		return resourceObjectsList.Items, nil
 	}
 	// filter out using ResourceNameRegex
 	if filter.ResourceNameRegex != "" {
 		if filter.ResourceNameRegex == "." {
-			// include all resources obtained from list
+			// "." will match everything, so return all resources obtained from the list call
 			return resourceObjectsList.Items, nil
 		}
 
@@ -226,14 +227,16 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 		if err != nil {
 			return filteredByName, err
 		}
-		logrus.Infof("list filteredObjectsList: %v", filteredObjectsList.GetResourceVersion())
 		filteredByResourceNames = filteredObjectsList.Items
 
 		if len(filteredByResourceNames) == 0 {
-			// none matched
+			// exact names were provided, but no resources found by that name
+			// so return anything obtained from matching resource names by regex
+			// if that list is empty too, means nothing matched the filters
 			return filteredByName, nil
 		}
 		if len(filteredByNameMap) > 0 {
+			// avoid duplicates
 			for _, resObj := range filteredByResourceNames {
 				if !filteredByNameMap[&resObj] {
 					filteredByName = append(filteredByName, resObj)
@@ -268,7 +271,7 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 	}
 	if filter.NamespaceRegex != "" {
 		if filter.NamespaceRegex == "." {
-			// include all namespaces, so return all objects obtained after filtering by name
+			// "." will match all namespaces, so return all objects obtained after filtering by name
 			return filteredByName, nil
 		}
 		for _, resObj := range filteredByName {
@@ -286,10 +289,13 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 
 		if len(filteredByNamespaceRegex) == 0 {
 			// none matched regex
+			// return whatever was filtered by exact namespace match
+			// if that list is also empty, it means no namespaces matched the given filters
 			return filteredByNamespace, nil
 		}
 
 		if len(filteredByNsMap) > 0 {
+			// avoid duplicates
 			for _, resObj := range filteredByNamespaceRegex {
 				if !filteredByNsMap[&resObj] {
 					filteredByNamespace = append(filteredByNamespace, resObj)
@@ -316,26 +322,35 @@ func (h *ResourceHandler) writeBackupObjects(resObjects []unstructured.Unstructu
 		}
 
 		objName := metadata["name"].(string)
+		objFilename := objName
 
-		// TODO: decide whether to store deletionTimestamp or not
-		// TODO: check if generation is needed
-		for _, field := range []string{"uid", "creationTimestamp", "selfLink", "resourceVersion"} {
+		// TODO: confirm-test deletionTimestamp needs to be dropped
+		for _, field := range []string{"uid", "creationTimestamp", "deletionTimestamp", "selfLink", "resourceVersion"} {
 			delete(metadata, field)
 		}
-
-		gr := schema.ParseGroupResource(res.Name + "." + res.Group)
-		encryptionTransformer := transformerMap[gr]
-		additionalAuthenticatedData := objName
-		//if res.Namespaced {
-		//	additionalAuthenticatedData = metadata["namespace"].(string) + "/" + additionalAuthenticatedData
-		//}
 
 		resourcePath := backupPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
 		if err := createResourceDir(resourcePath); err != nil {
 			return err
 		}
 
-		err := writeToBackup(resObj.Object, resourcePath, objName, encryptionTransformer, additionalAuthenticatedData)
+		gr := schema.ParseGroupResource(res.Name + "." + res.Group)
+		encryptionTransformer := transformerMap[gr]
+		additionalAuthenticatedData := objName
+		if res.Namespaced {
+			additionalAuthenticatedData = fmt.Sprintf("%s#%s", metadata["namespace"].(string), additionalAuthenticatedData)
+			/*Max length in k8s is 253 characters for names of resources, for instance for serviceaccount.
+			And max length of filename on UNIX is 255, so we risk going over max filename length by storing namespace in the filename,
+			hence create a separate subdir for namespaced resources*/
+			objNs := metadata["namespace"].(string)
+			resourcePath = filepath.Join(resourcePath, objNs)
+			if err := createResourceDir(resourcePath); err != nil {
+				return err
+			}
+		}
+
+		// TODO: collect all objects first and then write??
+		err := writeToBackup(resObj.Object, resourcePath, objFilename, encryptionTransformer, additionalAuthenticatedData)
 		if err != nil {
 			return err
 		}
@@ -387,7 +402,7 @@ func writeToBackup(resource map[string]interface{}, backupPath, filename string,
 
 func skipBackup(res k8sv1.APIResource) bool {
 	if !canListResource(res.Verbs) {
-		logrus.Infof("WELP Cannot list resource %v, not backing up", res)
+		logrus.Infof("Cannot list resource %v, not backing up", res)
 		return true
 	}
 	return false

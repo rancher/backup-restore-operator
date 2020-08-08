@@ -72,6 +72,9 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return backup, nil
 		}
 		// else recurring
+		// backup.Schedule = 2hr lastsnapshotTS, same check as the goroutine
+		// NO conditions
+		// TODO: switch to enqueueAfter instead of cron
 		if !condition.Cond(v1.BackupConditionTriggered).IsTrue(backup) {
 			// not triggered yet
 			return backup, nil
@@ -88,7 +91,8 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	currTSForFilename := strings.Replace(currSnapshotTS, ":", "-", -1)
 	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, kubeSystemNS.UID, currTSForFilename)
 
-	// empty dir defaults to os.TempDir
+	// create a temp dir to write all backup files to, delete this before returning
+	// empty dir in ioutil.TempDir defaults to os.TempDir
 	tmpBackupPath, err := ioutil.TempDir("", backupFileName)
 	if err != nil {
 		return backup, fmt.Errorf("error creating temp dir: %v", err)
@@ -119,7 +123,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		DynamicClient:   h.dynamicClient,
 	}
 	resourcesWithStatusSubresource, err := rh.GatherResources(h.ctx, resourceSetTemplate.ResourceSelectors, tmpBackupPath, transformerMap)
-	//err = h.gatherResources(template.ResourceSelectors, tmpBackupPath, transformerMap)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -47,6 +46,7 @@ func (h *handler) prune(backupName, backupPath string, pruneTimeout int, transfo
 	}
 	logrus.Infof("Prune dir path is %s", pruneDirPath)
 
+	// TODO: don't write to disk again
 	if _, err := rh.GatherResources(h.ctx, backupFilters, pruneDirPath, transformerMap); err != nil {
 		return err
 	}
@@ -58,17 +58,17 @@ func (h *handler) prune(backupName, backupPath string, pruneTimeout int, transfo
 		if info.IsDir() {
 			return nil
 		}
-		// check if this file exists in backupPath or not
-		// for example, for /var/tmp/authconfigs.management.cattle.io#v3/adfs.json,
-		// containingDirFullPath = /var/tmp/authconfigs.management.cattle.io#v3
-		containingDirFullPath := path.Dir(currPath)
-		// containingDirBasePath = authconfigs.management.cattle.io#v3
-		containingDirBasePath := filepath.Base(containingDirFullPath)
+		currFileRelativePath, err := filepath.Rel(pruneDirPath, currPath)
+		if err != nil {
+			return fmt.Errorf("error getting relative filepath for %v: %v", currPath, err)
+		}
+		// example, relative path: serviceaccounts.#v1/user-4l2tw/default.json
+		resourceGVR := strings.Split(currFileRelativePath, "/")[0]
 		// currFileName = authconfigs.management.cattle.io#v3/adfs.json => removes the path upto the dir for groupversion
-		currFileName := filepath.Join(containingDirBasePath, filepath.Base(currPath))
+		currFileName := filepath.Join(resourceGVR, filepath.Base(currPath))
 		// if this file does not exist in the backup, it was created after taking backup, so delete it
-		if _, err := os.Stat(filepath.Join(backupPath, currFileName)); os.IsNotExist(err) {
-			gvr := getGVR(containingDirBasePath)
+		if _, err := os.Stat(filepath.Join(backupPath, currFileRelativePath)); os.IsNotExist(err) {
+			gvr := getGVR(resourceGVR)
 			isNamespaced, err := lasso.IsNamespaced(gvr, h.restmapper)
 			if err != nil {
 				logrus.Errorf("Error finding if %v is namespaced: %v", currFileName, err)
@@ -173,7 +173,6 @@ func (h *handler) deleteClusterScopedResources(resourcesToDelete []resourceInfo,
 						continue
 					}
 					errList = append(errList, err)
-					continue
 				}
 			}
 			return util.ErrList(errList)

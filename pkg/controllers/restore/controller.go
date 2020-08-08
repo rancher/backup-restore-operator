@@ -194,6 +194,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 	timeForGeneratingGraph := time.Since(doneRestoringCRDTime)
 	fmt.Printf("\ntime taken to generate graph: %v\n", timeForGeneratingGraph)
+
 	doneGeneratingGraphTime := time.Now()
 	logrus.Infof("No-goroutines-2 time right before starting to create from graph: %v", doneGeneratingGraphTime)
 	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore, resourcesWithStatusSubresource); err != nil {
@@ -222,6 +223,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 }
 
 func (h *handler) restoreCRDs(backupPath string, transformerMap map[schema.GroupResource]value.Transformer, created map[string]bool) error {
+	// Both CRD apiversions have different way of indicating presence of status subresource
 	for _, resourceGVK := range []string{"customresourcedefinitions.apiextensions.k8s.io#v1", "customresourcedefinitions.apiextensions.k8s.io#v1beta1"} {
 		resourceDirPath := path.Join(backupPath, resourceGVK)
 		if _, err := os.Stat(resourceDirPath); err != nil && os.IsNotExist(err) {
@@ -240,10 +242,6 @@ func (h *handler) restoreCRDs(backupPath string, transformerMap map[schema.Group
 			if err != nil {
 				return err
 			}
-			var crdData map[string]interface{}
-			if err := json.Unmarshal(crdContent, &crdData); err != nil {
-				return err
-			}
 			crdName := strings.TrimSuffix(resFile.Name(), ".json")
 			if decryptionTransformer != nil {
 				var encryptedBytes []byte
@@ -256,31 +254,17 @@ func (h *handler) restoreCRDs(backupPath string, transformerMap map[schema.Group
 				}
 				crdContent = decrypted
 			}
+			var crdData map[string]interface{}
+			if err := json.Unmarshal(crdContent, &crdData); err != nil {
+				return err
+			}
 			restoreObjKey := restoreObj{
 				Name:               crdName,
 				ResourceConfigPath: resConfigPath,
 				GVR:                gvr,
 				Data:               &unstructured.Unstructured{Object: crdData},
 			}
-			spec := crdData["spec"].(map[string]interface{})
-			hasStatusSubresource := false
-			if gvr.Version == "v1beta1" {
-				subresources, ok := spec["subresources"].(map[string]interface{})
-				if ok {
-					_, hasStatusSubresource = subresources["status"]
-				}
-			} else {
-				versions := spec["versions"].([]interface{})
-				for _, ver := range versions {
-					version := ver.(map[string]interface{})
-					subresources, ok := version["subresources"].(map[string]interface{})
-					if ok {
-						_, hasStatusSubresource = subresources["status"]
-						break
-					}
-				}
-			}
-			err = h.restoreResource(restoreObjKey, gvr, hasStatusSubresource)
+			err = h.restoreResource(restoreObjKey, gvr, false)
 			if err != nil {
 				return fmt.Errorf("restoreCRDs: %v", err)
 			}
@@ -300,6 +284,10 @@ func (h *handler) findResourcesWithStatusSubresource(backupPath string, resource
 	return err
 }
 
+// generateDependencyGraph creates a graph "ownerToDependentsList" to track objects with ownerReferences
+// any "node" in this graph is a map entry, where key = owning object, value = list of its dependents
+// all objects that do not have ownerRefs are added to the "toRestore" list
+// numOwnerReferences keeps track of how many owners any object has that haven't been restored yet
 func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[schema.GroupResource]value.Transformer,
 	ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj, numOwnerReferences map[string]int) error {
 	backupEntries, err := ioutil.ReadDir(backupPath)
@@ -309,6 +297,7 @@ func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[
 
 	for _, backupEntry := range backupEntries {
 		if backupEntry.Name() == "filters" {
+			// filters directory contains filters.json & a file with resourceGVK of resources that have status subresource
 			continue
 		}
 
@@ -317,14 +306,35 @@ func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[
 		resourceDirPath := path.Join(backupPath, resourceGVK)
 		gvr := getGVR(resourceGVK)
 		gr := gvr.GroupResource()
-		resourceFiles, err := ioutil.ReadDir(resourceDirPath)
+		resourceDirEntries, err := ioutil.ReadDir(resourceDirPath)
 		if err != nil {
 			return err
 		}
 
-		for _, resourceFile := range resourceFiles {
-			resManifestPath := filepath.Join(resourceDirPath, resourceFile.Name())
-			if err := h.addToOwnersToDependentsList(backupPath, resManifestPath, resourceFile.Name(), gvr, transformerMap[gr],
+		for _, resourceDirEntry := range resourceDirEntries {
+			var namespace string
+			if resourceDirEntry.IsDir() {
+				// resource is namespaced, and this subfolder's name is the namespace
+				namespace = resourceDirEntry.Name()
+				resourceNamespaceDirPath := path.Join(backupPath, resourceGVK, namespace)
+				resourceFiles, err := ioutil.ReadDir(resourceNamespaceDirPath)
+				if err != nil {
+					return err
+				}
+				for _, resourceFile := range resourceFiles {
+					resManifestPath := filepath.Join(resourceNamespaceDirPath, resourceFile.Name())
+					resourceName := strings.TrimSuffix(resourceFile.Name(), ".json")
+					additionalAuthenticatedData := fmt.Sprintf("%s#%s", namespace, resourceName)
+					if err := h.addToOwnersToDependentsList(backupPath, resManifestPath, additionalAuthenticatedData, gvr, transformerMap[gr],
+						ownerToDependentsList, toRestore, numOwnerReferences); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+			resManifestPath := filepath.Join(resourceDirPath, resourceDirEntry.Name())
+			additionalAuthenticatedData := strings.TrimSuffix(resourceDirEntry.Name(), ".json")
+			if err := h.addToOwnersToDependentsList(backupPath, resManifestPath, additionalAuthenticatedData, gvr, transformerMap[gr],
 				ownerToDependentsList, toRestore, numOwnerReferences); err != nil {
 				return err
 			}
@@ -333,7 +343,12 @@ func (h *handler) generateDependencyGraph(backupPath string, transformerMap map[
 	return nil
 }
 
-func (h *handler) addToOwnersToDependentsList(backupPath, resConfigPath, aad string, gvr schema.GroupVersionResource, decryptionTransformer value.Transformer,
+// addToOwnersToDependentsList reads given file, if there are no ownerRefs in that file, adds it to "toRestore"
+/* if the file has ownerRefences:
+1. it iterates over each ownerRef,
+2. creates an entry for each owner in ownerToDependentsList", with the current object in the value list
+3. gets total count of ownerRefs and adds current object to "numOwnerReferences" map to indicate the count*/
+func (h *handler) addToOwnersToDependentsList(backupPath, resConfigPath, additionalAuthenticatedData string, gvr schema.GroupVersionResource, decryptionTransformer value.Transformer,
 	ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj, numOwnerReferences map[string]int) error {
 	logrus.Infof("Processing %v for adjacency list", resConfigPath)
 	resBytes, err := ioutil.ReadFile(resConfigPath)
@@ -346,7 +361,7 @@ func (h *handler) addToOwnersToDependentsList(backupPath, resConfigPath, aad str
 		if err := json.Unmarshal(resBytes, &encryptedBytes); err != nil {
 			return err
 		}
-		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(aad))
+		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(additionalAuthenticatedData))
 		if err != nil {
 			return err
 		}
@@ -427,6 +442,10 @@ func (h *handler) addToOwnersToDependentsList(backupPath, resConfigPath, aad str
 		if isNamespaced {
 			// if owning object is namespaced, then it has to be the same ns as the current dependent object
 			ownerObj.Namespace = currRestoreObj.Namespace
+			// the owner object's resourceFile in backup would also have namespace in the filename, so update
+			// ownerObj.ResourceConfigPath to include namespace subdir before the filename for owner
+			ownerFilename := filepath.Join(currRestoreObj.Namespace, ownerName+".json")
+			ownerObj.ResourceConfigPath = filepath.Join(backupPath, ownerDirPath, ownerFilename)
 		}
 		ownerObjDependents, ok := ownerToDependentsList[ownerObj.ResourceConfigPath]
 		if !ok {
@@ -459,6 +478,9 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 			logrus.Infof("Resource %v is already created", curr.ResourceConfigPath)
 			continue
 		}
+		// TODO add resourcename to error to print summary
+		// TODO if owner not found, it has to be cross-namespaced dependency, so still create this obj: log this
+		// log if you're dropping ownerRefs
 		if err := h.restoreResource(curr, curr.GVR, resourcesWithStatusSubresource[curr.GVR.String()]); err != nil {
 			errList = append(errList, err)
 			continue
@@ -476,6 +498,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		created[curr.ResourceConfigPath] = true
 		countRestored++
 	}
+	// TODO: LOG all skipped objects with reasons
 	fmt.Printf("\nTotal restored resources final: %v\n", countRestored)
 	return util.ErrList(errList)
 }
@@ -503,6 +526,12 @@ func (h *handler) updateOwnerRefs(ownerReferences []interface{}, namespace strin
 			Name: name,
 			GVR:  ownerGVR,
 		}
+		// ns.OwnerRef = cluster
+		// namespace can only be owned by cluster-scoped objects, SO
+		// CRDS, cluster-scoped, then namespaced
+		// obj in ns A has owner ref to obj in ns B: what t
+		// TODO: restore cluster-scoped first then namespaced
+		// ns.ownerRefs
 		// if owner object is namespaced, it has to be within same namespace, since per definition
 		/*
 			// OwnerReference contains enough information to let you identify an owning
@@ -515,6 +544,9 @@ func (h *handler) updateOwnerRefs(ownerReferences []interface{}, namespace strin
 		logrus.Infof("Getting new UID for %v ", ownerObj.Name)
 		ownerObjNewUID, err := h.getOwnerNewUID(ownerObj)
 		if err != nil {
+			// not found error should be handled separately
+			// continue trying to get UIDs of other owners?
+			// obj in ns A has owner ref to obj in ns B: check what err is, mostly not found
 			return fmt.Errorf("error obtaining new UID for %v: %v", ownerObj.Name, err)
 		}
 		reference["uid"] = ownerObjNewUID
@@ -539,6 +571,7 @@ func (h *handler) restoreResource(currRestoreObj restoreObj, gvr schema.GroupVer
 	}
 	ownerReferences, _ := fileMapMetadata[ownerRefsMapKey].([]interface{})
 	if ownerReferences != nil {
+		// no-cross ns, restoreA: error, network
 		if err := h.updateOwnerRefs(ownerReferences, namespace); err != nil {
 			return err
 		}
@@ -597,6 +630,7 @@ func (h *handler) getOwnerNewUID(owner *restoreObj) (string, error) {
 	return ownerObjUID, nil
 }
 
+// getGVR parses the directory path to provide groupVersionResource
 func getGVR(resourceGVK string) schema.GroupVersionResource {
 	gvkParts := strings.Split(resourceGVK, "#")
 	version := gvkParts[1]
