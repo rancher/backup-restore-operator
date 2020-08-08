@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 )
@@ -38,19 +37,11 @@ func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 		if err != nil {
 			return fmt.Errorf("error creating header for %v: %v", info.Name(), err)
 		}
-		if info.IsDir() {
-			hdr.Name = filepath.Base(currPath)
-			if err := tw.WriteHeader(hdr); err != nil {
-				return fmt.Errorf("error writing header for %v: %v", info.Name(), err)
-			}
-			return nil
+		relativePath, err := filepath.Rel(backupPath, currPath)
+		if err != nil {
+			return fmt.Errorf("error getting relative path for %v: %v", info.Name(), err)
 		}
-		// for example, for /var/tmp/authconfigs.management.cattle.io#v3/adfs.json,
-		// containingDirFullPath = /var/tmp/authconfigs.management.cattle.io#v3
-		containingDirFullPath := path.Dir(currPath)
-		// containingDirBasePath = authconfigs.management.cattle.io#v3
-		containingDirBasePath := filepath.Base(containingDirFullPath)
-		hdr.Name = filepath.Join(containingDirBasePath, filepath.Base(currPath))
+		hdr.Name = filepath.Join(relativePath)
 		if err := tw.WriteHeader(hdr); err != nil {
 			return fmt.Errorf("error writing header for %v: %v", info.Name(), err)
 		}
@@ -75,6 +66,7 @@ func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 }
 
 // https://medium.com/@skdomino/taring-untaring-files-in-go-6b07cf56bc07
+// TODO: create the restoreObj objects here/ OR a map of [gvk+name+ns]: unstructed.Data; use that when generating dep graph
 func LoadFromTarGzip(tarGzFilePath, tmpBackupPath string) error {
 	r, err := os.Open(tarGzFilePath)
 	if err != nil {
