@@ -13,6 +13,7 @@ import (
 	util "github.com/mrajashree/backup/pkg/controllers"
 	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
 	lasso "github.com/rancher/lasso/pkg/client"
+	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -21,7 +22,6 @@ import (
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 )
@@ -35,7 +35,7 @@ type handler struct {
 	ctx                            context.Context
 	restores                       backupControllers.RestoreController
 	backups                        backupControllers.BackupController
-	backupEncryptionConfigs        backupControllers.BackupEncryptionConfigController
+	secrets                        v1core.SecretController
 	discoveryClient                discovery.DiscoveryInterface
 	dynamicClient                  dynamic.Interface
 	sharedClientFactory            lasso.SharedClientFactory
@@ -65,21 +65,21 @@ func Register(
 	ctx context.Context,
 	restores backupControllers.RestoreController,
 	backups backupControllers.BackupController,
-	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController,
+	secrets v1core.SecretController,
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface,
 	sharedClientFactory lasso.SharedClientFactory,
 	restmapper meta.RESTMapper) {
 
 	controller := &handler{
-		ctx:                     ctx,
-		restores:                restores,
-		backups:                 backups,
-		backupEncryptionConfigs: backupEncryptionConfigs,
-		dynamicClient:           dynamicInterface,
-		discoveryClient:         clientSet.Discovery(),
-		sharedClientFactory:     sharedClientFactory,
-		restmapper:              restmapper,
+		ctx:                 ctx,
+		restores:            restores,
+		backups:             backups,
+		secrets:             secrets,
+		dynamicClient:       dynamicInterface,
+		discoveryClient:     clientSet.Discovery(),
+		sharedClientFactory: sharedClientFactory,
+		restmapper:          restmapper,
 	}
 
 	// Register handlers
@@ -102,7 +102,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	if backupLocation == nil {
 		return restore, fmt.Errorf("Specify backup location during restore")
 	}
-	transformerMap, err := h.getEncryptionTransformers(restore.Spec.EncryptionConfigName)
+	transformerMap, err := util.GetEncryptionTransformers(restore.Spec.EncryptionConfigName, h.secrets)
 	if err != nil {
 		return restore, err
 	}
@@ -512,16 +512,4 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 	gr := schema.ParseGroupResource(resource + "." + group)
 	gvr := gr.WithVersion(version)
 	return gvr
-}
-
-func (h *handler) getEncryptionTransformers(encryptionConfigName string) (map[schema.GroupResource]value.Transformer, error) {
-	config, err := h.backupEncryptionConfigs.Get("default", encryptionConfigName, k8sv1.GetOptions{})
-	if err != nil {
-		return map[schema.GroupResource]value.Transformer{}, err
-	}
-	transformerMap, err := util.GetEncryptionTransformers(config)
-	if err != nil {
-		return map[schema.GroupResource]value.Transformer{}, err
-	}
-	return transformerMap, nil
 }

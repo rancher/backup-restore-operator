@@ -2,9 +2,16 @@ package controllers
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"fmt"
+	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
+	"github.com/sirupsen/logrus"
 	"io"
+	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
+	"k8s.io/apiserver/pkg/storage/value"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -65,50 +72,20 @@ func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 	return nil
 }
 
-// https://medium.com/@skdomino/taring-untaring-files-in-go-6b07cf56bc07
-// TODO: create the restoreObj objects here/ OR a map of [gvk+name+ns]: unstructed.Data; use that when generating dep graph
-func LoadFromTarGzip(tarGzFilePath, tmpBackupPath string) error {
-	r, err := os.Open(tarGzFilePath)
+func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core.SecretController) (map[schema.GroupResource]value.Transformer, error) {
+	var transformerMap map[schema.GroupResource]value.Transformer
+	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
+	// kubectl create secret generic test-encryptionconfig --from-file=./encryptionConfig.yaml
+	// TODO: confirm the chart's ns
+	encryptionConfigSecret, err := secrets.Get(ChartNamespace, encryptionConfigSecretName, k8sv1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("error opening tar.gz backup fike %v", err)
+		return transformerMap, err
 	}
-
-	gz, err := gzip.NewReader(r)
-	if err != nil {
-		return err
+	for fileName, encryptionConfigBytes := range encryptionConfigSecret.Data {
+		logrus.Infof("Using file %v for encryptionConfig", fileName)
+		return encryptionconfig.ParseEncryptionConfiguration(bytes.NewReader(encryptionConfigBytes))
 	}
-	tarball := tar.NewReader(gz)
-
-	for {
-		tarContent, err := tarball.Next()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if tarContent.Typeflag == tar.TypeDir {
-			if _, err := os.Stat(filepath.Join(tmpBackupPath, tarContent.Name)); err != nil {
-				if os.IsNotExist(err) {
-					err := os.Mkdir(filepath.Join(tmpBackupPath, tarContent.Name), os.ModePerm)
-					if err != nil {
-						return fmt.Errorf("error creating dir %v", err)
-
-					}
-				}
-			}
-		} else if tarContent.Typeflag == tar.TypeReg {
-			file, err := os.OpenFile(filepath.Join(tmpBackupPath, tarContent.Name), os.O_CREATE|os.O_RDWR, os.FileMode(tarContent.Mode))
-			if err != nil {
-				return err
-			}
-			if _, err := io.Copy(file, tarball); err != nil {
-				return err
-			}
-
-			file.Close()
-		}
-	}
+	return transformerMap, fmt.Errorf("no encryptionConfig provided")
 }
 
 func GetObjectQueue(l interface{}, capacity int) chan interface{} {

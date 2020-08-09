@@ -20,42 +20,37 @@ import (
 
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 )
 
 type handler struct {
-	ctx                     context.Context
-	backups                 backupControllers.BackupController
-	resourceSets            backupControllers.ResourceSetController
-	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController
-	secrets                 v1core.SecretController
-	namespaces              v1core.NamespaceController
-	discoveryClient         discovery.DiscoveryInterface
-	dynamicClient           dynamic.Interface
+	ctx             context.Context
+	backups         backupControllers.BackupController
+	resourceSets    backupControllers.ResourceSetController
+	secrets         v1core.SecretController
+	namespaces      v1core.NamespaceController
+	discoveryClient discovery.DiscoveryInterface
+	dynamicClient   dynamic.Interface
 }
 
 func Register(
 	ctx context.Context,
 	backups backupControllers.BackupController,
 	backupTemplates backupControllers.ResourceSetController,
-	backupEncryptionConfigs backupControllers.BackupEncryptionConfigController,
 	secrets v1core.SecretController,
 	namespaces v1core.NamespaceController,
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface) {
 
 	controller := &handler{
-		ctx:                     ctx,
-		backups:                 backups,
-		resourceSets:            backupTemplates,
-		backupEncryptionConfigs: backupEncryptionConfigs,
-		secrets:                 secrets,
-		namespaces:              namespaces,
-		discoveryClient:         clientSet.Discovery(),
-		dynamicClient:           dynamicInterface,
+		ctx:             ctx,
+		backups:         backups,
+		resourceSets:    backupTemplates,
+		secrets:         secrets,
+		namespaces:      namespaces,
+		discoveryClient: clientSet.Discovery(),
+		dynamicClient:   dynamicInterface,
 	}
 
 	// Register handlers
@@ -99,7 +94,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 	logrus.Infof("Temporary backup path is %v", tmpBackupPath)
 
-	transformerMap, err := h.getEncryptionTransformers(backup)
+	transformerMap, err := util.GetEncryptionTransformers(backup.Spec.EncryptionConfigName, h.secrets)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
@@ -215,20 +210,4 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	logrus.Infof("Done with backup")
 
 	return backup, err
-}
-
-func (h *handler) getEncryptionTransformers(backup *v1.Backup) (map[schema.GroupResource]value.Transformer, error) {
-	var transformerMap map[schema.GroupResource]value.Transformer
-	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
-	// TODO: change secret ns to the chart's ns
-	//encryptionConfigSecret, err := h.secrets.Get("default", backup.Spec.EncryptionConfigName, k8sv1.GetOptions{})
-	//if err != nil {
-	//	return transformerMap, err
-	//}
-	//fileName, encryptionConfigBytes := encryptionConfigSecret.Data
-	config, err := h.backupEncryptionConfigs.Get("default", backup.Spec.EncryptionConfigName, k8sv1.GetOptions{})
-	if err != nil {
-		return transformerMap, err
-	}
-	return util.GetEncryptionTransformers(config)
 }
