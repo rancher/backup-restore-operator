@@ -34,6 +34,7 @@ type ResourceSet struct {
 	ResourceSelectors []ResourceSelector `json:"resourceSelectors"`
 }
 
+// regex+list = OR //separate fields :AND
 type ResourceSelector struct {
 	ApiGroup          string                `json:"apiGroup"`
 	Kinds             []string              `json:"kinds"`

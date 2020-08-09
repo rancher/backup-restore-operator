@@ -1,4 +1,4 @@
-apiVersion: backupper.cattle.io/v1
+apiVersion: resources.cattle.io/v1
 kind: ResourceSet
 metadata:
   name: ecm-resource-set

@@ -19,7 +19,7 @@ limitations under the License.
 package v1
 
 import (
-	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
+	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/schemes"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -31,7 +31,6 @@ func init() {
 
 type Interface interface {
 	Backup() BackupController
-	BackupEncryptionConfig() BackupEncryptionConfigController
 	ResourceSet() ResourceSetController
 	Restore() RestoreController
 }
@@ -47,14 +46,11 @@ type version struct {
 }
 
 func (c *version) Backup() BackupController {
-	return NewBackupController(schema.GroupVersionKind{Group: "backupper.cattle.io", Version: "v1", Kind: "Backup"}, "backups", true, c.controllerFactory)
-}
-func (c *version) BackupEncryptionConfig() BackupEncryptionConfigController {
-	return NewBackupEncryptionConfigController(schema.GroupVersionKind{Group: "backupper.cattle.io", Version: "v1", Kind: "BackupEncryptionConfig"}, "backupencryptionconfigs", true, c.controllerFactory)
+	return NewBackupController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "Backup"}, "backups", true, c.controllerFactory)
 }
 func (c *version) ResourceSet() ResourceSetController {
-	return NewResourceSetController(schema.GroupVersionKind{Group: "backupper.cattle.io", Version: "v1", Kind: "ResourceSet"}, "resourcesets", true, c.controllerFactory)
+	return NewResourceSetController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "ResourceSet"}, "resourcesets", true, c.controllerFactory)
 }
 func (c *version) Restore() RestoreController {
-	return NewRestoreController(schema.GroupVersionKind{Group: "backupper.cattle.io", Version: "v1", Kind: "Restore"}, "restores", true, c.controllerFactory)
+	return NewRestoreController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "Restore"}, "restores", true, c.controllerFactory)
 }

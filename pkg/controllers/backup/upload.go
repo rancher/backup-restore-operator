@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
+	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
 	util "github.com/mrajashree/backup/pkg/controllers"
 )
 

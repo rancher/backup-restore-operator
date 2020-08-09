@@ -4,7 +4,7 @@ import (
 	"github.com/mrajashree/backup/pkg/crds"
 	"os"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
+	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
 	controllergen "github.com/rancher/wrangler/pkg/controller-gen"
 	"github.com/rancher/wrangler/pkg/controller-gen/args"
 )
@@ -15,11 +15,10 @@ func main() {
 		OutputPackage: "github.com/mrajashree/backup/pkg/generated",
 		Boilerplate:   "scripts/boilerplate.go.txt",
 		Groups: map[string]args.Group{
-			"backupper.cattle.io": {
+			"resources.cattle.io": {
 				Types: []interface{}{
 					v1.Backup{},
 					v1.ResourceSet{},
-					v1.BackupEncryptionConfig{},
 					v1.Restore{},
 				},
 				GenerateTypes: true,

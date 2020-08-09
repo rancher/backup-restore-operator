@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
+	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
 	util "github.com/mrajashree/backup/pkg/controllers"
-	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
+	restoreControllers "github.com/mrajashree/backup/pkg/generated/controllers/resources.cattle.io/v1"
 	lasso "github.com/rancher/lasso/pkg/client"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
@@ -33,8 +33,8 @@ const (
 
 type handler struct {
 	ctx                            context.Context
-	restores                       backupControllers.RestoreController
-	backups                        backupControllers.BackupController
+	restores                       restoreControllers.RestoreController
+	backups                        restoreControllers.BackupController
 	secrets                        v1core.SecretController
 	discoveryClient                discovery.DiscoveryInterface
 	dynamicClient                  dynamic.Interface
@@ -63,8 +63,8 @@ type restoreObj struct {
 
 func Register(
 	ctx context.Context,
-	restores backupControllers.RestoreController,
-	backups backupControllers.BackupController,
+	restores restoreControllers.RestoreController,
+	backups restoreControllers.BackupController,
 	secrets v1core.SecretController,
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface,

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
+	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
 	util "github.com/mrajashree/backup/pkg/controllers"
-	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io/v1"
+	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/resources.cattle.io/v1"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/sirupsen/logrus"

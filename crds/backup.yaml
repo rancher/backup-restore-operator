@@ -1,9 +1,9 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: backups.backupper.cattle.io
+  name: backups.resources.cattle.io
 spec:
-  group: backupper.cattle.io
+  group: resources.cattle.io
   names:
     kind: Backup
     plural: backups

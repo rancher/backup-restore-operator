@@ -22,7 +22,7 @@ import (
 	"context"
 	"time"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
+	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/apply"
@@ -41,51 +41,51 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-type BackupHandler func(string, *v1.Backup) (*v1.Backup, error)
+type RestoreHandler func(string, *v1.Restore) (*v1.Restore, error)
 
-type BackupController interface {
+type RestoreController interface {
 	generic.ControllerMeta
-	BackupClient
+	RestoreClient
 
-	OnChange(ctx context.Context, name string, sync BackupHandler)
-	OnRemove(ctx context.Context, name string, sync BackupHandler)
+	OnChange(ctx context.Context, name string, sync RestoreHandler)
+	OnRemove(ctx context.Context, name string, sync RestoreHandler)
 	Enqueue(namespace, name string)
 	EnqueueAfter(namespace, name string, duration time.Duration)
 
-	Cache() BackupCache
+	Cache() RestoreCache
 }
 
-type BackupClient interface {
-	Create(*v1.Backup) (*v1.Backup, error)
-	Update(*v1.Backup) (*v1.Backup, error)
-	UpdateStatus(*v1.Backup) (*v1.Backup, error)
+type RestoreClient interface {
+	Create(*v1.Restore) (*v1.Restore, error)
+	Update(*v1.Restore) (*v1.Restore, error)
+	UpdateStatus(*v1.Restore) (*v1.Restore, error)
 	Delete(namespace, name string, options *metav1.DeleteOptions) error
-	Get(namespace, name string, options metav1.GetOptions) (*v1.Backup, error)
-	List(namespace string, opts metav1.ListOptions) (*v1.BackupList, error)
+	Get(namespace, name string, options metav1.GetOptions) (*v1.Restore, error)
+	List(namespace string, opts metav1.ListOptions) (*v1.RestoreList, error)
 	Watch(namespace string, opts metav1.ListOptions) (watch.Interface, error)
-	Patch(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.Backup, err error)
+	Patch(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.Restore, err error)
 }
 
-type BackupCache interface {
-	Get(namespace, name string) (*v1.Backup, error)
-	List(namespace string, selector labels.Selector) ([]*v1.Backup, error)
+type RestoreCache interface {
+	Get(namespace, name string) (*v1.Restore, error)
+	List(namespace string, selector labels.Selector) ([]*v1.Restore, error)
 
-	AddIndexer(indexName string, indexer BackupIndexer)
-	GetByIndex(indexName, key string) ([]*v1.Backup, error)
+	AddIndexer(indexName string, indexer RestoreIndexer)
+	GetByIndex(indexName, key string) ([]*v1.Restore, error)
 }
 
-type BackupIndexer func(obj *v1.Backup) ([]string, error)
+type RestoreIndexer func(obj *v1.Restore) ([]string, error)
 
-type backupController struct {
+type restoreController struct {
 	controller    controller.SharedController
 	client        *client.Client
 	gvk           schema.GroupVersionKind
 	groupResource schema.GroupResource
 }
 
-func NewBackupController(gvk schema.GroupVersionKind, resource string, namespaced bool, controller controller.SharedControllerFactory) BackupController {
+func NewRestoreController(gvk schema.GroupVersionKind, resource string, namespaced bool, controller controller.SharedControllerFactory) RestoreController {
 	c := controller.ForResourceKind(gvk.GroupVersion().WithResource(resource), gvk.Kind, namespaced)
-	return &backupController{
+	return &restoreController{
 		controller: c,
 		client:     c.Client(),
 		gvk:        gvk,
@@ -96,13 +96,13 @@ func NewBackupController(gvk schema.GroupVersionKind, resource string, namespace
 	}
 }
 
-func FromBackupHandlerToHandler(sync BackupHandler) generic.Handler {
+func FromRestoreHandlerToHandler(sync RestoreHandler) generic.Handler {
 	return func(key string, obj runtime.Object) (ret runtime.Object, err error) {
-		var v *v1.Backup
+		var v *v1.Restore
 		if obj == nil {
 			v, err = sync(key, nil)
 		} else {
-			v, err = sync(key, obj.(*v1.Backup))
+			v, err = sync(key, obj.(*v1.Restore))
 		}
 		if v == nil {
 			return nil, err
@@ -111,9 +111,9 @@ func FromBackupHandlerToHandler(sync BackupHandler) generic.Handler {
 	}
 }
 
-func (c *backupController) Updater() generic.Updater {
+func (c *restoreController) Updater() generic.Updater {
 	return func(obj runtime.Object) (runtime.Object, error) {
-		newObj, err := c.Update(obj.(*v1.Backup))
+		newObj, err := c.Update(obj.(*v1.Restore))
 		if newObj == nil {
 			return nil, err
 		}
@@ -121,7 +121,7 @@ func (c *backupController) Updater() generic.Updater {
 	}
 }
 
-func UpdateBackupDeepCopyOnChange(client BackupClient, obj *v1.Backup, handler func(obj *v1.Backup) (*v1.Backup, error)) (*v1.Backup, error) {
+func UpdateRestoreDeepCopyOnChange(client RestoreClient, obj *v1.Restore, handler func(obj *v1.Restore) (*v1.Restore, error)) (*v1.Restore, error) {
 	if obj == nil {
 		return obj, nil
 	}
@@ -138,92 +138,92 @@ func UpdateBackupDeepCopyOnChange(client BackupClient, obj *v1.Backup, handler f
 	return copyObj, err
 }
 
-func (c *backupController) AddGenericHandler(ctx context.Context, name string, handler generic.Handler) {
+func (c *restoreController) AddGenericHandler(ctx context.Context, name string, handler generic.Handler) {
 	c.controller.RegisterHandler(ctx, name, controller.SharedControllerHandlerFunc(handler))
 }
 
-func (c *backupController) AddGenericRemoveHandler(ctx context.Context, name string, handler generic.Handler) {
+func (c *restoreController) AddGenericRemoveHandler(ctx context.Context, name string, handler generic.Handler) {
 	c.AddGenericHandler(ctx, name, generic.NewRemoveHandler(name, c.Updater(), handler))
 }
 
-func (c *backupController) OnChange(ctx context.Context, name string, sync BackupHandler) {
-	c.AddGenericHandler(ctx, name, FromBackupHandlerToHandler(sync))
+func (c *restoreController) OnChange(ctx context.Context, name string, sync RestoreHandler) {
+	c.AddGenericHandler(ctx, name, FromRestoreHandlerToHandler(sync))
 }
 
-func (c *backupController) OnRemove(ctx context.Context, name string, sync BackupHandler) {
-	c.AddGenericHandler(ctx, name, generic.NewRemoveHandler(name, c.Updater(), FromBackupHandlerToHandler(sync)))
+func (c *restoreController) OnRemove(ctx context.Context, name string, sync RestoreHandler) {
+	c.AddGenericHandler(ctx, name, generic.NewRemoveHandler(name, c.Updater(), FromRestoreHandlerToHandler(sync)))
 }
 
-func (c *backupController) Enqueue(namespace, name string) {
+func (c *restoreController) Enqueue(namespace, name string) {
 	c.controller.Enqueue(namespace, name)
 }
 
-func (c *backupController) EnqueueAfter(namespace, name string, duration time.Duration) {
+func (c *restoreController) EnqueueAfter(namespace, name string, duration time.Duration) {
 	c.controller.EnqueueAfter(namespace, name, duration)
 }
 
-func (c *backupController) Informer() cache.SharedIndexInformer {
+func (c *restoreController) Informer() cache.SharedIndexInformer {
 	return c.controller.Informer()
 }
 
-func (c *backupController) GroupVersionKind() schema.GroupVersionKind {
+func (c *restoreController) GroupVersionKind() schema.GroupVersionKind {
 	return c.gvk
 }
 
-func (c *backupController) Cache() BackupCache {
-	return &backupCache{
+func (c *restoreController) Cache() RestoreCache {
+	return &restoreCache{
 		indexer:  c.Informer().GetIndexer(),
 		resource: c.groupResource,
 	}
 }
 
-func (c *backupController) Create(obj *v1.Backup) (*v1.Backup, error) {
-	result := &v1.Backup{}
+func (c *restoreController) Create(obj *v1.Restore) (*v1.Restore, error) {
+	result := &v1.Restore{}
 	return result, c.client.Create(context.TODO(), obj.Namespace, obj, result, metav1.CreateOptions{})
 }
 
-func (c *backupController) Update(obj *v1.Backup) (*v1.Backup, error) {
-	result := &v1.Backup{}
+func (c *restoreController) Update(obj *v1.Restore) (*v1.Restore, error) {
+	result := &v1.Restore{}
 	return result, c.client.Update(context.TODO(), obj.Namespace, obj, result, metav1.UpdateOptions{})
 }
 
-func (c *backupController) UpdateStatus(obj *v1.Backup) (*v1.Backup, error) {
-	result := &v1.Backup{}
+func (c *restoreController) UpdateStatus(obj *v1.Restore) (*v1.Restore, error) {
+	result := &v1.Restore{}
 	return result, c.client.UpdateStatus(context.TODO(), obj.Namespace, obj, result, metav1.UpdateOptions{})
 }
 
-func (c *backupController) Delete(namespace, name string, options *metav1.DeleteOptions) error {
+func (c *restoreController) Delete(namespace, name string, options *metav1.DeleteOptions) error {
 	if options == nil {
 		options = &metav1.DeleteOptions{}
 	}
 	return c.client.Delete(context.TODO(), namespace, name, *options)
 }
 
-func (c *backupController) Get(namespace, name string, options metav1.GetOptions) (*v1.Backup, error) {
-	result := &v1.Backup{}
+func (c *restoreController) Get(namespace, name string, options metav1.GetOptions) (*v1.Restore, error) {
+	result := &v1.Restore{}
 	return result, c.client.Get(context.TODO(), namespace, name, result, options)
 }
 
-func (c *backupController) List(namespace string, opts metav1.ListOptions) (*v1.BackupList, error) {
-	result := &v1.BackupList{}
+func (c *restoreController) List(namespace string, opts metav1.ListOptions) (*v1.RestoreList, error) {
+	result := &v1.RestoreList{}
 	return result, c.client.List(context.TODO(), namespace, result, opts)
 }
 
-func (c *backupController) Watch(namespace string, opts metav1.ListOptions) (watch.Interface, error) {
+func (c *restoreController) Watch(namespace string, opts metav1.ListOptions) (watch.Interface, error) {
 	return c.client.Watch(context.TODO(), namespace, opts)
 }
 
-func (c *backupController) Patch(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (*v1.Backup, error) {
-	result := &v1.Backup{}
+func (c *restoreController) Patch(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (*v1.Restore, error) {
+	result := &v1.Restore{}
 	return result, c.client.Patch(context.TODO(), namespace, name, pt, data, result, metav1.PatchOptions{}, subresources...)
 }
 
-type backupCache struct {
+type restoreCache struct {
 	indexer  cache.Indexer
 	resource schema.GroupResource
 }
 
-func (c *backupCache) Get(namespace, name string) (*v1.Backup, error) {
+func (c *restoreCache) Get(namespace, name string) (*v1.Restore, error) {
 	obj, exists, err := c.indexer.GetByKey(namespace + "/" + name)
 	if err != nil {
 		return nil, err
@@ -231,73 +231,73 @@ func (c *backupCache) Get(namespace, name string) (*v1.Backup, error) {
 	if !exists {
 		return nil, errors.NewNotFound(c.resource, name)
 	}
-	return obj.(*v1.Backup), nil
+	return obj.(*v1.Restore), nil
 }
 
-func (c *backupCache) List(namespace string, selector labels.Selector) (ret []*v1.Backup, err error) {
+func (c *restoreCache) List(namespace string, selector labels.Selector) (ret []*v1.Restore, err error) {
 
 	err = cache.ListAllByNamespace(c.indexer, namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.Backup))
+		ret = append(ret, m.(*v1.Restore))
 	})
 
 	return ret, err
 }
 
-func (c *backupCache) AddIndexer(indexName string, indexer BackupIndexer) {
+func (c *restoreCache) AddIndexer(indexName string, indexer RestoreIndexer) {
 	utilruntime.Must(c.indexer.AddIndexers(map[string]cache.IndexFunc{
 		indexName: func(obj interface{}) (strings []string, e error) {
-			return indexer(obj.(*v1.Backup))
+			return indexer(obj.(*v1.Restore))
 		},
 	}))
 }
 
-func (c *backupCache) GetByIndex(indexName, key string) (result []*v1.Backup, err error) {
+func (c *restoreCache) GetByIndex(indexName, key string) (result []*v1.Restore, err error) {
 	objs, err := c.indexer.ByIndex(indexName, key)
 	if err != nil {
 		return nil, err
 	}
-	result = make([]*v1.Backup, 0, len(objs))
+	result = make([]*v1.Restore, 0, len(objs))
 	for _, obj := range objs {
-		result = append(result, obj.(*v1.Backup))
+		result = append(result, obj.(*v1.Restore))
 	}
 	return result, nil
 }
 
-type BackupStatusHandler func(obj *v1.Backup, status v1.BackupStatus) (v1.BackupStatus, error)
+type RestoreStatusHandler func(obj *v1.Restore, status v1.RestoreStatus) (v1.RestoreStatus, error)
 
-type BackupGeneratingHandler func(obj *v1.Backup, status v1.BackupStatus) ([]runtime.Object, v1.BackupStatus, error)
+type RestoreGeneratingHandler func(obj *v1.Restore, status v1.RestoreStatus) ([]runtime.Object, v1.RestoreStatus, error)
 
-func RegisterBackupStatusHandler(ctx context.Context, controller BackupController, condition condition.Cond, name string, handler BackupStatusHandler) {
-	statusHandler := &backupStatusHandler{
+func RegisterRestoreStatusHandler(ctx context.Context, controller RestoreController, condition condition.Cond, name string, handler RestoreStatusHandler) {
+	statusHandler := &restoreStatusHandler{
 		client:    controller,
 		condition: condition,
 		handler:   handler,
 	}
-	controller.AddGenericHandler(ctx, name, FromBackupHandlerToHandler(statusHandler.sync))
+	controller.AddGenericHandler(ctx, name, FromRestoreHandlerToHandler(statusHandler.sync))
 }
 
-func RegisterBackupGeneratingHandler(ctx context.Context, controller BackupController, apply apply.Apply,
-	condition condition.Cond, name string, handler BackupGeneratingHandler, opts *generic.GeneratingHandlerOptions) {
-	statusHandler := &backupGeneratingHandler{
-		BackupGeneratingHandler: handler,
-		apply:                   apply,
-		name:                    name,
-		gvk:                     controller.GroupVersionKind(),
+func RegisterRestoreGeneratingHandler(ctx context.Context, controller RestoreController, apply apply.Apply,
+	condition condition.Cond, name string, handler RestoreGeneratingHandler, opts *generic.GeneratingHandlerOptions) {
+	statusHandler := &restoreGeneratingHandler{
+		RestoreGeneratingHandler: handler,
+		apply:                    apply,
+		name:                     name,
+		gvk:                      controller.GroupVersionKind(),
 	}
 	if opts != nil {
 		statusHandler.opts = *opts
 	}
 	controller.OnChange(ctx, name, statusHandler.Remove)
-	RegisterBackupStatusHandler(ctx, controller, condition, name, statusHandler.Handle)
+	RegisterRestoreStatusHandler(ctx, controller, condition, name, statusHandler.Handle)
 }
 
-type backupStatusHandler struct {
-	client    BackupClient
+type restoreStatusHandler struct {
+	client    RestoreClient
 	condition condition.Cond
-	handler   BackupStatusHandler
+	handler   RestoreStatusHandler
 }
 
-func (a *backupStatusHandler) sync(key string, obj *v1.Backup) (*v1.Backup, error) {
+func (a *restoreStatusHandler) sync(key string, obj *v1.Restore) (*v1.Restore, error) {
 	if obj == nil {
 		return obj, nil
 	}
@@ -328,20 +328,20 @@ func (a *backupStatusHandler) sync(key string, obj *v1.Backup) (*v1.Backup, erro
 	return obj, err
 }
 
-type backupGeneratingHandler struct {
-	BackupGeneratingHandler
+type restoreGeneratingHandler struct {
+	RestoreGeneratingHandler
 	apply apply.Apply
 	opts  generic.GeneratingHandlerOptions
 	gvk   schema.GroupVersionKind
 	name  string
 }
 
-func (a *backupGeneratingHandler) Remove(key string, obj *v1.Backup) (*v1.Backup, error) {
+func (a *restoreGeneratingHandler) Remove(key string, obj *v1.Restore) (*v1.Restore, error) {
 	if obj != nil {
 		return obj, nil
 	}
 
-	obj = &v1.Backup{}
+	obj = &v1.Restore{}
 	obj.Namespace, obj.Name = kv.RSplit(key, "/")
 	obj.SetGroupVersionKind(a.gvk)
 
@@ -351,8 +351,8 @@ func (a *backupGeneratingHandler) Remove(key string, obj *v1.Backup) (*v1.Backup
 		ApplyObjects()
 }
 
-func (a *backupGeneratingHandler) Handle(obj *v1.Backup, status v1.BackupStatus) (v1.BackupStatus, error) {
-	objs, newStatus, err := a.BackupGeneratingHandler(obj, status)
+func (a *restoreGeneratingHandler) Handle(obj *v1.Restore, status v1.RestoreStatus) (v1.RestoreStatus, error) {
+	objs, newStatus, err := a.RestoreGeneratingHandler(obj, status)
 	if err != nil {
 		return newStatus, err
 	}

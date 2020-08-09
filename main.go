@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"github.com/mrajashree/backup/pkg/controllers/backup"
 	"github.com/mrajashree/backup/pkg/controllers/restore"
-	"github.com/mrajashree/backup/pkg/generated/controllers/backupper.cattle.io"
+	"github.com/mrajashree/backup/pkg/generated/controllers/resources.cattle.io"
 	lasso "github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/lasso/pkg/mapper"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core"
@@ -51,7 +51,7 @@ func main() {
 		logrus.Fatalf("Error building rest mapper: %s", err.Error())
 	}
 
-	backups, err := backupper.NewFactoryFromConfig(restKubeConfig)
+	backups, err := resources.NewFactoryFromConfig(restKubeConfig)
 	if err != nil {
 		logrus.Fatalf("Error building sample controllers: %s", err.Error())
 	}
@@ -74,15 +74,14 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Error generating shared client factory: %s", err.Error())
 	}
-	backup.Register(ctx, backups.Backupper().V1().Backup(), backups.Backupper().V1().ResourceSet(),
-		backups.Backupper().V1().BackupEncryptionConfig(),
+	backup.Register(ctx, backups.Resources().V1().Backup(), backups.Resources().V1().ResourceSet(),
 		core.Core().V1().Secret(),
 		core.Core().V1().Namespace(),
 		clientSet, dynamicInterace)
-	restore.Register(ctx, backups.Backupper().V1().Restore(), backups.Backupper().V1().Backup(),
-		backups.Backupper().V1().BackupEncryptionConfig(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
+	restore.Register(ctx, backups.Resources().V1().Restore(), backups.Resources().V1().Backup(),
+		core.Core().V1().Secret(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
 
-	backup.StartRecurringBackupsDaemon(ctx, backups.Backupper().V1().Backup(), "")
+	backup.StartRecurringBackupsDaemon(ctx, backups.Resources().V1().Backup(), "")
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
 	}

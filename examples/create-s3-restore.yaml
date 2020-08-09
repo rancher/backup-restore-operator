@@ -1,24 +1,10 @@
-apiVersion: backupper.cattle.io/v1
-kind: BackupEncryptionConfig
-metadata:
-  name: testconfig
-  namespace: default
-resources:
-  - resources:
-      - secrets
-    providers:
-      - aescbc:
-          keys:
-            - name: key1
-              secret: c2VjcmV0IGlzIHNlY3VyZQ==
----
-apiVersion: backupper.cattle.io/v1
+apiVersion: resources.cattle.io/v1
 kind: Restore
 metadata:
   name: restore-s3-demo
   namespace: default
 spec:
-  backupFilename: backup-demo-upload.tar.gz
+  backupFilename: default-s3-backup-demo-7f44c41f-5f18-47f4-ab4c-ff34b2bd26a0-2020-08-09T15-19-20-07-00.tar.gz
   storageLocation:
     s3objectStore:
       credentialSecretName: default/creds

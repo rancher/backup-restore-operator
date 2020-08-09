@@ -2,7 +2,7 @@ package crds
 
 import (
 	"fmt"
-	backupper "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
+	backupper "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
 	_ "github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io"
 	"github.com/rancher/wrangler/pkg/crd"
 	"github.com/rancher/wrangler/pkg/yaml"
@@ -39,9 +39,6 @@ func List() []crd.CRD {
 		newCRD(&backupper.ResourceSet{}, func(c crd.CRD) crd.CRD {
 			return c
 		}),
-		newCRD(&backupper.BackupEncryptionConfig{}, func(c crd.CRD) crd.CRD {
-			return c
-		}),
 		newCRD(&backupper.Restore{}, func(c crd.CRD) crd.CRD {
 			return c
 		}),
@@ -51,7 +48,7 @@ func List() []crd.CRD {
 func newCRD(obj interface{}, customize func(crd.CRD) crd.CRD) crd.CRD {
 	crd := crd.CRD{
 		GVK: schema.GroupVersionKind{
-			Group:   "backupper.cattle.io",
+			Group:   "resources.cattle.io",
 			Version: "v1",
 		},
 		Status:       true,

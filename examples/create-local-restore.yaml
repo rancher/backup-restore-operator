@@ -1,24 +1,10 @@
-apiVersion: backupper.cattle.io/v1
-kind: BackupEncryptionConfig
-metadata:
-  name: testconfig
-  namespace: default
-resources:
-  - resources:
-      - secrets
-    providers:
-      - aescbc:
-          keys:
-            - name: key1
-              secret: c2VjcmV0IGlzIHNlY3VyZQ==
----
-apiVersion: backupper.cattle.io/v1
+apiVersion: resources.cattle.io/v1
 kind: Restore
 metadata:
   name: my-restore
 spec:
-  backupFilename: default-test-mcm-backup-e70fb183-275f-4563-9c22-3ff440a8a7a2-2020-08-07T13-36-32-07-00.tar.gz
-  encryptionConfigName: testconfig
+  backupFilename: default-test-ecm-backup-7f44c41f-5f18-47f4-ab4c-ff34b2bd26a0-2020-08-09T16-14-33-07-00.tar.gz
+  encryptionConfigName: test-encryptionconfig
   prune: true
   deleteTimeout: 5
   storageLocation:
