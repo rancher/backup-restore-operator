@@ -106,6 +106,7 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 			}
 			continue
 		}
+		h.resourcesFromBackup[tarContent.Name] = true
 		splitPath := strings.Split(tarContent.Name, "/")
 		if len(splitPath) == 2 {
 			// cluster scoped resource, since no subdir for namespace

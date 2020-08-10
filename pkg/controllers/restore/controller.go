@@ -43,6 +43,7 @@ type handler struct {
 	crdInfoToData                  map[objInfo]unstructured.Unstructured
 	namespaceInfoToData            map[objInfo]unstructured.Unstructured
 	resourceInfoToData             map[objInfo]unstructured.Unstructured
+	resourcesFromBackup            map[string]bool
 	resourcesWithStatusSubresource map[string]bool
 }
 
@@ -95,6 +96,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	h.crdInfoToData = make(map[objInfo]unstructured.Unstructured)
 	h.namespaceInfoToData = make(map[objInfo]unstructured.Unstructured)
 	h.resourceInfoToData = make(map[objInfo]unstructured.Unstructured)
+	h.resourcesFromBackup = make(map[string]bool)
 
 	backupName := restore.Spec.BackupFilename
 
@@ -181,7 +183,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	fmt.Printf("\ntime taken to restore resources: %v\n", timeForRestoringResources)
 
 	if restore.Spec.Prune {
-		if err := h.prune(strings.TrimSuffix(backupName, ".tar.gz"), "backupPath", restore.Spec.DeleteTimeout, transformerMap, resourceSelectors); err != nil {
+		if err := h.prune(resourceSelectors, transformerMap, restore.Spec.DeleteTimeout); err != nil {
 			return restore, fmt.Errorf("error pruning during restore: %v", err)
 		}
 	}

@@ -1,17 +1,12 @@
 package restore
 
 import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"os"
+	"k8s.io/client-go/dynamic"
 	"path/filepath"
-	"strings"
 	"time"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/backupper.cattle.io/v1"
+	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
 	util "github.com/mrajashree/backup/pkg/controllers"
-	lasso "github.com/rancher/lasso/pkg/client"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,128 +15,73 @@ import (
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
-type resourceInfo struct {
-	path string
-	name string
-	gvr  schema.GroupVersionResource
+type pruneResourceInfo struct {
+	name      string
+	namespace string
+	gvr       schema.GroupVersionResource
 }
 
-func (h *handler) prune(backupName, backupPath string, pruneTimeout int, transformerMap map[schema.GroupResource]value.Transformer) error {
-	// prune
-	filtersBytes, err := ioutil.ReadFile(filepath.Join(backupPath, "filters", "filters.json"))
-	if err != nil {
-		return fmt.Errorf("error reading backup fitlers file: %v", err)
-	}
-	var backupFilters []v1.ResourceSelector
-	if err := json.Unmarshal(filtersBytes, &backupFilters); err != nil {
-		return fmt.Errorf("error unmarshaling backup filters file: %v", err)
-	}
+func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap map[schema.GroupResource]value.Transformer,
+	deleteTimeout int) error {
 	rh := util.ResourceHandler{
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
+		TransformerMap:  transformerMap,
 	}
-	pruneDirPath, err := ioutil.TempDir("", fmt.Sprintf("prune-%s", backupName))
-	if err != nil {
-		return err
-	}
-	logrus.Infof("Prune dir path is %s", pruneDirPath)
 
-	// TODO: don't write to disk again
-	if _, err := rh.GatherResources(h.ctx, backupFilters, pruneDirPath, transformerMap); err != nil {
+	if _, err := rh.GatherResources(h.ctx, resourceSelectors); err != nil {
 		return err
 	}
-	logrus.Infof("Comparing prune and backup dirs")
-	// compare pruneDirPath and backupPath contents, to find any extra files in pruneDirPath, and mark them for deletion
-	var namespacedResourcesToDelete []resourceInfo
-	var resourcesToDelete []resourceInfo
-	walkFunc := func(currPath string, info os.FileInfo, err error) error {
-		if info.IsDir() {
-			return nil
-		}
-		currFileRelativePath, err := filepath.Rel(pruneDirPath, currPath)
-		if err != nil {
-			return fmt.Errorf("error getting relative filepath for %v: %v", currPath, err)
-		}
-		// example, relative path: serviceaccounts.#v1/user-4l2tw/default.json
-		resourceGVR := strings.Split(currFileRelativePath, "/")[0]
-		// currFileName = authconfigs.management.cattle.io#v3/adfs.json => removes the path upto the dir for groupversion
-		currFileName := filepath.Join(resourceGVR, filepath.Base(currPath))
-		// if this file does not exist in the backup, it was created after taking backup, so delete it
-		if _, err := os.Stat(filepath.Join(backupPath, currFileRelativePath)); os.IsNotExist(err) {
-			gvr := getGVR(resourceGVR)
-			isNamespaced, err := lasso.IsNamespaced(gvr, h.restmapper)
-			if err != nil {
-				logrus.Errorf("Error finding if %v is namespaced: %v", currFileName, err)
+	var resourcesToDelete []pruneResourceInfo
+	for gvResource, resObjects := range rh.GVResourceToObjects {
+		for _, resObj := range resObjects {
+			metadata := resObj.Object["metadata"].(map[string]interface{})
+			objName := metadata["name"].(string)
+			objNs, _ := metadata["namespace"].(string)
+			gv := gvResource.GroupVersion
+			resourcePath := gvResource.Name + "." + gv.Group + "#" + gv.Version
+			if gvResource.Namespaced {
+				resourcePath = filepath.Join(resourcePath, objNs)
 			}
-			if isNamespaced {
-				// use entire path as key, as we need to read this file to get the namespace
-				namespacedResourcesToDelete = append(namespacedResourcesToDelete, resourceInfo{
-					path: currPath,
-					name: "",
-					gvr:  gvr,
-				})
-			} else {
-				// use only the filename without json ext as we can delete this resource without reading the file
-				resourcesToDelete = append(resourcesToDelete, resourceInfo{
-					path: "",
-					name: strings.TrimSuffix(filepath.Base(currPath), ".json"),
-					gvr:  gvr,
+			resourceFilePath := filepath.Join(resourcePath, objName+".json")
+			logrus.Infof("resourceFilePath: %v", resourceFilePath)
+			if !h.resourcesFromBackup[resourceFilePath] {
+				resourcesToDelete = append(resourcesToDelete, pruneResourceInfo{
+					name:      objName,
+					namespace: objNs,
+					gvr:       gv.WithResource(gvResource.Name),
 				})
 			}
-
 		}
-		return nil
 	}
-	err = filepath.Walk(pruneDirPath, walkFunc)
-	if err != nil {
-		return err
-	}
-	logrus.Infof("Now Need to delete namespaced %v", namespacedResourcesToDelete)
-	logrus.Infof("Now Need to delete clusterscoped %v", resourcesToDelete)
-
-	if err := h.pruneResources(resourcesToDelete, namespacedResourcesToDelete, pruneTimeout, transformerMap); err != nil {
-		if removeErr := os.RemoveAll(pruneDirPath); removeErr != nil {
-			return removeErr
-		}
-		return err
-	}
-	err = os.RemoveAll(pruneDirPath)
-	return err
-}
-
-func (h *handler) pruneResources(resourcesToDelete, namespacedResourcesToDelete []resourceInfo, pruneTimeout int,
-	transformerMap map[schema.GroupResource]value.Transformer) error {
-	clusterScopedResourceDeletionError, namespacedResourceDeleteionError := make(chan error, 1), make(chan error, 1)
-	logrus.Infof("Pruning cluster scoped resources")
-	go h.pruneClusterScopedResources(resourcesToDelete, pruneTimeout, clusterScopedResourceDeletionError)
+	logrus.Infof("Now Need to delete following resources %v", resourcesToDelete)
+	clusterScopedResourceDeletionError := make(chan error, 1)
+	logrus.Infof("Pruning  resources")
+	go h.pruneClusterScopedResources(resourcesToDelete, deleteTimeout, clusterScopedResourceDeletionError)
 	cErr := <-clusterScopedResourceDeletionError
 	if cErr != nil {
 		return cErr
 	}
-
-	logrus.Infof("Pruning namespaced resources")
-	go h.pruneNamespacedResources(namespacedResourcesToDelete, pruneTimeout, namespacedResourceDeleteionError, transformerMap)
-	nErr := <-namespacedResourceDeleteionError
-	if nErr != nil {
-		return nErr
-	}
+	logrus.Infof("Returning")
 	return nil
 }
 
-func (h *handler) pruneClusterScopedResources(resourcesToDelete []resourceInfo, pruneTimeout int, retErr chan error) {
-	if err := h.deleteClusterScopedResources(resourcesToDelete, false); err != nil {
+func (h *handler) pruneClusterScopedResources(resourcesToDelete []pruneResourceInfo, pruneTimeout int, retErr chan error) {
+	if err := h.deleteResources(resourcesToDelete, false); err != nil {
 		retErr <- err
 		return
 	}
+	logrus.Infof("Will retry deleting resources by removing finalizers")
 	time.Sleep(time.Duration(pruneTimeout) * time.Second)
-	if err := h.deleteClusterScopedResources(resourcesToDelete, true); err != nil {
+	logrus.Infof("Retrying deleting resources by removing finalizers")
+	if err := h.deleteResources(resourcesToDelete, true); err != nil {
 		retErr <- err
 		return
 	}
 	retErr <- nil
 }
 
-func (h *handler) deleteClusterScopedResources(resourcesToDelete []resourceInfo, removeFinalizers bool) error {
+func (h *handler) deleteResources(resourcesToDelete []pruneResourceInfo, removeFinalizers bool) error {
 	var errgrp errgroup.Group
 	resourceQueue := util.GetObjectQueue(resourcesToDelete, len(resourcesToDelete))
 
@@ -149,9 +89,12 @@ func (h *handler) deleteClusterScopedResources(resourcesToDelete []resourceInfo,
 		errgrp.Go(func() error {
 			var errList []error
 			for res := range resourceQueue {
-				resource := res.(resourceInfo)
-				dr := h.dynamicClient.Resource(resource.gvr)
-
+				resource := res.(pruneResourceInfo)
+				var dr dynamic.ResourceInterface
+				dr = h.dynamicClient.Resource(resource.gvr)
+				if resource.namespace != "" {
+					dr = h.dynamicClient.Resource(resource.gvr).Namespace(resource.namespace)
+				}
 				if removeFinalizers {
 					obj, err := dr.Get(h.ctx, resource.name, k8sv1.GetOptions{})
 					if err != nil {
@@ -173,97 +116,6 @@ func (h *handler) deleteClusterScopedResources(resourcesToDelete []resourceInfo,
 						continue
 					}
 					errList = append(errList, err)
-				}
-			}
-			return util.ErrList(errList)
-		})
-	}
-	close(resourceQueue)
-	return errgrp.Wait()
-}
-
-func (h *handler) pruneNamespacedResources(resourcesToDelete []resourceInfo, pruneTimeout int, retErr chan error,
-	transformerMap map[schema.GroupResource]value.Transformer) {
-	if err := h.deleteNamespacedResources(resourcesToDelete, false, transformerMap); err != nil {
-		retErr <- err
-		return
-	}
-	time.Sleep(time.Duration(pruneTimeout) * time.Second)
-	if err := h.deleteNamespacedResources(resourcesToDelete, true, transformerMap); err != nil {
-		retErr <- err
-		return
-	}
-	retErr <- nil
-}
-
-func (h *handler) deleteNamespacedResources(resourcesToDelete []resourceInfo, removeFinalizers bool,
-	transformerMap map[schema.GroupResource]value.Transformer) error {
-	var errgrp errgroup.Group
-	resourceQueue := util.GetObjectQueue(resourcesToDelete, len(resourcesToDelete))
-
-	for w := 0; w < util.WorkerThreads; w++ {
-		errgrp.Go(func() error {
-			var errList []error
-			for res := range resourceQueue {
-				resource := res.(resourceInfo)
-
-				resourceBytes, err := ioutil.ReadFile(resource.path)
-				if err != nil {
-					errList = append(errList, err)
-					continue
-				}
-
-				decryptionTransformer, decrypted := transformerMap[resource.gvr.GroupResource()]
-				if decrypted {
-					var encryptedBytes []byte
-					if err := json.Unmarshal(resourceBytes, &encryptedBytes); err != nil {
-						errList = append(errList, err)
-						continue
-					}
-					decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(resource.name))
-					if err != nil {
-						errList = append(errList, err)
-						continue
-					}
-					resourceBytes = decrypted
-				}
-
-				var resourceContents map[string]interface{}
-				if err := json.Unmarshal(resourceBytes, &resourceContents); err != nil {
-					errList = append(errList, err)
-					continue
-				}
-				metadata := resourceContents[metadataMapKey].(map[string]interface{})
-				resourceName, nameFound := metadata["name"].(string)
-				namespace, nsFound := metadata["namespace"].(string)
-				if !nameFound || !nsFound {
-					errList = append(errList, fmt.Errorf("cannot delete resource as namespace not found"))
-					continue
-				}
-				dr := h.dynamicClient.Resource(resource.gvr).Namespace(namespace)
-
-				if removeFinalizers {
-					obj, err := dr.Get(h.ctx, resourceName, k8sv1.GetOptions{})
-					if err != nil {
-						if apierrors.IsNotFound(err) || apierrors.IsGone(err) {
-							continue
-						}
-						errList = append(errList, err)
-						continue
-					}
-					delete(obj.Object[metadataMapKey].(map[string]interface{}), "finalizers")
-					if _, err := dr.Update(h.ctx, obj, k8sv1.UpdateOptions{}); err != nil {
-						errList = append(errList, err)
-						continue
-					}
-				}
-
-				if err := dr.Delete(h.ctx, resourceName, k8sv1.DeleteOptions{}); err != nil {
-					if apierrors.IsNotFound(err) || apierrors.IsGone(err) {
-						continue
-					}
-					errList = append(errList, err)
-					continue
 				}
 			}
 			return util.ErrList(errList)

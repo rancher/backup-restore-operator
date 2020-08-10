@@ -20,9 +20,17 @@ import (
 	"strings"
 )
 
+type GVResource struct {
+	GroupVersion schema.GroupVersion
+	Name         string
+	Namespaced   bool
+}
+
 type ResourceHandler struct {
-	DiscoveryClient discovery.DiscoveryInterface
-	DynamicClient   dynamic.Interface
+	DiscoveryClient     discovery.DiscoveryInterface
+	DynamicClient       dynamic.Interface
+	TransformerMap      map[schema.GroupResource]value.Transformer
+	GVResourceToObjects map[GVResource][]unstructured.Unstructured
 }
 
 /*  GatherResources iterates over the ResourceSelectors in the given ResourceSet
@@ -40,12 +48,11 @@ type ResourceHandler struct {
 	resourceNames: "local"
 	All namespaces that match resourceNamesRegex, also local ns is backed up
 */
-func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors []v1.ResourceSelector, backupPath string,
-	transformerMap map[schema.GroupResource]value.Transformer) (map[string]bool, error) {
-
+func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors []v1.ResourceSelector) (map[string]bool, error) {
 	var resourceVersion string
 	resourcesWithStatusSubresource := make(map[string]bool)
-
+	h.GVResourceToObjects = make(map[GVResource][]unstructured.Unstructured)
+	var gatheredResources []unstructured.Unstructured
 	for _, resourceSelector := range resourceSelectors {
 		resourceList, err := h.gatherResourcesForGroupVersion(resourceSelector)
 		if err != nil {
@@ -55,7 +62,11 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 		if err != nil {
 			return resourcesWithStatusSubresource, err
 		}
+		var objectsForCurrGVResource []unstructured.Unstructured
+		currGVResource := GVResource{GroupVersion: gv}
 		for _, res := range resourceList {
+			currGVResource.Name = res.Name
+			currGVResource.Namespaced = res.Namespaced
 			// this is a subresource, check if its a status subsubresource
 			split := strings.SplitN(res.Name, "/", 2)
 			if len(split) == 2 {
@@ -77,9 +88,9 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 			if err != nil {
 				return resourcesWithStatusSubresource, err
 			}
-			if err := h.writeBackupObjects(filteredObjects, res, gv, backupPath, transformerMap); err != nil {
-				return resourcesWithStatusSubresource, err
-			}
+			objectsForCurrGVResource = append(objectsForCurrGVResource, filteredObjects...)
+			h.GVResourceToObjects[currGVResource] = filteredObjects
+			gatheredResources = append(gatheredResources, filteredObjects...)
 		}
 	}
 	return resourcesWithStatusSubresource, nil
@@ -309,50 +320,51 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 	return filteredObjects, nil
 }
 
-func (h *ResourceHandler) writeBackupObjects(resObjects []unstructured.Unstructured, res k8sv1.APIResource,
-	gv schema.GroupVersion, backupPath string, transformerMap map[schema.GroupResource]value.Transformer) error {
-	for _, resObj := range resObjects {
-		metadata := resObj.Object["metadata"].(map[string]interface{})
-		// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
-		if _, deletionTs := metadata["deletionTimestamp"]; deletionTs {
-			if _, finSet := metadata["finalizers"]; !finSet {
-				// no finalizers set, don't backup object
-				continue
+func (h *ResourceHandler) WriteBackupObjects(backupPath string) error {
+	for gvResource, resObjects := range h.GVResourceToObjects {
+		for _, resObj := range resObjects {
+			metadata := resObj.Object["metadata"].(map[string]interface{})
+			// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
+			if _, deletionTs := metadata["deletionTimestamp"]; deletionTs {
+				if _, finSet := metadata["finalizers"]; !finSet {
+					// no finalizers set, don't backup object
+					continue
+				}
 			}
-		}
 
-		objName := metadata["name"].(string)
-		objFilename := objName
+			objName := metadata["name"].(string)
+			objFilename := objName
 
-		// TODO: confirm-test deletionTimestamp needs to be dropped
-		for _, field := range []string{"uid", "creationTimestamp", "deletionTimestamp", "selfLink", "resourceVersion"} {
-			delete(metadata, field)
-		}
-
-		resourcePath := backupPath + "/" + res.Name + "." + gv.Group + "#" + gv.Version
-		if err := createResourceDir(resourcePath); err != nil {
-			return err
-		}
-
-		gr := schema.ParseGroupResource(res.Name + "." + res.Group)
-		encryptionTransformer := transformerMap[gr]
-		additionalAuthenticatedData := objName
-		if res.Namespaced {
-			additionalAuthenticatedData = fmt.Sprintf("%s#%s", metadata["namespace"].(string), additionalAuthenticatedData)
-			/*Max length in k8s is 253 characters for names of resources, for instance for serviceaccount.
-			And max length of filename on UNIX is 255, so we risk going over max filename length by storing namespace in the filename,
-			hence create a separate subdir for namespaced resources*/
-			objNs := metadata["namespace"].(string)
-			resourcePath = filepath.Join(resourcePath, objNs)
+			// TODO: confirm-test deletionTimestamp needs to be dropped
+			for _, field := range []string{"uid", "creationTimestamp", "deletionTimestamp", "selfLink", "resourceVersion"} {
+				delete(metadata, field)
+			}
+			gv := gvResource.GroupVersion
+			resourcePath := backupPath + "/" + gvResource.Name + "." + gv.Group + "#" + gv.Version
 			if err := createResourceDir(resourcePath); err != nil {
 				return err
 			}
-		}
 
-		// TODO: collect all objects first and then write??
-		err := writeToBackup(resObj.Object, resourcePath, objFilename, encryptionTransformer, additionalAuthenticatedData)
-		if err != nil {
-			return err
+			gr := schema.ParseGroupResource(gvResource.Name + "." + gv.Group)
+			encryptionTransformer := h.TransformerMap[gr]
+			additionalAuthenticatedData := objName
+			if gvResource.Namespaced {
+				additionalAuthenticatedData = fmt.Sprintf("%s#%s", metadata["namespace"].(string), additionalAuthenticatedData)
+				/*Max length in k8s is 253 characters for names of resources, for instance for serviceaccount.
+				And max length of filename on UNIX is 255, so we risk going over max filename length by storing namespace in the filename,
+				hence create a separate subdir for namespaced resources*/
+				objNs := metadata["namespace"].(string)
+				resourcePath = filepath.Join(resourcePath, objNs)
+				if err := createResourceDir(resourcePath); err != nil {
+					return err
+				}
+			}
+
+			// TODO: collect all objects first and then write??
+			err := writeToBackup(resObj.Object, resourcePath, objFilename, encryptionTransformer, additionalAuthenticatedData)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

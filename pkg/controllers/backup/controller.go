@@ -116,8 +116,17 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	rh := util.ResourceHandler{
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
+		TransformerMap:  transformerMap,
 	}
-	resourcesWithStatusSubresource, err := rh.GatherResources(h.ctx, resourceSetTemplate.ResourceSelectors, tmpBackupPath, transformerMap)
+	resourcesWithStatusSubresource, err := rh.GatherResources(h.ctx, resourceSetTemplate.ResourceSelectors)
+	if err != nil {
+		removeDirErr := os.RemoveAll(tmpBackupPath)
+		if removeDirErr != nil {
+			return backup, errors.New(err.Error() + removeDirErr.Error())
+		}
+		return backup, err
+	}
+	err = rh.WriteBackupObjects(tmpBackupPath)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
