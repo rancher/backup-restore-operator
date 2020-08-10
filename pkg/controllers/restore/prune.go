@@ -1,7 +1,6 @@
 package restore
 
 import (
-	"k8s.io/client-go/dynamic"
 	"path/filepath"
 	"time"
 
@@ -9,10 +8,12 @@ import (
 	util "github.com/rancher/backup-restore-operator/pkg/controllers"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
+	"k8s.io/client-go/dynamic"
 )
 
 type pruneResourceInfo struct {
@@ -54,31 +55,21 @@ func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap 
 			}
 		}
 	}
-	logrus.Infof("Now Need to delete following resources %v", resourcesToDelete)
-	clusterScopedResourceDeletionError := make(chan error, 1)
-	logrus.Infof("Pruning  resources")
-	go h.pruneClusterScopedResources(resourcesToDelete, deleteTimeout, clusterScopedResourceDeletionError)
-	cErr := <-clusterScopedResourceDeletionError
-	if cErr != nil {
-		return cErr
-	}
-	logrus.Infof("Returning")
-	return nil
+	logrus.Infof("Pruning following resources %v", resourcesToDelete)
+	return h.pruneClusterScopedResources(resourcesToDelete, deleteTimeout)
 }
 
-func (h *handler) pruneClusterScopedResources(resourcesToDelete []pruneResourceInfo, pruneTimeout int, retErr chan error) {
-	if err := h.deleteResources(resourcesToDelete, false); err != nil {
-		retErr <- err
-		return
+func (h *handler) pruneClusterScopedResources(resourcesToDelete []pruneResourceInfo, pruneTimeout int) error {
+	err := h.deleteResources(resourcesToDelete, false)
+	if err != nil {
+		// don't return this error, let the second call retry
+		logrus.Errorf("Error pruning resources: %v", err)
 	}
-	logrus.Infof("Will retry deleting resources by removing finalizers")
+
+	logrus.Infof("Will retry pruning resources by removing finalizers in %vs", pruneTimeout)
 	time.Sleep(time.Duration(pruneTimeout) * time.Second)
-	logrus.Infof("Retrying deleting resources by removing finalizers")
-	if err := h.deleteResources(resourcesToDelete, true); err != nil {
-		retErr <- err
-		return
-	}
-	retErr <- nil
+	logrus.Infof("Retrying pruning resources by removing finalizers")
+	return h.deleteResources(resourcesToDelete, true)
 }
 
 func (h *handler) deleteResources(resourcesToDelete []pruneResourceInfo, removeFinalizers bool) error {

@@ -42,7 +42,6 @@ func (h *handler) uploadToS3(backupNs string, objectStore *v1.S3ObjectStore, tmp
 		accessKey, _ = s3SecretData["accessKey"].(string)
 		secretKey, _ = s3SecretData["secretKey"].(string)
 	}
-	fmt.Printf("\naccessKey: %v, secretKey: %v\n", accessKey, secretKey)
 	// if no s3 credentials are provided, use IAM profile, this means passing empty access and secret keys to the SetS3Service call
 	s3Client, err := util.SetS3Service(objectStore, accessKey, secretKey, false)
 	if err != nil {
