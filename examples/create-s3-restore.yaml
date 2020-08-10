@@ -4,12 +4,12 @@ metadata:
   name: restore-s3-demo
   namespace: default
 spec:
-  backupFilename: default-s3-backup-demo-7f44c41f-5f18-47f4-ab4c-ff34b2bd26a0-2020-08-09T15-19-20-07-00.tar.gz
+  backupFilename: default-s3-backup-demo-24e1b8ce-1f00-4bbe-94bb-248ad7606dc8-2020-08-10T15-29-53-07-00.tar.gz
   storageLocation:
     s3objectStore:
-      credentialSecretName: default/creds
+      credentialSecretName: creds
       bucketName: rajashree-backup-test
       folder: ecm1
       region: us-west-2
       endpoint: s3.us-west-2.amazonaws.com
-  encryptionConfigName: testconfig
+  encryptionConfigName: test-encryptionconfig

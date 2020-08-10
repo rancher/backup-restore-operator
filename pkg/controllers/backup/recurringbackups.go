@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
-	backupController "github.com/mrajashree/backup/pkg/generated/controllers/resources.cattle.io/v1"
+	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	backupController "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/robfig/cron"
 	"github.com/sirupsen/logrus"

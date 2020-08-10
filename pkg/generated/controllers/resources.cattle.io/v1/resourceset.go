@@ -22,7 +22,7 @@ import (
 	"context"
 	"time"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
+	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/generic"

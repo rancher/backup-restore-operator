@@ -6,14 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/storage/value"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
-	util "github.com/mrajashree/backup/pkg/controllers"
-	backupControllers "github.com/mrajashree/backup/pkg/generated/controllers/resources.cattle.io/v1"
+	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	util "github.com/rancher/backup-restore-operator/pkg/controllers"
+	backupControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/sirupsen/logrus"
@@ -94,13 +96,16 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 	logrus.Infof("Temporary backup path is %v", tmpBackupPath)
 
-	transformerMap, err := util.GetEncryptionTransformers(backup.Spec.EncryptionConfigName, h.secrets)
-	if err != nil {
-		removeDirErr := os.RemoveAll(tmpBackupPath)
-		if removeDirErr != nil {
-			return backup, errors.New(err.Error() + removeDirErr.Error())
+	transformerMap := make(map[schema.GroupResource]value.Transformer)
+	if backup.Spec.EncryptionConfigName != "" {
+		transformerMap, err = util.GetEncryptionTransformers(backup.Spec.EncryptionConfigName, h.secrets)
+		if err != nil {
+			removeDirErr := os.RemoveAll(tmpBackupPath)
+			if removeDirErr != nil {
+				return backup, errors.New(err.Error() + removeDirErr.Error())
+			}
+			return backup, err
 		}
-		return backup, err
 	}
 
 	resourceSetTemplate, err := h.resourceSets.Get(backup.Namespace, backup.Spec.ResourceSetName, k8sv1.GetOptions{})
@@ -152,7 +157,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return backup, errors.New(err.Error() + removeDirErr.Error())
 		}
 	}
-
 	err = ioutil.WriteFile(filepath.Join(filtersPath, "filters.json"), filters, os.ModePerm)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
@@ -161,7 +165,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		}
 		return backup, err
 	}
-
 	subresources, err := json.Marshal(resourcesWithStatusSubresource)
 	if err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
@@ -193,7 +196,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return backup, err
 		}
 	} else if storageLocation.S3 != nil {
-		if err := h.uploadToS3(storageLocation.S3, tmpBackupPath, gzipFile); err != nil {
+		if err := h.uploadToS3(backup.Namespace, storageLocation.S3, tmpBackupPath, gzipFile); err != nil {
 			removeDirErr := os.RemoveAll(tmpBackupPath)
 			if removeDirErr != nil {
 				return backup, errors.New(err.Error() + removeDirErr.Error())

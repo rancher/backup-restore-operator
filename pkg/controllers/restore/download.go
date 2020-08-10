@@ -10,8 +10,8 @@ import (
 	"os"
 	"strings"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
-	util "github.com/mrajashree/backup/pkg/controllers"
+	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	util "github.com/rancher/backup-restore-operator/pkg/controllers"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -19,28 +19,23 @@ import (
 )
 
 func (h *handler) downloadFromS3(restore *v1.Restore) (string, error) {
+	var accessKey, secretKey string
 	objStore := restore.Spec.StorageLocation.S3
-	gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
-	secrets := h.dynamicClient.Resource(gvr)
-	secretNs, secretName := "default", objStore.CredentialSecretName
-	if strings.Contains(objStore.CredentialSecretName, "/") {
-		split := strings.SplitN(objStore.CredentialSecretName, "/", 2)
-		if len(split) != 2 {
-			return "", fmt.Errorf("invalid credentials secret info")
+	if objStore.CredentialSecretName != "" {
+		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
+		secrets := h.dynamicClient.Resource(gvr)
+		secretNs, secretName := restore.Namespace, objStore.CredentialSecretName
+		s3secret, err := secrets.Namespace(secretNs).Get(h.ctx, secretName, k8sv1.GetOptions{})
+		if err != nil {
+			return "", err
 		}
-		secretNs = split[0]
-		secretName = split[1]
+		s3SecretData, ok := s3secret.Object["data"].(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("malformed secret")
+		}
+		accessKey, _ = s3SecretData["accessKey"].(string)
+		secretKey, _ = s3SecretData["secretKey"].(string)
 	}
-	s3secret, err := secrets.Namespace(secretNs).Get(h.ctx, secretName, k8sv1.GetOptions{})
-	if err != nil {
-		return "", err
-	}
-	s3SecretData, ok := s3secret.Object["data"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("malformed secret")
-	}
-	accessKey, _ := s3SecretData["accessKey"].(string)
-	secretKey, _ := s3SecretData["secretKey"].(string)
 	s3Client, err := util.SetS3Service(objStore, accessKey, secretKey, false)
 	if err != nil {
 		return "", err
@@ -145,13 +140,13 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 		}
 		if strings.EqualFold(gvr.Resource, "customresourcedefinitions") {
 			h.crdInfoToData[info] = unstructured.Unstructured{Object: fileMap}
-		} else if strings.EqualFold(gvr.Resource, "namespaces") {
-			h.namespaceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
 		} else {
 			if namespace != "" {
 				info.Namespace = namespace
+				h.namespacedResourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
+			} else {
+				h.clusterscopedResourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
 			}
-			h.resourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
 		}
 
 		// unsetting namespace for the next resource

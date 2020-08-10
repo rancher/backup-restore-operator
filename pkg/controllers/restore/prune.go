@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"time"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
-	util "github.com/mrajashree/backup/pkg/controllers"
+	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	util "github.com/rancher/backup-restore-operator/pkg/controllers"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

@@ -19,7 +19,7 @@ limitations under the License.
 package resources
 
 import (
-	v1 "github.com/mrajashree/backup/pkg/generated/controllers/resources.cattle.io/v1"
+	v1 "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
 	"github.com/rancher/lasso/pkg/controller"
 )
 

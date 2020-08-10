@@ -8,9 +8,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/mrajashree/backup/pkg/controllers/backup"
-	"github.com/mrajashree/backup/pkg/controllers/restore"
-	"github.com/mrajashree/backup/pkg/generated/controllers/resources.cattle.io"
+
+	"github.com/rancher/backup-restore-operator/pkg/controllers/backup"
+	"github.com/rancher/backup-restore-operator/pkg/controllers/restore"
+	"github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io"
 	lasso "github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/lasso/pkg/mapper"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core"

@@ -21,7 +21,7 @@ limitations under the License.
 package v1
 
 import (
-	resources "github.com/mrajashree/backup/pkg/apis/resources.cattle.io"
+	resources "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"

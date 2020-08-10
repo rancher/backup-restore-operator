@@ -5,16 +5,17 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"reflect"
+
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
-	"io"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/apiserver/pkg/storage/value"
-	"os"
-	"path/filepath"
-	"reflect"
 )
 
 const (
@@ -77,6 +78,7 @@ func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core
 	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
 	// kubectl create secret generic test-encryptionconfig --from-file=./encryptionConfig.yaml
 	// TODO: confirm the chart's ns
+	fmt.Printf("\nencryptionConfigSecretName: %v\n", encryptionConfigSecretName)
 	encryptionConfigSecret, err := secrets.Get(ChartNamespace, encryptionConfigSecretName, k8sv1.GetOptions{})
 	if err != nil {
 		return transformerMap, err

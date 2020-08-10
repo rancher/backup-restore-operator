@@ -5,4 +5,6 @@
 *.swp
 .idea
 ./backup
+./backup-restore-operator
+backup-restore-operator
 /secretExamples

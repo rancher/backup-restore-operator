@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/apiserver/pkg/storage/value"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
-	util "github.com/mrajashree/backup/pkg/controllers"
-	restoreControllers "github.com/mrajashree/backup/pkg/generated/controllers/resources.cattle.io/v1"
+	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	util "github.com/rancher/backup-restore-operator/pkg/controllers"
+	restoreControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
 	lasso "github.com/rancher/lasso/pkg/client"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
@@ -29,22 +30,24 @@ import (
 const (
 	metadataMapKey  = "metadata"
 	ownerRefsMapKey = "ownerReferences"
+	clusterScoped   = "clusterscoped"
+	namespaceScoped = "namespaceScoped"
 )
 
 type handler struct {
-	ctx                            context.Context
-	restores                       restoreControllers.RestoreController
-	backups                        restoreControllers.BackupController
-	secrets                        v1core.SecretController
-	discoveryClient                discovery.DiscoveryInterface
-	dynamicClient                  dynamic.Interface
-	sharedClientFactory            lasso.SharedClientFactory
-	restmapper                     meta.RESTMapper
-	crdInfoToData                  map[objInfo]unstructured.Unstructured
-	namespaceInfoToData            map[objInfo]unstructured.Unstructured
-	resourceInfoToData             map[objInfo]unstructured.Unstructured
-	resourcesFromBackup            map[string]bool
-	resourcesWithStatusSubresource map[string]bool
+	ctx                             context.Context
+	restores                        restoreControllers.RestoreController
+	backups                         restoreControllers.BackupController
+	secrets                         v1core.SecretController
+	discoveryClient                 discovery.DiscoveryInterface
+	dynamicClient                   dynamic.Interface
+	sharedClientFactory             lasso.SharedClientFactory
+	restmapper                      meta.RESTMapper
+	crdInfoToData                   map[objInfo]unstructured.Unstructured
+	clusterscopedResourceInfoToData map[objInfo]unstructured.Unstructured
+	namespacedResourceInfoToData    map[objInfo]unstructured.Unstructured
+	resourcesFromBackup             map[string]bool
+	resourcesWithStatusSubresource  map[string]bool
 }
 
 type objInfo struct {
@@ -94,9 +97,11 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	numOwnerReferences := make(map[string]int)
 	h.resourcesWithStatusSubresource = make(map[string]bool)
 	h.crdInfoToData = make(map[objInfo]unstructured.Unstructured)
-	h.namespaceInfoToData = make(map[objInfo]unstructured.Unstructured)
-	h.resourceInfoToData = make(map[objInfo]unstructured.Unstructured)
+	h.clusterscopedResourceInfoToData = make(map[objInfo]unstructured.Unstructured)
+	h.namespacedResourceInfoToData = make(map[objInfo]unstructured.Unstructured)
 	h.resourcesFromBackup = make(map[string]bool)
+
+	// user.ownerRef = secret => user.ownerRef.UID won't change
 
 	backupName := restore.Spec.BackupFilename
 
@@ -104,7 +109,15 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	if backupLocation == nil {
 		return restore, fmt.Errorf("Specify backup location during restore")
 	}
-	transformerMap, err := util.GetEncryptionTransformers(restore.Spec.EncryptionConfigName, h.secrets)
+	transformerMap := make(map[schema.GroupResource]value.Transformer)
+	var err error
+	if restore.Spec.EncryptionConfigName != "" {
+		transformerMap, err = util.GetEncryptionTransformers(restore.Spec.EncryptionConfigName, h.secrets)
+		if err != nil {
+			return restore, err
+		}
+	}
+	transformerMap, err = util.GetEncryptionTransformers(restore.Spec.EncryptionConfigName, h.secrets)
 	if err != nil {
 		return restore, err
 	}
@@ -116,7 +129,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		if resourceSelectors, err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
 			return restore, err
 		}
-		fmt.Printf("resourceInfoToData len: %v\n", len(h.resourceInfoToData))
+		fmt.Printf("clusterscopedResourceInfoToData len: %v\n", len(h.clusterscopedResourceInfoToData))
 	} else if backupLocation.S3 != nil {
 		backupFilePath, err := h.downloadFromS3(restore)
 		if err != nil {
@@ -149,38 +162,48 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return restore, err
 	}
 	timeForRestoringCRDs := time.Since(startTimeCRDs)
+	doneRestoringCRDstime := time.Now()
 	fmt.Printf("\ntime taken to restore CRDs: %v\n", timeForRestoringCRDs)
 
-	// first restore CRDs
-	startTimeNamespaces := time.Now()
-	fmt.Printf("\nStart time: %v\n", startTimeNamespaces)
-	if err := h.restoreNamespaces(created); err != nil {
-		logrus.Errorf("\nerror during restoreCRDs: %v\n", err)
-		panic(err)
-		return restore, err
-	}
-	timeForRestoringNamespaces := time.Since(startTimeNamespaces)
-	fmt.Printf("\ntime taken to restore Namespaces: %v\n", timeForRestoringNamespaces)
-	doneRestoringNsTime := time.Now()
-
 	// generate adjacency lists for dependents and ownerRefs
-	if err := h.generateDependencyGraph(ownerToDependentsList, &toRestore, numOwnerReferences); err != nil {
+	if err := h.generateDependencyGraph(ownerToDependentsList, &toRestore, numOwnerReferences, clusterScoped); err != nil {
 		logrus.Errorf("\nerror during generateDependencyGraph: %v\n", err)
 		panic(err)
 		return restore, err
 	}
-	timeForGeneratingGraph := time.Since(doneRestoringNsTime)
-	fmt.Printf("\ntime taken to generate graph: %v\n", timeForGeneratingGraph)
+	timeForGeneratingCSGraph := time.Since(doneRestoringCRDstime)
+	fmt.Printf("\ntime taken to generate graph for cluster scoped: %v\n", timeForGeneratingCSGraph)
 
-	doneGeneratingGraphTime := time.Now()
-	logrus.Infof("No-goroutines-2 time right before starting to create from graph: %v", doneGeneratingGraphTime)
+	doneGeneratingCSGraphTime := time.Now()
+	logrus.Infof("No-goroutines-2 time right before starting to create from graph: %v", doneGeneratingCSGraphTime)
 	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore); err != nil {
 		logrus.Errorf("\nerror during createFromDependencyGraph: %v\n", err)
 		panic(err)
 		return restore, err
 	}
-	timeForRestoringResources := time.Since(doneGeneratingGraphTime)
-	fmt.Printf("\ntime taken to restore resources: %v\n", timeForRestoringResources)
+	timeForRestoringResources := time.Since(doneGeneratingCSGraphTime)
+	fmt.Printf("\ntime taken to restore clusterscoped resources: %v\n", timeForRestoringResources)
+	ownerToDependentsList = make(map[string][]restoreObj)
+	toRestore = []restoreObj{}
+	doneRestoringNamespacedTime := time.Now()
+	// generate adjacency lists for dependents and ownerRefs
+	if err := h.generateDependencyGraph(ownerToDependentsList, &toRestore, numOwnerReferences, namespaceScoped); err != nil {
+		logrus.Errorf("\nerror during generateDependencyGraph: %v\n", err)
+		panic(err)
+		return restore, err
+	}
+	timeForGeneratingNamespacedGraph := time.Since(doneRestoringNamespacedTime)
+	fmt.Printf("\ntime taken to generate graph for namespace scoped: %v\n", timeForGeneratingNamespacedGraph)
+
+	doneGeneratingNamespacedGraphTime := time.Now()
+	logrus.Infof("No-goroutines-2 time right before starting to create from graph: %v", doneGeneratingNamespacedGraphTime)
+	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore); err != nil {
+		logrus.Errorf("\nerror during createFromDependencyGraph: %v\n", err)
+		panic(err)
+		return restore, err
+	}
+	timeForRestoringNamespacedResources := time.Since(doneGeneratingNamespacedGraphTime)
+	fmt.Printf("\ntime taken to restore clusterscoped resources: %v\n", timeForRestoringNamespacedResources)
 
 	if restore.Spec.Prune {
 		if err := h.prune(resourceSelectors, transformerMap, restore.Spec.DeleteTimeout); err != nil {
@@ -203,18 +226,6 @@ func (h *handler) restoreCRDs(created map[string]bool) error {
 	return nil
 }
 
-func (h *handler) restoreNamespaces(created map[string]bool) error {
-	// Both CRD apiversions have different way of indicating presence of status subresource
-	for namespaceInfo, namespaceData := range h.namespaceInfoToData {
-		err := h.restoreResource(namespaceInfo, namespaceData, false)
-		if err != nil {
-			return fmt.Errorf("restoreNamespaces: %v", err)
-		}
-		created[namespaceInfo.ConfigPath] = true
-	}
-	return nil
-}
-
 // generateDependencyGraph creates a graph "ownerToDependentsList" to track objects with ownerReferences
 // any "node" in this graph is a map entry, where key = owning object, value = list of its dependents
 // all objects that do not have ownerRefs are added to the "toRestore" list
@@ -224,12 +235,18 @@ func (h *handler) restoreNamespaces(created map[string]bool) error {
 2. creates an entry for each owner in ownerToDependentsList", with the current object in the value list
 3. gets total count of ownerRefs and adds current object to "numOwnerReferences" map to indicate the count*/
 func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int) error {
-	for resourceInfo, resourceData := range h.resourceInfoToData {
+	numOwnerReferences map[string]int, scope string) error {
+	var resourceInfoToData map[objInfo]unstructured.Unstructured
+	switch scope {
+	case clusterScoped:
+		resourceInfoToData = h.clusterscopedResourceInfoToData
+	case namespaceScoped:
+		resourceInfoToData = h.namespacedResourceInfoToData
+	}
+	for resourceInfo, resourceData := range resourceInfoToData {
 		// add to adjacency list
 		name := resourceInfo.Name
 		namespace := resourceInfo.Namespace
-		//fmt.Printf("\nnewGenerateDependencyGraph: checking for %#v\n", resourceInfo)
 		gvr := resourceInfo.GVR
 		currRestoreObj := restoreObj{
 			Name:               name,
@@ -302,7 +319,6 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 				ownerToDependentsList[ownerObj.ResourceConfigPath] = append(ownerObjDependents, currRestoreObj)
 			}
 		}
-
 		numOwnerReferences[currRestoreObj.ResourceConfigPath] = numOwners
 	}
 	return nil
@@ -337,8 +353,13 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 			GVR:        curr.GVR,
 			ConfigPath: curr.ResourceConfigPath,
 		}
-
-		if err := h.restoreResource(currResourceInfo, h.resourceInfoToData[currResourceInfo], h.resourcesWithStatusSubresource[curr.GVR.String()]); err != nil {
+		var resourceData unstructured.Unstructured
+		if curr.Namespace != "" {
+			resourceData = h.namespacedResourceInfoToData[currResourceInfo]
+		} else {
+			resourceData = h.clusterscopedResourceInfoToData[currResourceInfo]
+		}
+		if err := h.restoreResource(currResourceInfo, resourceData, h.resourcesWithStatusSubresource[curr.GVR.String()]); err != nil {
 			errList = append(errList, err)
 			continue
 		}
@@ -361,7 +382,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 }
 
 func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstructured.Unstructured, hasStatusSubresource bool) error {
-	logrus.Infof("restoreResource: Restoring %v", restoreObjInfo.Name)
+	logrus.Infof("restoreResource: Restoring %v of type %v", restoreObjInfo.Name, restoreObjInfo.GVR)
 
 	fileMap := restoreObjData.Object
 	obj := restoreObjData
@@ -383,20 +404,19 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 				// if owner not found, still restore resource but drop the ownerRefs field,
 				// because k8s terminates objects with invalid ownerRef UIDs
 				delete(obj.Object[metadataMapKey].(map[string]interface{}), ownerRefsMapKey)
+				// user.ownerRef = catalogTemplate
 			} else {
 				return err
 			}
 		}
 	}
-	//fmt.Printf("\ngvr: %v\n", gvr)
-	//fmt.Printf("\nname: %v, namespace: %v\n", name, namespace)
+
 	res, err := dr.Get(h.ctx, name, k8sv1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("restoreResource: err getting resource %v", err)
 		}
 		// create and return
-		//fmt.Printf("\n%v Does not exist, so creating\n", name)
 		createdObj, err := dr.Create(h.ctx, &obj, k8sv1.CreateOptions{})
 		if err != nil {
 			return err
@@ -410,7 +430,6 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 		}
 		return nil
 	}
-	//fmt.Printf("\n%v exist, so updating\n", name)
 	resMetadata := res.Object[metadataMapKey].(map[string]interface{})
 	resourceVersion := resMetadata["resourceVersion"].(string)
 	obj.Object[metadataMapKey].(map[string]interface{})["resourceVersion"] = resourceVersion
@@ -455,10 +474,10 @@ func (h *handler) updateOwnerRefs(ownerReferences []interface{}, namespace strin
 		}
 		// ns.OwnerRef = cluster
 		// namespace can only be owned by cluster-scoped objects, SO
-		// CRDS, cluster-scoped, then namespaced
+		// CRDs, cluster-scoped, then namespaced
 		// obj in ns A has owner ref to obj in ns B: what t
-		// TODO: restore cluster-scoped first then namespaced
 		// ns.ownerRefs
+		// https://github.com/kubernetes/kubernetes/issues/65200
 		// if owner object is namespaced, it has to be within same namespace, since per definition
 		/*
 			// OwnerReference contains enough information to let you identify an owning

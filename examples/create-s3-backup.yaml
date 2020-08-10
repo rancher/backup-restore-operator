@@ -6,10 +6,10 @@ metadata:
 spec:
   storageLocation:
     s3objectStore:
-      credentialSecretName: default/creds
+      credentialSecretName: creds
       bucketName: rajashree-backup-test
       folder: ecm1
       region: us-west-2
       endpoint: s3.us-west-2.amazonaws.com
   resourceSetName: ecm-resource-set
-  encryptionConfigName: testconfig
+  encryptionConfigName: test-encryptionconfig

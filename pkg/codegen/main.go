@@ -1,10 +1,10 @@
 package main
 
 import (
-	"github.com/mrajashree/backup/pkg/crds"
 	"os"
 
-	v1 "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
+	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/crds"
 	controllergen "github.com/rancher/wrangler/pkg/controller-gen"
 	"github.com/rancher/wrangler/pkg/controller-gen/args"
 )
@@ -12,7 +12,7 @@ import (
 func main() {
 	os.Unsetenv("GOPATH")
 	controllergen.Run(args.Options{
-		OutputPackage: "github.com/mrajashree/backup/pkg/generated",
+		OutputPackage: "github.com/rancher/backup-restore-operator/pkg/generated",
 		Boilerplate:   "scripts/boilerplate.go.txt",
 		Groups: map[string]args.Group{
 			"resources.cattle.io": {
