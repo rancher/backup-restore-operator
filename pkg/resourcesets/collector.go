@@ -1,4 +1,4 @@
-package controllers
+package resourcesets
 
 import (
 	"context"
@@ -429,3 +429,4 @@ func canListResource(verbs k8sv1.Verbs) bool {
 	}
 	return false
 }
+

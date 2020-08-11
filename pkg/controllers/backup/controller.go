@@ -14,8 +14,9 @@ import (
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	util "github.com/rancher/backup-restore-operator/pkg/controllers"
+	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	backupControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/util"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/sirupsen/logrus"
@@ -118,7 +119,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 	resourceCollectionStartTime := time.Now()
 	logrus.Infof("Started gathering resources at %v", resourceCollectionStartTime)
-	rh := util.ResourceHandler{
+	rh := resourcesets.ResourceHandler{
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
 		TransformerMap:  transformerMap,
@@ -188,7 +189,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	storageLocation := backup.Spec.StorageLocation
 	if storageLocation == nil || storageLocation.Local != "" {
 		// for local, to send backup tar to given local path, use that as the path when creating compressed file
-		if err := util.CreateTarAndGzip(tmpBackupPath, storageLocation.Local, gzipFile); err != nil {
+		if err := CreateTarAndGzip(tmpBackupPath, storageLocation.Local, gzipFile); err != nil {
 			removeDirErr := os.RemoveAll(tmpBackupPath)
 			if removeDirErr != nil {
 				return backup, errors.New(err.Error() + removeDirErr.Error())

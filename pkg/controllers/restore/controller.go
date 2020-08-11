@@ -11,8 +11,8 @@ import (
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	util "github.com/rancher/backup-restore-operator/pkg/controllers"
 	restoreControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/util"
 	lasso "github.com/rancher/lasso/pkg/client"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
@@ -116,10 +116,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		if err != nil {
 			return restore, err
 		}
-	}
-	transformerMap, err = util.GetEncryptionTransformers(restore.Spec.EncryptionConfigName, h.secrets)
-	if err != nil {
-		return restore, err
 	}
 
 	var resourceSelectors []v1.ResourceSelector

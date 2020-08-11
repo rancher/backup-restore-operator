@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	util "github.com/rancher/backup-restore-operator/pkg/controllers"
+	"github.com/rancher/backup-restore-operator/pkg/objectstore"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,7 +36,7 @@ func (h *handler) downloadFromS3(restore *v1.Restore) (string, error) {
 		accessKey, _ = s3SecretData["accessKey"].(string)
 		secretKey, _ = s3SecretData["secretKey"].(string)
 	}
-	s3Client, err := util.SetS3Service(objStore, accessKey, secretKey, false)
+	s3Client, err := objectstore.SetS3Service(objStore, accessKey, secretKey, false)
 	if err != nil {
 		return "", err
 	}
@@ -48,7 +48,7 @@ func (h *handler) downloadFromS3(restore *v1.Restore) (string, error) {
 	if len(folder) != 0 {
 		prefix = fmt.Sprintf("%s/%s", folder, prefix)
 	}
-	targetFileLocation, err := util.DownloadFromS3WithPrefix(s3Client, prefix, objStore.BucketName)
+	targetFileLocation, err := objectstore.DownloadFromS3WithPrefix(s3Client, prefix, objStore.BucketName)
 	if err != nil {
 		return "", err
 	}

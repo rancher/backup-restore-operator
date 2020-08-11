@@ -1,4 +1,4 @@
-package controllers
+package objectstore
 
 import (
 	"crypto/tls"
@@ -211,3 +211,4 @@ func isValidCertificate(c []byte) bool {
 	}
 	return true
 }
+

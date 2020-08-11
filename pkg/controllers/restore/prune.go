@@ -5,7 +5,8 @@ import (
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	util "github.com/rancher/backup-restore-operator/pkg/controllers"
+	 "github.com/rancher/backup-restore-operator/pkg/resourcesets"
+	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
@@ -24,7 +25,7 @@ type pruneResourceInfo struct {
 
 func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap map[schema.GroupResource]value.Transformer,
 	deleteTimeout int) error {
-	rh := util.ResourceHandler{
+	rh := resourcesets.ResourceHandler{
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
 		TransformerMap:  transformerMap,
@@ -47,6 +48,7 @@ func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap 
 			resourceFilePath := filepath.Join(resourcePath, objName+".json")
 			logrus.Infof("resourceFilePath: %v", resourceFilePath)
 			if !h.resourcesFromBackup[resourceFilePath] {
+				logrus.Infof("Marking resource %v for deletion")
 				resourcesToDelete = append(resourcesToDelete, pruneResourceInfo{
 					name:      objName,
 					namespace: objNs,
