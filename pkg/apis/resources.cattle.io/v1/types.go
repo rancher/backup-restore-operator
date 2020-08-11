@@ -5,6 +5,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var (
+	BackupConditionReady        = "Ready"
+	BackupConditionUploaded     = "Uploaded"
+	BackupConditionReconciling  = "Reconciling"
+	BackupConditionStalled      = "Stalled"
+	RestoreConditionReconciling = "Reconciling"
+	RestoreConditionStalled     = "Stalled"
+	RestoreConditionReady       = "Ready"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -46,18 +56,13 @@ type ResourceSelector struct {
 	LabelSelectors     *metav1.LabelSelector `json:"labelSelectors,omitempty"`
 }
 
-var (
-	BackupConditionReady     = "Ready"
-	BackupConditionUploaded  = "Uploaded"
-	BackupConditionTriggered = "Triggered"
-)
-
 type BackupStatus struct {
-	Conditions     []genericcondition.GenericCondition `json:"conditions"`
-	LastSnapshotTS string                              `json:"lastSnapshotTs"`
-	NextSnapshotAt string                              `json:"nextSnapshotAt"`
-	NumSnapshots   int                                 `json:"numSnapshots"`
-	Summary        string                              `json:"summary"`
+	Conditions         []genericcondition.GenericCondition `json:"conditions"`
+	LastSnapshotTS     string                              `json:"lastSnapshotTs"`
+	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
+	NumSnapshots       int                                 `json:"numSnapshots"`
+	ObservedGeneration int64                               `json:"observedGeneration"`
+	Summary            string                              `json:"summary"`
 }
 
 type StorageLocation struct {
@@ -96,6 +101,7 @@ type RestoreSpec struct {
 
 type RestoreStatus struct {
 	Conditions          []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	Summary             string                              `json:"summary,omitempty"`
 	RestoreCompletionTS string                              `json:"restoreCompletionTs"`
+	ObservedGeneration  int64                               `json:"observedGeneration"`
+	Summary             string                              `json:"summary,omitempty"`
 }

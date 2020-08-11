@@ -46,23 +46,21 @@ func Register(
 	secrets v1core.SecretController,
 	namespaces v1core.NamespaceController,
 	clientSet *clientset.Clientset,
-	dynamicInterface dynamic.Interface) {
+	dynamicInterface dynamic.Interface,
+	defaultBackupLocation string) {
 
 	controller := &handler{
-		ctx:             ctx,
-		backups:         backups,
-		resourceSets:    backupTemplates,
-		secrets:         secrets,
-		namespaces:      namespaces,
-		discoveryClient: clientSet.Discovery(),
-		dynamicClient:   dynamicInterface,
+		ctx:                   ctx,
+		backups:               backups,
+		resourceSets:          backupTemplates,
+		secrets:               secrets,
+		namespaces:            namespaces,
+		discoveryClient:       clientSet.Discovery(),
+		dynamicClient:         dynamicInterface,
+		defaultBackupLocation: defaultBackupLocation,
 	}
-	defaultLocation, err := ioutil.TempDir("", "defaultbackuplocation")
-	if err != nil {
-		logrus.Errorf("Error setting default location")
-	}
-	controller.defaultBackupLocation = defaultLocation
-	logrus.Infof("Default location for storing backups is %v", defaultLocation)
+
+	logrus.Infof("Default location for storing backups is %v", controller.defaultBackupLocation)
 	// Register handlers
 	backups.OnChange(ctx, "backups", controller.OnBackupChange)
 }
@@ -71,7 +69,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if backup == nil || backup.DeletionTimestamp != nil {
 		return backup, nil
 	}
-	//if condition.Cond(v1.BackupConditionReady).IsTrue(backup) && condition.Cond(v1.BackupConditionUploaded).IsTrue(backup) {
 	if backup.Status.LastSnapshotTS != "" {
 		if backup.Spec.Schedule == "" {
 			// one time backup
@@ -83,7 +80,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		if backup.Status.NextSnapshotAt != "" {
 			nextSnapshotTime, err := time.Parse(time.RFC3339, backup.Status.NextSnapshotAt)
 			if err != nil {
-				return backup, err
+				return h.setReconcilingCondition(backup, err)
 			}
 			if nextSnapshotTime.After(time.Now().Round(time.Minute)) {
 				return backup, nil
@@ -91,152 +88,39 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		}
 	}
 
-	kubeSystemNS, err := h.namespaces.Get("kube-system", k8sv1.GetOptions{})
+	backupFileName, err := h.generateBackupFilename(backup)
 	if err != nil {
-		return backup, err
+		return h.setReconcilingCondition(backup, err)
 	}
-
-	currSnapshotTS := time.Now().Format(time.RFC3339)
-	// on OS X writing file with `:` converts colon to forward slash
-	currTSForFilename := strings.Replace(currSnapshotTS, ":", "#", -1)
-	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, kubeSystemNS.UID, currTSForFilename)
 
 	// create a temp dir to write all backup files to, delete this before returning
 	// empty dir in ioutil.TempDir defaults to os.TempDir
 	tmpBackupPath, err := ioutil.TempDir("", backupFileName)
 	if err != nil {
-		return backup, fmt.Errorf("error creating temp dir: %v", err)
+		return h.setReconcilingCondition(backup, fmt.Errorf("error creating temp dir: %v", err))
 	}
 	logrus.Infof("Temporary backup path is %v", tmpBackupPath)
 
-	transformerMap := make(map[schema.GroupResource]value.Transformer)
-	if backup.Spec.EncryptionConfigName != "" {
-		transformerMap, err = util.GetEncryptionTransformers(backup.Spec.EncryptionConfigName, h.secrets)
-		if err != nil {
-			removeDirErr := os.RemoveAll(tmpBackupPath)
-			if removeDirErr != nil {
-				return backup, errors.New(err.Error() + removeDirErr.Error())
-			}
-			return backup, err
-		}
-	}
-
-	resourceSetTemplate, err := h.resourceSets.Get(backup.Namespace, backup.Spec.ResourceSetName, k8sv1.GetOptions{})
-	if err != nil {
+	if err := h.performBackup(backup, tmpBackupPath, backupFileName); err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
-			return backup, errors.New(err.Error() + removeDirErr.Error())
-		}
-		return backup, err
-	}
-	resourceCollectionStartTime := time.Now()
-	logrus.Infof("Started gathering resources at %v", resourceCollectionStartTime)
-	rh := resourcesets.ResourceHandler{
-		DiscoveryClient: h.discoveryClient,
-		DynamicClient:   h.dynamicClient,
-		TransformerMap:  transformerMap,
-	}
-	resourcesWithStatusSubresource, err := rh.GatherResources(h.ctx, resourceSetTemplate.ResourceSelectors)
-	if err != nil {
-		removeDirErr := os.RemoveAll(tmpBackupPath)
-		if removeDirErr != nil {
-			return backup, errors.New(err.Error() + removeDirErr.Error())
-		}
-		return backup, err
-	}
-	err = rh.WriteBackupObjects(tmpBackupPath)
-	if err != nil {
-		removeDirErr := os.RemoveAll(tmpBackupPath)
-		if removeDirErr != nil {
-			return backup, errors.New(err.Error() + removeDirErr.Error())
-		}
-		return backup, err
-	}
-	timeTakenToCollectResources := time.Since(resourceCollectionStartTime)
-	logrus.Infof("time taken to collect resources: %v", timeTakenToCollectResources)
-	filters, err := json.Marshal(resourceSetTemplate.ResourceSelectors)
-	if err != nil {
-		removeDirErr := os.RemoveAll(tmpBackupPath)
-		if removeDirErr != nil {
-			return backup, errors.New(err.Error() + removeDirErr.Error())
-		}
-		return backup, err
-	}
-	filtersPath := filepath.Join(tmpBackupPath, "filters")
-	err = os.Mkdir(filtersPath, os.ModePerm)
-	if err != nil {
-		removeDirErr := os.RemoveAll(tmpBackupPath)
-		if removeDirErr != nil {
-			return backup, errors.New(err.Error() + removeDirErr.Error())
-		}
-	}
-	err = ioutil.WriteFile(filepath.Join(filtersPath, "filters.json"), filters, os.ModePerm)
-	if err != nil {
-		removeDirErr := os.RemoveAll(tmpBackupPath)
-		if removeDirErr != nil {
-			return backup, errors.New(err.Error() + removeDirErr.Error())
-		}
-		return backup, err
-	}
-	subresources, err := json.Marshal(resourcesWithStatusSubresource)
-	if err != nil {
-		removeDirErr := os.RemoveAll(tmpBackupPath)
-		if removeDirErr != nil {
-			return backup, errors.New(err.Error() + removeDirErr.Error())
-		}
-		return backup, err
-
-	}
-	err = ioutil.WriteFile(filepath.Join(filtersPath, "statussubresource.json"), subresources, os.ModePerm)
-	if err != nil {
-		removeDirErr := os.RemoveAll(tmpBackupPath)
-		if removeDirErr != nil {
-			return backup, errors.New(err.Error() + removeDirErr.Error())
+			return h.setReconcilingCondition(backup, errors.New(err.Error()+removeDirErr.Error()))
 		}
 		return backup, err
 	}
 
-	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
-	gzipFile := backupFileName + ".tar.gz"
-	storageLocation := backup.Spec.StorageLocation
-	if storageLocation == nil {
-		if err := CreateTarAndGzip(tmpBackupPath, h.defaultBackupLocation, gzipFile); err != nil {
-			removeDirErr := os.RemoveAll(tmpBackupPath)
-			if removeDirErr != nil {
-				return backup, errors.New(err.Error() + removeDirErr.Error())
-			}
-			return backup, err
-		}
-	} else if storageLocation.Local != "" {
-		// for local, to send backup tar to given local path, use that as the path when creating compressed file
-		if err := CreateTarAndGzip(tmpBackupPath, storageLocation.Local, gzipFile); err != nil {
-			removeDirErr := os.RemoveAll(tmpBackupPath)
-			if removeDirErr != nil {
-				return backup, errors.New(err.Error() + removeDirErr.Error())
-			}
-			return backup, err
-		}
-	} else if storageLocation.S3 != nil {
-		if err := h.uploadToS3(backup.Namespace, storageLocation.S3, tmpBackupPath, gzipFile); err != nil {
-			removeDirErr := os.RemoveAll(tmpBackupPath)
-			if removeDirErr != nil {
-				return backup, errors.New(err.Error() + removeDirErr.Error())
-			}
-			return backup, err
-		}
-	}
 	if err := os.RemoveAll(tmpBackupPath); err != nil {
-		return backup, err
+		return h.setReconcilingCondition(backup, err)
 	}
 
 	condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
 
-	backup.Status.LastSnapshotTS = currSnapshotTS
+	backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
 	backup.Status.NumSnapshots++
 	if backup.Spec.Schedule != "" {
 		cronSchedule, err := cron.ParseStandard(backup.Spec.Schedule)
 		if err != nil {
-			return backup, err
+			return h.setReconcilingCondition(backup, err)
 		}
 		nextBackupAt := cronSchedule.Next(time.Now()).Round(time.Minute)
 		backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
@@ -247,11 +131,111 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		//	snapshotsToRemove
 		//}
 	}
-
+	backup.Status.ObservedGeneration = backup.Generation
 	if updBackup, err := h.backups.UpdateStatus(backup); err != nil {
-		return updBackup, err
+		return h.setReconcilingCondition(updBackup, err)
 	}
 	logrus.Infof("Done with backup")
 
 	return backup, err
+}
+
+func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName string) error {
+	var err error
+	transformerMap := make(map[schema.GroupResource]value.Transformer)
+	if backup.Spec.EncryptionConfigName != "" {
+		transformerMap, err = util.GetEncryptionTransformers(backup.Spec.EncryptionConfigName, h.secrets)
+		if err != nil {
+			return err
+		}
+	}
+
+	resourceSetTemplate, err := h.resourceSets.Get(backup.Namespace, backup.Spec.ResourceSetName, k8sv1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	resourceCollectionStartTime := time.Now()
+	logrus.Infof("Started gathering resources at %v", resourceCollectionStartTime)
+	rh := resourcesets.ResourceHandler{
+		DiscoveryClient: h.discoveryClient,
+		DynamicClient:   h.dynamicClient,
+		TransformerMap:  transformerMap,
+	}
+	resourcesWithStatusSubresource, err := rh.GatherResources(h.ctx, resourceSetTemplate.ResourceSelectors)
+	if err != nil {
+		return err
+	}
+
+	err = rh.WriteBackupObjects(tmpBackupPath)
+	if err != nil {
+		return err
+	}
+	timeTakenToCollectResources := time.Since(resourceCollectionStartTime)
+	logrus.Infof("time taken to collect resources: %v", timeTakenToCollectResources)
+	filters, err := json.Marshal(resourceSetTemplate.ResourceSelectors)
+	if err != nil {
+		return err
+	}
+	filtersPath := filepath.Join(tmpBackupPath, "filters")
+	err = os.Mkdir(filtersPath, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(filepath.Join(filtersPath, "filters.json"), filters, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	subresources, err := json.Marshal(resourcesWithStatusSubresource)
+	if err != nil {
+		return err
+
+	}
+	err = ioutil.WriteFile(filepath.Join(filtersPath, "statussubresource.json"), subresources, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
+
+	gzipFile := backupFileName + ".tar.gz"
+	storageLocation := backup.Spec.StorageLocation
+	if storageLocation == nil {
+		if err := CreateTarAndGzip(tmpBackupPath, h.defaultBackupLocation, gzipFile); err != nil {
+			return err
+		}
+	} else if storageLocation.Local != "" {
+		// for local, to send backup tar to given local path, use that as the path when creating compressed file
+		if err := CreateTarAndGzip(tmpBackupPath, storageLocation.Local, gzipFile); err != nil {
+			return err
+		}
+	} else if storageLocation.S3 != nil {
+		if err := h.uploadToS3(backup.Namespace, storageLocation.S3, tmpBackupPath, gzipFile); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (h *handler) generateBackupFilename(backup *v1.Backup) (string, error) {
+	kubeSystemNS, err := h.namespaces.Get("kube-system", k8sv1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	currSnapshotTS := time.Now().Format(time.RFC3339)
+	// on OS X writing file with `:` converts colon to forward slash
+	currTSForFilename := strings.Replace(currSnapshotTS, ":", "#", -1)
+	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, kubeSystemNS.UID, currTSForFilename)
+	return backupFileName, nil
+}
+
+// https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
+// Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
+func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) (*v1.Backup, error) {
+	condition.Cond(v1.BackupConditionReconciling).SetStatusBool(backup, true)
+	if updBackup, err := h.backups.UpdateStatus(backup); err != nil {
+		return updBackup, errors.New(originalErr.Error() + err.Error())
+	}
+	return backup, originalErr
 }

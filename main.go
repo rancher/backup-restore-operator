@@ -8,7 +8,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-
 	"github.com/rancher/backup-restore-operator/pkg/controllers/backup"
 	"github.com/rancher/backup-restore-operator/pkg/controllers/restore"
 	"github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io"
@@ -20,14 +19,16 @@ import (
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/rancher/wrangler/pkg/start"
 	"github.com/sirupsen/logrus"
+	"io/ioutil"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/dynamic"
 )
 
 var (
-	Version    = "v0.0.0-dev"
-	GitCommit  = "HEAD"
-	KubeConfig string
+	Version                   = "v0.0.0-dev"
+	GitCommit                 = "HEAD"
+	KubeConfig                string
+	DefaultTempBackupLocation = "defaultbackuplocation"
 )
 
 func init() {
@@ -75,14 +76,18 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Error generating shared client factory: %s", err.Error())
 	}
+
+	defaultLocation, err := ioutil.TempDir("", DefaultTempBackupLocation)
+	if err != nil {
+		logrus.Errorf("Error setting default location")
+	}
 	backup.Register(ctx, backups.Resources().V1().Backup(), backups.Resources().V1().ResourceSet(),
 		core.Core().V1().Secret(),
 		core.Core().V1().Namespace(),
-		clientSet, dynamicInterace)
+		clientSet, dynamicInterace, defaultLocation)
 	restore.Register(ctx, backups.Resources().V1().Restore(), backups.Resources().V1().Backup(),
 		core.Core().V1().Secret(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
 
-	//backup.StartRecurringBackupsDaemon(ctx, backups.Resources().V1().Backup(), "")
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
 	}

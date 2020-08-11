@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"k8s.io/apiserver/pkg/storage/value"
+	"github.com/rancher/wrangler/pkg/condition"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +23,7 @@ import (
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 )
@@ -111,14 +112,14 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 	backupLocation := restore.Spec.StorageLocation
 	if backupLocation == nil {
-		return restore, fmt.Errorf("Specify backup location during restore")
+		return h.setReconcilingCondition(restore, fmt.Errorf("specify backup location during restore"))
 	}
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
 	var err error
 	if restore.Spec.EncryptionConfigName != "" {
 		transformerMap, err = util.GetEncryptionTransformers(restore.Spec.EncryptionConfigName, h.secrets)
 		if err != nil {
-			return restore, err
+			return h.setReconcilingCondition(restore, err)
 		}
 	}
 
@@ -127,91 +128,77 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		// if local, backup tar.gz must be added to the "Local" path
 		backupFilePath := filepath.Join(backupLocation.Local, backupName)
 		if resourceSelectors, err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
-			return restore, err
+			return h.setReconcilingCondition(restore, err)
 		}
 		fmt.Printf("clusterscopedResourceInfoToData len: %v\n", len(h.clusterscopedResourceInfoToData))
 	} else if backupLocation.S3 != nil {
 		backupFilePath, err := h.downloadFromS3(restore)
 		if err != nil {
-			removeFileErr := os.Remove(backupFilePath)
-			if removeFileErr != nil {
-				return restore, errors.New(err.Error() + removeFileErr.Error())
-			}
-			return restore, err
+			return h.setReconcilingCondition(restore, err)
 		}
 		if resourceSelectors, err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
-			removeFileErr := os.Remove(backupFilePath)
-			if removeFileErr != nil {
-				return restore, errors.New(err.Error() + removeFileErr.Error())
-			}
-			return restore, err
+			return h.setReconcilingCondition(restore, err)
 		}
-		// remove the downloaded gzip file from s3 as contents are untar/unzipped at the temp location by this point
+		// remove the downloaded gzip file from s3
 		removeFileErr := os.Remove(backupFilePath)
 		if removeFileErr != nil {
-			return restore, errors.New(err.Error() + removeFileErr.Error())
+			return restore, removeFileErr
 		}
 	}
 
 	// first restore CRDs
 	startTimeCRDs := time.Now()
-	fmt.Printf("\nStart time: %v\n", startTimeCRDs)
+	logrus.Infof("Starting to restore CRDs at %v", startTimeCRDs)
 	if err := h.restoreCRDs(created); err != nil {
-		logrus.Errorf("\nerror during restoreCRDs: %v\n", err)
-		panic(err)
-		return restore, err
+		return h.setReconcilingCondition(restore, err)
 	}
 	timeForRestoringCRDs := time.Since(startTimeCRDs)
 	doneRestoringCRDstime := time.Now()
-	fmt.Printf("\ntime taken to restore CRDs: %v\n", timeForRestoringCRDs)
+	logrus.Infof("Time taken to restore CRDs: %v", timeForRestoringCRDs)
 
-	// generate adjacency lists for dependents and ownerRefs
+	// generate adjacency lists for dependents and ownerRefs first for clusterscoped resources
 	if err := h.generateDependencyGraph(ownerToDependentsList, &toRestore, numOwnerReferences, clusterScoped); err != nil {
-		logrus.Errorf("\nerror during generateDependencyGraph: %v\n", err)
-		panic(err)
-		return restore, err
+		return h.setReconcilingCondition(restore, err)
 	}
 	timeForGeneratingCSGraph := time.Since(doneRestoringCRDstime)
-	fmt.Printf("\ntime taken to generate graph for cluster scoped: %v\n", timeForGeneratingCSGraph)
+	logrus.Infof("Time taken to generate graph for clusterscoped resources: %v", timeForGeneratingCSGraph)
 
 	doneGeneratingCSGraphTime := time.Now()
-	logrus.Infof("No-goroutines-2 time right before starting to create from graph: %v", doneGeneratingCSGraphTime)
+	logrus.Infof("Starting to restore clusterscoped resources at %v", doneGeneratingCSGraphTime)
 	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore); err != nil {
-		logrus.Errorf("\nerror during createFromDependencyGraph: %v\n", err)
-		panic(err)
-		return restore, err
+		return h.setReconcilingCondition(restore, err)
 	}
 	timeForRestoringResources := time.Since(doneGeneratingCSGraphTime)
-	fmt.Printf("\ntime taken to restore clusterscoped resources: %v\n", timeForRestoringResources)
+	logrus.Infof("Time taken to restore clusterscoped resources: %v\n", timeForRestoringResources)
+
+	// now generate adjacency lists for dependents and ownerRefs for namespaced resources
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
 	doneRestoringNamespacedTime := time.Now()
 	// generate adjacency lists for dependents and ownerRefs
 	if err := h.generateDependencyGraph(ownerToDependentsList, &toRestore, numOwnerReferences, namespaceScoped); err != nil {
-		logrus.Errorf("\nerror during generateDependencyGraph: %v\n", err)
-		panic(err)
-		return restore, err
+		return h.setReconcilingCondition(restore, err)
 	}
 	timeForGeneratingNamespacedGraph := time.Since(doneRestoringNamespacedTime)
-	fmt.Printf("\ntime taken to generate graph for namespace scoped: %v\n", timeForGeneratingNamespacedGraph)
+	logrus.Infof("Time taken to generate graph for namespace scoped: %v", timeForGeneratingNamespacedGraph)
 
 	doneGeneratingNamespacedGraphTime := time.Now()
-	logrus.Infof("No-goroutines-2 time right before starting to create from graph: %v", doneGeneratingNamespacedGraphTime)
+	logrus.Infof("Starting to restore namespaced resources at %v", doneGeneratingNamespacedGraphTime)
 	if err := h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, toRestore); err != nil {
-		logrus.Errorf("\nerror during createFromDependencyGraph: %v\n", err)
-		panic(err)
-		return restore, err
+		return h.setReconcilingCondition(restore, err)
 	}
 	timeForRestoringNamespacedResources := time.Since(doneGeneratingNamespacedGraphTime)
-	fmt.Printf("\ntime taken to restore clusterscoped resources: %v\n", timeForRestoringNamespacedResources)
+	logrus.Infof("Time taken to restore namespaced resources: %v", timeForRestoringNamespacedResources)
 
 	// prune by default
 	if restore.Spec.Prune == nil || *restore.Spec.Prune == true {
 		if err := h.prune(resourceSelectors, transformerMap, restore.Spec.DeleteTimeout); err != nil {
-			return restore, fmt.Errorf("error pruning during restore: %v", err)
+			return h.setReconcilingCondition(restore, fmt.Errorf("error pruning during restore: %v", err))
 		}
 	}
 	restore.Status.RestoreCompletionTS = time.Now().Format(time.RFC3339)
+	condition.Cond(v1.RestoreConditionReady).SetStatusBool(restore, true)
+	restore.Status.ObservedGeneration = restore.Generation
 	_, err = h.restores.UpdateStatus(restore)
 	logrus.Infof("Done restoring")
 	return restore, err
@@ -335,7 +322,6 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 	}
 	countRestored := 0
 	var errList []error
-	fmt.Printf("\nlen toRestore: %v\n", len(toRestore))
 	for len(toRestore) > 0 {
 		curr := toRestore[0]
 		if len(toRestore) == 1 {
@@ -380,7 +366,6 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		countRestored++
 	}
 	// TODO: LOG all skipped objects with reasons
-	fmt.Printf("\nTotal restored resources final: %v\n", countRestored)
 	return util.ErrList(errList)
 }
 
@@ -495,7 +480,6 @@ func (h *handler) updateOwnerRefs(ownerReferences []interface{}, namespace strin
 		if err != nil {
 			// not found error should be handled separately
 			if apierrors.IsNotFound(err) {
-				fmt.Printf("\nOwner's new UID not found, err: %v\n", err)
 				return err
 			}
 			// obj in ns A has owner ref to obj in ns B: check what err is, mostly not found
@@ -536,4 +520,14 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 	gr := schema.ParseGroupResource(resource + "." + group)
 	gvr := gr.WithVersion(version)
 	return gvr
+}
+
+// https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
+// Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
+func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error) (*v1.Restore, error) {
+	condition.Cond(v1.RestoreConditionReconciling).SetStatusBool(restore, true)
+	if updRestore, err := h.restores.UpdateStatus(restore); err != nil {
+		return updRestore, errors.New(originalErr.Error() + err.Error())
+	}
+	return restore, originalErr
 }
