@@ -56,100 +56,105 @@ func (h *handler) downloadFromS3(restore *v1.Restore) (string, error) {
 }
 
 // very initial parts: https://medium.com/@skdomino/taring-untaring-files-in-go-6b07cf56bc07
-func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schema.GroupResource]value.Transformer) ([]v1.ResourceSelector, error) {
-	var additionalAuthenticatedData, name, namespace string
-	var resourceSelectors []v1.ResourceSelector
-
+func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schema.GroupResource]value.Transformer) error {
 	r, err := os.Open(tarGzFilePath)
 	if err != nil {
-		return resourceSelectors, fmt.Errorf("error opening tar.gz backup fike %v", err)
+		return fmt.Errorf("error opening tar.gz backup fike %v", err)
 	}
 
 	gz, err := gzip.NewReader(r)
 	if err != nil {
-		return resourceSelectors, err
+		return err
 	}
 	tarball := tar.NewReader(gz)
 
 	for {
 		tarContent, err := tarball.Next()
 		if err == io.EOF {
-			return resourceSelectors, nil
+			return nil
 		}
 		if err != nil {
-			return resourceSelectors, err
+			return err
 		}
 		if tarContent.Typeflag != tar.TypeReg {
 			continue
 		}
 		readData, err := ioutil.ReadAll(tarball)
 		if err != nil {
-			return resourceSelectors, err
+			return err
 		}
-		// tarContent.Name = serviceaccounts.#v1/cattle-system/cattle.json OR users.management.cattle.io#v3/u-lqx8j.json
 		if strings.Contains(tarContent.Name, "filters") {
-			// TODO: generate resourceSet and statussubresource map
 			if strings.Contains(tarContent.Name, "filters.json") {
-				if err := json.Unmarshal(readData, &resourceSelectors); err != nil {
-					return resourceSelectors, fmt.Errorf("error unmarshaling backup filters file: %v", err)
+				if err := json.Unmarshal(readData, &h.resourceSelectors); err != nil {
+					return fmt.Errorf("error unmarshaling backup filters file: %v", err)
 				}
 			}
 			if strings.Contains(tarContent.Name, "statussubresource.json") {
 				if err := json.Unmarshal(readData, &h.resourcesWithStatusSubresource); err != nil {
-					return resourceSelectors, fmt.Errorf("error unmarshaling backup filters file: %v", err)
+					return fmt.Errorf("error unmarshaling status subresource info file: %v", err)
 				}
 			}
 			continue
 		}
-		h.resourcesFromBackup[tarContent.Name] = true
-		splitPath := strings.Split(tarContent.Name, "/")
-		if len(splitPath) == 2 {
-			// cluster scoped resource, since no subdir for namespace
-			name = strings.TrimSuffix(splitPath[1], ".json")
-			additionalAuthenticatedData = name
-		} else {
-			// namespaced resource, splitPath[0] =  serviceaccounts.#v1, splitPath[1] = namespace
-			name = strings.TrimSuffix(splitPath[2], ".json")
-			namespace = splitPath[1]
-			additionalAuthenticatedData = fmt.Sprintf("%s#%s", namespace, name)
-		}
-		gvrStr := splitPath[0]
-		gvr := getGVR(gvrStr)
 
-		decryptionTransformer := transformerMap[gvr.GroupResource()]
-		if decryptionTransformer != nil {
-			var encryptedBytes []byte
-			if err := json.Unmarshal(readData, &encryptedBytes); err != nil {
-				return resourceSelectors, err
-			}
-			decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(additionalAuthenticatedData))
-			if err != nil {
-				return resourceSelectors, err
-			}
-			readData = decrypted
-		}
-		fileMap := make(map[string]interface{})
-		err = json.Unmarshal(readData, &fileMap)
+		// tarContent.Name = serviceaccounts.#v1/cattle-system/cattle.json OR users.management.cattle.io#v3/u-lqx8j.json
+		err = h.loadDataFromFile(tarContent, readData, transformerMap)
 		if err != nil {
-			return resourceSelectors, err
+			return err
 		}
-		info := objInfo{
-			Name:       name,
-			GVR:        gvr,
-			ConfigPath: tarContent.Name,
-		}
-		if strings.EqualFold(gvr.Resource, "customresourcedefinitions") {
-			h.crdInfoToData[info] = unstructured.Unstructured{Object: fileMap}
-		} else {
-			if namespace != "" {
-				info.Namespace = namespace
-				h.namespacedResourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
-			} else {
-				h.clusterscopedResourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
-			}
-		}
-
-		// unsetting namespace for the next resource
-		namespace = ""
 	}
+}
+
+func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
+	transformerMap map[schema.GroupResource]value.Transformer) error {
+	var name, namespace, additionalAuthenticatedData string
+
+	h.resourcesFromBackup[tarContent.Name] = true
+	splitPath := strings.Split(tarContent.Name, "/")
+	if len(splitPath) == 2 {
+		// cluster scoped resource, since no subdir for namespace
+		name = strings.TrimSuffix(splitPath[1], ".json")
+		additionalAuthenticatedData = name
+	} else {
+		// namespaced resource, splitPath[0] =  serviceaccounts.#v1, splitPath[1] = namespace
+		name = strings.TrimSuffix(splitPath[2], ".json")
+		namespace = splitPath[1]
+		additionalAuthenticatedData = fmt.Sprintf("%s#%s", namespace, name)
+	}
+	gvrStr := splitPath[0]
+	gvr := getGVR(gvrStr)
+
+	decryptionTransformer := transformerMap[gvr.GroupResource()]
+	if decryptionTransformer != nil {
+		var encryptedBytes []byte
+		if err := json.Unmarshal(readData, &encryptedBytes); err != nil {
+			return err
+		}
+		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(additionalAuthenticatedData))
+		if err != nil {
+			return err
+		}
+		readData = decrypted
+	}
+	fileMap := make(map[string]interface{})
+	err := json.Unmarshal(readData, &fileMap)
+	if err != nil {
+		return err
+	}
+	info := objInfo{
+		Name:       name,
+		GVR:        gvr,
+		ConfigPath: tarContent.Name,
+	}
+	if strings.EqualFold(gvr.Resource, "customresourcedefinitions") {
+		h.crdInfoToData[info] = unstructured.Unstructured{Object: fileMap}
+	} else {
+		if namespace != "" {
+			info.Namespace = namespace
+			h.namespacedResourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
+		} else {
+			h.clusterscopedResourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
+		}
+	}
+	return nil
 }

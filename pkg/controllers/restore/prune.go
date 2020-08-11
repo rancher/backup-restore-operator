@@ -5,7 +5,7 @@ import (
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	 "github.com/rancher/backup-restore-operator/pkg/resourcesets"
+	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -25,6 +25,7 @@ type pruneResourceInfo struct {
 
 func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap map[schema.GroupResource]value.Transformer,
 	deleteTimeout int) error {
+	var resourcesToDelete []pruneResourceInfo
 	rh := resourcesets.ResourceHandler{
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
@@ -34,7 +35,7 @@ func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap 
 	if _, err := rh.GatherResources(h.ctx, resourceSelectors); err != nil {
 		return err
 	}
-	var resourcesToDelete []pruneResourceInfo
+
 	for gvResource, resObjects := range rh.GVResourceToObjects {
 		for _, resObj := range resObjects {
 			metadata := resObj.Object["metadata"].(map[string]interface{})
