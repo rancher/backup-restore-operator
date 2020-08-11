@@ -98,6 +98,9 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	if restore.Status.RestoreCompletionTS != "" {
 		return restore, nil
 	}
+	backupName := restore.Spec.BackupFilename
+	logrus.Infof("Restoring from backup %v", restore.Spec.BackupFilename)
+
 	created := make(map[string]bool)
 	ownerToDependentsList := make(map[string][]restoreObj)
 	var toRestore []restoreObj
@@ -108,15 +111,15 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	h.namespacedResourceInfoToData = make(map[objInfo]unstructured.Unstructured)
 	h.resourcesFromBackup = make(map[string]bool)
 
-	backupName := restore.Spec.BackupFilename
-
 	backupLocation := restore.Spec.StorageLocation
 	if backupLocation == nil {
 		return h.setReconcilingCondition(restore, fmt.Errorf("specify backup location during restore"))
 	}
+
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
 	var err error
 	if restore.Spec.EncryptionConfigName != "" {
+		logrus.Infof("Processing encryption config %v for restore CR %v", restore.Spec.EncryptionConfigName, restore.Name)
 		transformerMap, err = util.GetEncryptionTransformers(restore.Spec.EncryptionConfigName, h.secrets)
 		if err != nil {
 			return h.setReconcilingCondition(restore, err)
@@ -125,12 +128,11 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 	var resourceSelectors []v1.ResourceSelector
 	if backupLocation.Local != "" {
-		// if local, backup tar.gz must be added to the "Local" path
+		// if local, backup tar.gz must be present at the "Local" path
 		backupFilePath := filepath.Join(backupLocation.Local, backupName)
 		if resourceSelectors, err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
 			return h.setReconcilingCondition(restore, err)
 		}
-		fmt.Printf("clusterscopedResourceInfoToData len: %v\n", len(h.clusterscopedResourceInfoToData))
 	} else if backupLocation.S3 != nil {
 		backupFilePath, err := h.downloadFromS3(restore)
 		if err != nil {

@@ -50,10 +50,9 @@ type ResourceHandler struct {
 	All namespaces that match resourceNamesRegex, also local ns is backed up
 */
 func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors []v1.ResourceSelector) (map[string]bool, error) {
-	var resourceVersion string
 	resourcesWithStatusSubresource := make(map[string]bool)
 	h.GVResourceToObjects = make(map[GVResource][]unstructured.Unstructured)
-	var gatheredResources []unstructured.Unstructured
+
 	for _, resourceSelector := range resourceSelectors {
 		resourceList, err := h.gatherResourcesForGroupVersion(resourceSelector)
 		if err != nil {
@@ -63,14 +62,14 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 		if err != nil {
 			return resourcesWithStatusSubresource, err
 		}
-		var objectsForCurrGVResource []unstructured.Unstructured
 		currGVResource := GVResource{GroupVersion: gv}
 		for _, res := range resourceList {
 			currGVResource.Name = res.Name
 			currGVResource.Namespaced = res.Namespaced
-			// this is a subresource, check if its a status subsubresource
+
 			split := strings.SplitN(res.Name, "/", 2)
 			if len(split) == 2 {
+				// if this is a subresource, check if its a status subsubresource
 				if split[1] == "status" && split[0] != "customresourcedefinitions" && slice.ContainsString(res.Verbs, "update") {
 					// this resource has status subresource and it accepts "update" verb, so we need to call UpdateStatus on it during restore
 					// we need to save names of such objects
@@ -80,18 +79,18 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 				continue
 			}
 
-			// check for all rancher objects
+			// TODO: check for all rancher objects, use GET calls
 			if skipBackup(res) {
 				continue
 			}
 
-			filteredObjects, err := h.gatherObjectsForResource(ctx, res, gv, resourceSelector, resourceVersion)
+			filteredObjects, err := h.gatherObjectsForResource(ctx, res, gv, resourceSelector)
 			if err != nil {
 				return resourcesWithStatusSubresource, err
 			}
-			objectsForCurrGVResource = append(objectsForCurrGVResource, filteredObjects...)
+			// currGVResource contains GV for resource type, its name and if its namespaced or not,
+			// exmaple: gv=v1, name=secrets, namespaced=true; filteredObjects are all the objects matching the resourceSelector
 			h.GVResourceToObjects[currGVResource] = filteredObjects
-			gatheredResources = append(gatheredResources, filteredObjects...)
 		}
 	}
 	return resourcesWithStatusSubresource, nil
@@ -99,7 +98,9 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 
 func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelector) ([]k8sv1.APIResource, error) {
 	var resourceList, resourceListFromRegex, resourceListFromNames []k8sv1.APIResource
+
 	groupVersion := filter.ApiGroup
+	logrus.Infof("Gathering resources for groupVersion: %v", groupVersion)
 
 	// first list all resources for given groupversion using discovery API
 	resources, err := h.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
@@ -126,7 +127,7 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 			if !matched {
 				continue
 			}
-			logrus.Infof("resource kind %v matched regex %v\n", res.Name, filter.KindsRegexp)
+			logrus.Infof("resource kind %v matched regex %v", res.Name, filter.KindsRegexp)
 			resourceListFromRegex = append(resourceListFromRegex, res)
 		}
 	}
@@ -144,6 +145,7 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 		}
 		for _, res := range resources.APIResources {
 			if resourceTypesToInclude[res.Name] && !resourceListAfterRegexMatch[res.Name] {
+				logrus.Infof("resource kind %v found in list of resources to include %v", res.Name)
 				resourceListFromNames = append(resourceListFromNames, res)
 			}
 		}
@@ -153,15 +155,14 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 	return resourceList, nil
 }
 
-func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.ResourceSelector, resourceVersion string) ([]unstructured.Unstructured, error) {
+func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.ResourceSelector) ([]unstructured.Unstructured, error) {
 	var filteredByNamespace, filteredObjects []unstructured.Unstructured
-
 	gvr := gv.WithResource(res.Name)
 	var dr dynamic.ResourceInterface
 	dr = h.DynamicClient.Resource(gvr)
 
 	// only resources that match name+namespace+label combination will be backed up, so we can filter in any order
-	filteredByName, err := h.filterByNameAndLabel(ctx, dr, filter, resourceVersion)
+	filteredByName, err := h.filterByNameAndLabel(ctx, dr, filter)
 	if err != nil {
 		return filteredObjects, err
 	}
@@ -180,7 +181,7 @@ func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv
 	return filteredObjects, nil
 }
 
-func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector, resourceVersion string) ([]unstructured.Unstructured, error) {
+func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector) ([]unstructured.Unstructured, error) {
 	var filteredByName, filteredByResourceNames []unstructured.Unstructured
 	var fieldSelector, labelSelector string
 
@@ -190,14 +191,13 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 			return filteredByName, err
 		}
 		labelSelector = labels.SelectorFromSet(labelMap).String()
+		logrus.Infof("Listing objects using label selector %v", labelSelector)
 	}
 
-	//resourceObjectsList, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: labelSelector, ResourceVersion: resourceVersion})
 	resourceObjectsList, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
 		return filteredByName, err
 	}
-	//logrus.Infof("[%v] list resourceObjectsList: %v, org resourceVersion: %v", time.Now(), resourceObjectsList.GetResourceVersion(), resourceVersion)
 	filteredByNameMap := make(map[*unstructured.Unstructured]bool)
 
 	if len(filter.ResourceNames) == 0 && filter.ResourceNameRegexp == "" {
@@ -232,9 +232,7 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 			fieldSelector += fmt.Sprintf("metadata.name=%s,", name)
 		}
 		strings.TrimRight(fieldSelector, ",")
-		// TODO: set resourceVersion later when it becomes clear how to use it
-		//filteredObjectsList, err := dr.List(ctx, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector,
-		//	ResourceVersion: resourceVersion})
+		// TODO: NOT for preview-2: set resourceVersion later when it becomes clear how to use it
 		filteredObjectsList, err := dr.List(ctx, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector})
 		if err != nil {
 			return filteredByName, err
@@ -264,7 +262,6 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 
 func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filteredByName []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
 	var filteredByNamespace, filteredByNamespaceRegex, filteredObjects []unstructured.Unstructured
-
 	filteredByNsMap := make(map[*unstructured.Unstructured]bool)
 
 	if len(filter.Namespaces) > 0 {

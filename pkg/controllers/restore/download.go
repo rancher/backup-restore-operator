@@ -55,10 +55,11 @@ func (h *handler) downloadFromS3(restore *v1.Restore) (string, error) {
 	return targetFileLocation, nil
 }
 
-// initial parts: https://medium.com/@skdomino/taring-untaring-files-in-go-6b07cf56bc07
+// very initial parts: https://medium.com/@skdomino/taring-untaring-files-in-go-6b07cf56bc07
 func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schema.GroupResource]value.Transformer) ([]v1.ResourceSelector, error) {
 	var additionalAuthenticatedData, name, namespace string
 	var resourceSelectors []v1.ResourceSelector
+
 	r, err := os.Open(tarGzFilePath)
 	if err != nil {
 		return resourceSelectors, fmt.Errorf("error opening tar.gz backup fike %v", err)
@@ -86,7 +87,6 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 			return resourceSelectors, err
 		}
 		// tarContent.Name = serviceaccounts.#v1/cattle-system/cattle.json OR users.management.cattle.io#v3/u-lqx8j.json
-		fmt.Printf("\nProcessing %v\n", tarContent.Name)
 		if strings.Contains(tarContent.Name, "filters") {
 			// TODO: generate resourceSet and statussubresource map
 			if strings.Contains(tarContent.Name, "filters.json") {

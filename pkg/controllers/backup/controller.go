@@ -45,7 +45,7 @@ type handler struct {
 func Register(
 	ctx context.Context,
 	backups backupControllers.BackupController,
-	backupTemplates backupControllers.ResourceSetController,
+	resourceSets backupControllers.ResourceSetController,
 	secrets v1core.SecretController,
 	namespaces v1core.NamespaceController,
 	clientSet *clientset.Clientset,
@@ -55,7 +55,7 @@ func Register(
 	controller := &handler{
 		ctx:                   ctx,
 		backups:               backups,
-		resourceSets:          backupTemplates,
+		resourceSets:          resourceSets,
 		secrets:               secrets,
 		namespaces:            namespaces,
 		discoveryClient:       clientSet.Discovery(),
@@ -64,6 +64,7 @@ func Register(
 	}
 
 	logrus.Infof("Default location for storing backups is %v", controller.defaultBackupLocation)
+	// Use the kube-system NS.UID as the unique ID for a cluster
 	kubeSystemNS, err := controller.namespaces.Get("kube-system", k8sv1.GetOptions{})
 	if err != nil {
 		logrus.Fatal("Error getting namespace kube-system %v", err)
@@ -77,14 +78,18 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if backup == nil || backup.DeletionTimestamp != nil {
 		return backup, nil
 	}
+	logrus.Infof("Processing backup %v", backup.Name)
+
 	if backup.Status.LastSnapshotTS != "" {
 		if backup.Spec.Schedule == "" {
-			// one time backup
+			// Backup CR was meant for one-time backup, and the backup has been completed. Probably here from UpdateStatus call
+			logrus.Infof("Backup CR %v has been processed for one-time backup, returning", backup.Name)
 			return backup, nil
 		}
-		currTime := time.Now().Round(time.Minute).Format(time.RFC3339)
-		logrus.Infof("Next snapshot is scheduled for: %v, current time: %v", backup.Status.NextSnapshotAt, currTime)
 		if backup.Status.NextSnapshotAt != "" {
+			currTime := time.Now().Round(time.Minute).Format(time.RFC3339)
+			logrus.Infof("Next snapshot is scheduled for: %v, current time: %v", backup.Status.NextSnapshotAt, currTime)
+
 			nextSnapshotTime, err := time.Parse(time.RFC3339, backup.Status.NextSnapshotAt)
 			if err != nil {
 				return h.setReconcilingCondition(backup, err)
@@ -92,6 +97,8 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			if nextSnapshotTime.After(time.Now().Round(time.Minute)) {
 				return backup, nil
 			}
+			// proceed with backup only if current time is same as or after nextSnapshotTime
+			logrus.Infof("Processing recurring backup CR %v ", backup.Name)
 		}
 	}
 
@@ -99,14 +106,15 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if err != nil {
 		return h.setReconcilingCondition(backup, err)
 	}
+	logrus.Infof("For backup CR %v, filename: %v", backup.Name, backupFileName)
 
-	// create a temp dir to write all backup files to, delete this before returning
-	// empty dir in ioutil.TempDir defaults to os.TempDir
+	// create a temp dir to write all backup files to, delete this before returning.
+	// empty dir param in ioutil.TempDir defaults to os.TempDir
 	tmpBackupPath, err := ioutil.TempDir("", backupFileName)
 	if err != nil {
 		return h.setReconcilingCondition(backup, fmt.Errorf("error creating temp dir: %v", err))
 	}
-	logrus.Infof("Temporary backup path is %v", tmpBackupPath)
+	logrus.Infof("Temporary backup path for storing all contents for backup CR %v is %v", backup.Name, tmpBackupPath)
 
 	if err := h.performBackup(backup, tmpBackupPath, backupFileName); err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
@@ -147,18 +155,20 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	var err error
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
 	if backup.Spec.EncryptionConfigName != "" {
+		logrus.Infof("Processing encryption config %v for backup CR %v", backup.Spec.EncryptionConfigName, backup.Name)
 		transformerMap, err = util.GetEncryptionTransformers(backup.Spec.EncryptionConfigName, h.secrets)
 		if err != nil {
 			return err
 		}
 	}
 
+	logrus.Infof("Using resourceSet %v for gathering resources for backup CR %v", backup.Spec.ResourceSetName, backup.Name)
 	resourceSetTemplate, err := h.resourceSets.Get(backup.Namespace, backup.Spec.ResourceSetName, k8sv1.GetOptions{})
 	if err != nil {
 		return err
 	}
-	resourceCollectionStartTime := time.Now()
-	logrus.Infof("Started gathering resources at %v", resourceCollectionStartTime)
+
+	logrus.Infof("Gathering resources for backup CR %v", backup.Name)
 	rh := resourcesets.ResourceHandler{
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
@@ -169,12 +179,13 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		return err
 	}
 
+	logrus.Infof("Finished gathering resources for backup CR %v, writing to temp location", backup.Name)
 	err = rh.WriteBackupObjects(tmpBackupPath)
 	if err != nil {
 		return err
 	}
-	timeTakenToCollectResources := time.Since(resourceCollectionStartTime)
-	logrus.Infof("time taken to collect resources: %v", timeTakenToCollectResources)
+
+	logrus.Infof("Saving resourceSet used for backup CR %v", backup.Name)
 	filters, err := json.Marshal(resourceSetTemplate.ResourceSelectors)
 	if err != nil {
 		return err
@@ -188,6 +199,8 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	if err != nil {
 		return err
 	}
+
+	logrus.Infof("Saving information about resources with status subresource that are part of backup CR %v", backup.Name)
 	subresources, err := json.Marshal(resourcesWithStatusSubresource)
 	if err != nil {
 		return err
@@ -203,16 +216,17 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	gzipFile := backupFileName + ".tar.gz"
 	storageLocation := backup.Spec.StorageLocation
 	if storageLocation == nil {
-		if err := CreateTarAndGzip(tmpBackupPath, h.defaultBackupLocation, gzipFile); err != nil {
+		// use the default location that the controller is configured with
+		if err := CreateTarAndGzip(tmpBackupPath, h.defaultBackupLocation, gzipFile, backup.Name); err != nil {
 			return err
 		}
 	} else if storageLocation.Local != "" {
 		// for local, to send backup tar to given local path, use that as the path when creating compressed file
-		if err := CreateTarAndGzip(tmpBackupPath, storageLocation.Local, gzipFile); err != nil {
+		if err := CreateTarAndGzip(tmpBackupPath, storageLocation.Local, gzipFile, backup.Name); err != nil {
 			return err
 		}
 	} else if storageLocation.S3 != nil {
-		if err := h.uploadToS3(backup.Namespace, storageLocation.S3, tmpBackupPath, gzipFile); err != nil {
+		if err := h.uploadToS3(backup, storageLocation.S3, tmpBackupPath, gzipFile); err != nil {
 			return err
 		}
 	}
@@ -231,8 +245,9 @@ func (h *handler) generateBackupFilename(backup *v1.Backup) (string, error) {
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) (*v1.Backup, error) {
 	condition.Cond(v1.BackupConditionReconciling).SetStatusBool(backup, true)
-	if updBackup, err := h.backups.UpdateStatus(backup); err != nil {
+	updBackup, err := h.backups.UpdateStatus(backup)
+	if err != nil {
 		return updBackup, errors.New(originalErr.Error() + err.Error())
 	}
-	return backup, originalErr
+	return updBackup, originalErr
 }

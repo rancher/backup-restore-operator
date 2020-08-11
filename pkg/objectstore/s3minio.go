@@ -67,7 +67,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 			continue
 		}
 		if bc.EndpointCA != "" {
-			tr, err = setTransportCA(tr, bc.EndpointCA)
+			tr, err = setTransportCA(tr, bc.EndpointCA, bc.InsecureTLSSkipVerify)
 			if err != nil {
 				return nil, err
 			}
@@ -168,7 +168,7 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 	return targetFileLocation, nil
 }
 
-func setTransportCA(tr http.RoundTripper, endpointCA string) (http.RoundTripper, error) {
+func setTransportCA(tr http.RoundTripper, endpointCA string, insecureSkipVerify bool) (http.RoundTripper, error) {
 	ca, err := readS3EndpointCA(endpointCA)
 	if err != nil {
 		return tr, err
@@ -180,7 +180,8 @@ func setTransportCA(tr http.RoundTripper, endpointCA string) (http.RoundTripper,
 	certPool.AppendCertsFromPEM(ca)
 
 	tr.(*http.Transport).TLSClientConfig = &tls.Config{
-		RootCAs: certPool,
+		RootCAs:            certPool,
+		InsecureSkipVerify: insecureSkipVerify,
 	}
 
 	return tr, nil
@@ -211,4 +212,3 @@ func isValidCertificate(c []byte) bool {
 	}
 	return true
 }
-

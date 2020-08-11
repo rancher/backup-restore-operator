@@ -7,7 +7,8 @@ package main
 import (
 	"context"
 	"flag"
-	"io/ioutil"
+	"os"
+	"path/filepath"
 
 	"github.com/ehazlett/simplelog"
 	"github.com/rancher/backup-restore-operator/pkg/controllers/backup"
@@ -82,7 +83,8 @@ func main() {
 
 	if DefaultLocation == "" {
 		logrus.Infof("No temporary backup location provided, creating a new default in the temp dir")
-		DefaultLocation, err = ioutil.TempDir("", "defaultbackuplocation")
+		DefaultLocation = filepath.Join(os.TempDir(), "defaultbackuplocation")
+		err = os.Mkdir(filepath.Join(os.TempDir(), "defaultbackuplocation"), os.ModePerm)
 		if err != nil {
 			logrus.Errorf("Error setting default location")
 		}

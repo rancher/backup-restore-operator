@@ -3,7 +3,9 @@ package backup
 import (
 	"archive/tar"
 	"compress/gzip"
+	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +17,7 @@ import (
 	"github.com/rancher/backup-restore-operator/pkg/objectstore"
 )
 
-func (h *handler) uploadToS3(backupNs string, objectStore *v1.S3ObjectStore, tmpBackupPath, gzipFile string) error {
+func (h *handler) uploadToS3(backup *v1.Backup, objectStore *v1.S3ObjectStore, tmpBackupPath, gzipFile string) error {
 	var accessKey, secretKey string
 	tmpBackupGzipFilepath, err := ioutil.TempDir("", "uploadpath")
 	if err != nil {
@@ -23,24 +25,24 @@ func (h *handler) uploadToS3(backupNs string, objectStore *v1.S3ObjectStore, tmp
 	}
 	if objectStore.Folder != "" {
 		if err := os.Mkdir(filepath.Join(tmpBackupGzipFilepath, objectStore.Folder), os.ModePerm); err != nil {
-			return err
+			return removeTempUploadDir(tmpBackupGzipFilepath, err)
 		}
 		gzipFile = fmt.Sprintf("%s/%s", objectStore.Folder, gzipFile)
 	}
-	if err := CreateTarAndGzip(tmpBackupPath, tmpBackupGzipFilepath, gzipFile); err != nil {
+	if err := CreateTarAndGzip(tmpBackupPath, tmpBackupGzipFilepath, gzipFile, backup.Name); err != nil {
 		return err
 	}
 	if objectStore.CredentialSecretName != "" {
 		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 		secrets := h.dynamicClient.Resource(gvr)
-		secretNs, secretName := backupNs, objectStore.CredentialSecretName
+		secretNs, secretName := backup.Namespace, objectStore.CredentialSecretName
 		s3secret, err := secrets.Namespace(secretNs).Get(h.ctx, secretName, k8sv1.GetOptions{})
 		if err != nil {
-			return err
+			return removeTempUploadDir(tmpBackupGzipFilepath, err)
 		}
 		s3SecretData, ok := s3secret.Object["data"].(map[string]interface{})
 		if !ok {
-			return fmt.Errorf("malformed secret")
+			return removeTempUploadDir(tmpBackupGzipFilepath, fmt.Errorf("malformed secret"))
 		}
 		accessKey, _ = s3SecretData["accessKey"].(string)
 		secretKey, _ = s3SecretData["secretKey"].(string)
@@ -48,16 +50,16 @@ func (h *handler) uploadToS3(backupNs string, objectStore *v1.S3ObjectStore, tmp
 	// if no s3 credentials are provided, use IAM profile, this means passing empty access and secret keys to the SetS3Service call
 	s3Client, err := objectstore.SetS3Service(objectStore, accessKey, secretKey, false)
 	if err != nil {
-		return err
+		return removeTempUploadDir(tmpBackupGzipFilepath, err)
 	}
 	if err := objectstore.UploadBackupFile(s3Client, objectStore.BucketName, gzipFile, filepath.Join(tmpBackupGzipFilepath, gzipFile)); err != nil {
-		return err
+		return removeTempUploadDir(tmpBackupGzipFilepath, err)
 	}
-	err = os.RemoveAll(tmpBackupGzipFilepath)
-	return err
+	return os.RemoveAll(tmpBackupGzipFilepath)
 }
 
-func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
+func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile, backupCRName string) error {
+	logrus.Infof("Compressing backup CR %v", backupCRName)
 	gzipFile, err := os.Create(filepath.Join(targetGzipPath, targetGzipFile))
 	if err != nil {
 		return fmt.Errorf("error creating backup tar gzip file: %v", err)
@@ -68,6 +70,7 @@ func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 	// writes to tw will be written to gw
 	tw := tar.NewWriter(gw)
 	defer tw.Close()
+
 	walkFunc := func(currPath string, info os.FileInfo, err error) error {
 		if currPath == backupPath {
 			return nil
@@ -79,6 +82,8 @@ func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 		if err != nil {
 			return fmt.Errorf("error creating header for %v: %v", info.Name(), err)
 		}
+		// backupPath could be /var/tmp/folders/backup/authconfigs.management.cattle.io/adfs.json
+		// we need to include only authconfigs.management.cattle.io onwards, so get relative path
 		relativePath, err := filepath.Rel(backupPath, currPath)
 		if err != nil {
 			return fmt.Errorf("error getting relative path for %v: %v", info.Name(), err)
@@ -97,12 +102,15 @@ func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile string) error {
 		if _, err := io.Copy(tw, fInfo); err != nil {
 			return fmt.Errorf("error copying %v: %v", info.Name(), err)
 		}
-		fInfo.Close()
-		return nil
+		return fInfo.Close()
 	}
-	if err := filepath.Walk(backupPath, walkFunc); err != nil {
-		return err
-	}
+	return filepath.Walk(backupPath, walkFunc)
+}
 
-	return nil
+func removeTempUploadDir(tmpBackupGzipFilepath string, originalErr error) error {
+	removeErr := os.RemoveAll(tmpBackupGzipFilepath)
+	if removeErr != nil {
+		return errors.New(originalErr.Error() + removeErr.Error())
+	}
+	return originalErr
 }
