@@ -5,6 +5,7 @@ go 1.13
 replace k8s.io/client-go => k8s.io/client-go v0.18.0
 
 require (
+	github.com/ehazlett/simplelog v0.0.0-20200226020431-d374894e92a4
 	github.com/minio/minio-go/v6 v6.0.57
 	github.com/mrajashree/backup v0.0.0-20200810051511-8ea9b0797cf7
 	github.com/rancher/lasso v0.0.0-20200515155337-a34e1e26ad91

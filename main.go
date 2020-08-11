@@ -7,7 +7,9 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
+	"io/ioutil"
+
+	"github.com/ehazlett/simplelog"
 	"github.com/rancher/backup-restore-operator/pkg/controllers/backup"
 	"github.com/rancher/backup-restore-operator/pkg/controllers/restore"
 	"github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io"
@@ -19,7 +21,6 @@ import (
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/rancher/wrangler/pkg/start"
 	"github.com/sirupsen/logrus"
-	"io/ioutil"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/dynamic"
 )
@@ -38,8 +39,8 @@ func init() {
 
 func main() {
 	logrus.Info("Starting controller")
+	logrus.SetFormatter(&simplelog.StandardFormatter{})
 	ctx := signals.SetupSignalHandler(context.Background())
-	fmt.Printf("kubeconfig: %v\n", KubeConfig)
 
 	restKubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
 	if err != nil {
