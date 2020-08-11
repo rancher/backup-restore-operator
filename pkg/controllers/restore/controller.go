@@ -94,6 +94,9 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	if restore == nil || restore.DeletionTimestamp != nil {
 		return restore, nil
 	}
+	if restore.Status.RestoreCompletionTS != "" {
+		return restore, nil
+	}
 	created := make(map[string]bool)
 	ownerToDependentsList := make(map[string][]restoreObj)
 	var toRestore []restoreObj
@@ -103,8 +106,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	h.clusterscopedResourceInfoToData = make(map[objInfo]unstructured.Unstructured)
 	h.namespacedResourceInfoToData = make(map[objInfo]unstructured.Unstructured)
 	h.resourcesFromBackup = make(map[string]bool)
-
-	// user.ownerRef = secret => user.ownerRef.UID won't change
 
 	backupName := restore.Spec.BackupFilename
 
@@ -210,8 +211,10 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			return restore, fmt.Errorf("error pruning during restore: %v", err)
 		}
 	}
+	restore.Status.RestoreCompletionTS = time.Now().Format(time.RFC3339)
+	_, err = h.restores.UpdateStatus(restore)
 	logrus.Infof("Done restoring")
-	return restore, nil
+	return restore, err
 }
 
 func (h *handler) restoreCRDs(created map[string]bool) error {

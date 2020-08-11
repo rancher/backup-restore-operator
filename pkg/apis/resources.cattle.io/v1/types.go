@@ -95,6 +95,7 @@ type RestoreSpec struct {
 }
 
 type RestoreStatus struct {
-	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	Summary    string                              `json:"summary,omitempty"`
+	Conditions          []genericcondition.GenericCondition `json:"conditions,omitempty"`
+	Summary             string                              `json:"summary,omitempty"`
+	RestoreCompletionTS string                              `json:"restoreCompletionTs"`
 }
