@@ -7,5 +7,5 @@ spec:
   storageLocation:
     local: test-backup-location-local
   resourceSetName: ecm-resource-set
-  encryptionConfigName: testconfig
+  encryptionConfigName: test-encryptionconfig
   schedule: "@every 1m"

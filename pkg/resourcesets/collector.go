@@ -36,8 +36,8 @@ type ResourceHandler struct {
 
 /*  GatherResources iterates over the ResourceSelectors in the given ResourceSet
    	Each ResourceSelector can specify only one apigroupversion, example "v1" or "management.cattle.io/v3"
-	ResourceSelector can specify resource types/kinds to backup from this apigroupversion through Kinds and KindsRegex.
-	Resources matching Kinds and KindsRegex both will be backed up
+	ResourceSelector can specify resource types/kinds to backup from this apigroupversion through Kinds and KindsRegexp.
+	Resources matching Kinds and KindsRegexp both will be backed up
 	ResourceSelector can also specify names of particular resources of this groupversionkind to backup, using ResourceNames and ResourceNamesRegex
 	It can specify namespaces from which to backup these resources through Namespaces and NamespacesRegex
 	And it can provide a labelSelector to backup resources of this gvk+name+ns combination containing some label
@@ -106,27 +106,27 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 	if err != nil {
 		return resourceList, err
 	}
-	if filter.KindsRegex == "" && len(filter.Kinds) == 0 {
+	if filter.KindsRegexp == "" && len(filter.Kinds) == 0 {
 		// if no filters for resource kind are given, return entire resource list
 		return resources.APIResources, nil
 	}
 
-	// "resources" list has all resources under given groupVersion, first filter based on KindsRegex
-	if filter.KindsRegex != "" {
-		if filter.KindsRegex == "." {
+	// "resources" list has all resources under given groupVersion, first filter based on KindsRegexp
+	if filter.KindsRegexp != "" {
+		if filter.KindsRegexp == "." {
 			// "." will match anything, so return entire resource list
 			return resources.APIResources, nil
 		}
 		// else filter out resource with regex match
 		for _, res := range resources.APIResources {
-			matched, err := regexp.MatchString(filter.KindsRegex, res.Name)
+			matched, err := regexp.MatchString(filter.KindsRegexp, res.Name)
 			if err != nil {
 				return resourceList, err
 			}
 			if !matched {
 				continue
 			}
-			logrus.Infof("resource kind %v matched regex %v\n", res.Name, filter.KindsRegex)
+			logrus.Infof("resource kind %v matched regex %v\n", res.Name, filter.KindsRegexp)
 			resourceListFromRegex = append(resourceListFromRegex, res)
 		}
 	}
@@ -167,7 +167,7 @@ func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv
 	}
 
 	if res.Namespaced {
-		if len(filter.Namespaces) > 0 || filter.NamespaceRegex != "" {
+		if len(filter.Namespaces) > 0 || filter.NamespaceRegexp != "" {
 			filteredByNamespace, err = h.filterByNamespace(filter, filteredByName)
 			if err != nil {
 				return filteredObjects, err
@@ -200,13 +200,13 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 	//logrus.Infof("[%v] list resourceObjectsList: %v, org resourceVersion: %v", time.Now(), resourceObjectsList.GetResourceVersion(), resourceVersion)
 	filteredByNameMap := make(map[*unstructured.Unstructured]bool)
 
-	if len(filter.ResourceNames) == 0 && filter.ResourceNameRegex == "" {
+	if len(filter.ResourceNames) == 0 && filter.ResourceNameRegexp == "" {
 		// no filters for names of the resource, return all objects obtained from the list call
 		return resourceObjectsList.Items, nil
 	}
-	// filter out using ResourceNameRegex
-	if filter.ResourceNameRegex != "" {
-		if filter.ResourceNameRegex == "." {
+	// filter out using ResourceNameRegexp
+	if filter.ResourceNameRegexp != "" {
+		if filter.ResourceNameRegexp == "." {
 			// "." will match everything, so return all resources obtained from the list call
 			return resourceObjectsList.Items, nil
 		}
@@ -214,7 +214,7 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 		for _, resObj := range resourceObjectsList.Items {
 			metadata := resObj.Object["metadata"].(map[string]interface{})
 			name := metadata["name"].(string)
-			nameMatched, err := regexp.MatchString(filter.ResourceNameRegex, name)
+			nameMatched, err := regexp.MatchString(filter.ResourceNameRegexp, name)
 			if err != nil {
 				return filteredByName, err
 			}
@@ -281,15 +281,15 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 			}
 		}
 	}
-	if filter.NamespaceRegex != "" {
-		if filter.NamespaceRegex == "." {
+	if filter.NamespaceRegexp != "" {
+		if filter.NamespaceRegexp == "." {
 			// "." will match all namespaces, so return all objects obtained after filtering by name
 			return filteredByName, nil
 		}
 		for _, resObj := range filteredByName {
 			metadata := resObj.Object["metadata"].(map[string]interface{})
 			ns := metadata["namespace"].(string)
-			nsMatched, err := regexp.MatchString(filter.NamespaceRegex, ns)
+			nsMatched, err := regexp.MatchString(filter.NamespaceRegexp, ns)
 			if err != nil {
 				return filteredByNamespace, err
 			}
@@ -429,4 +429,3 @@ func canListResource(verbs k8sv1.Verbs) bool {
 	}
 	return false
 }
-

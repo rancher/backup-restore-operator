@@ -300,6 +300,11 @@ func (in *RestoreSpec) DeepCopyInto(out *RestoreSpec) {
 		*out = new(StorageLocation)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Prune != nil {
+		in, out := &in.Prune, &out.Prune
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 

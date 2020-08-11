@@ -91,6 +91,9 @@ func Register(
 }
 
 func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, error) {
+	if restore == nil || restore.DeletionTimestamp != nil {
+		return restore, nil
+	}
 	created := make(map[string]bool)
 	ownerToDependentsList := make(map[string][]restoreObj)
 	var toRestore []restoreObj
@@ -201,7 +204,8 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	timeForRestoringNamespacedResources := time.Since(doneGeneratingNamespacedGraphTime)
 	fmt.Printf("\ntime taken to restore clusterscoped resources: %v\n", timeForRestoringNamespacedResources)
 
-	if restore.Spec.Prune {
+	// prune by default
+	if restore.Spec.Prune == nil || *restore.Spec.Prune == true {
 		if err := h.prune(resourceSelectors, transformerMap, restore.Spec.DeleteTimeout); err != nil {
 			return restore, fmt.Errorf("error pruning during restore: %v", err)
 		}

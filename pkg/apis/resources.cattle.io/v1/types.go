@@ -19,9 +19,9 @@ type Backup struct {
 type BackupSpec struct {
 	StorageLocation      *StorageLocation `json:"storageLocation"`
 	ResourceSetName      string           `json:"resourceSetName"`
-	EncryptionConfigName string           `json:"encryptionConfigName"`
-	Schedule             string           `json:"schedule"`
-	Retention            int              `json:"retention"`
+	EncryptionConfigName string           `json:"encryptionConfigName,omitempty"`
+	Schedule             string           `json:"schedule,omitempty"`
+	Retention            int              `json:"retention,omitempty"` //time to keep snapshot in hours
 }
 
 // +genclient
@@ -36,14 +36,14 @@ type ResourceSet struct {
 
 // regex+list = OR //separate fields :AND
 type ResourceSelector struct {
-	ApiGroup          string                `json:"apiGroup"`
-	Kinds             []string              `json:"kinds"`
-	KindsRegex        string                `json:"kindsRegex"`
-	ResourceNames     []string              `json:"resourceNames"`
-	ResourceNameRegex string                `json:"resourceNameRegex"`
-	Namespaces        []string              `json:"namespaces"`
-	NamespaceRegex    string                `json:"namespaceRegex"`
-	LabelSelectors    *metav1.LabelSelector `json:"labelSelectors"`
+	ApiGroup           string                `json:"apiGroup"`
+	Kinds              []string              `json:"kinds,omitempty"`
+	KindsRegexp        string                `json:"kindsRegexp,omitempty"`
+	ResourceNames      []string              `json:"resourceNames,omitempty"`
+	ResourceNameRegexp string                `json:"resourceNameRegexp,omitempty"`
+	Namespaces         []string              `json:"namespaces,omitempty"`
+	NamespaceRegexp    string                `json:"namespaceRegexp,omitempty"`
+	LabelSelectors     *metav1.LabelSelector `json:"labelSelectors,omitempty"`
 }
 
 var (
@@ -53,10 +53,11 @@ var (
 )
 
 type BackupStatus struct {
-	Conditions     []genericcondition.GenericCondition `json:"conditions,omitempty"`
+	Conditions     []genericcondition.GenericCondition `json:"conditions"`
 	LastSnapshotTS string                              `json:"lastSnapshotTs"`
+	NextSnapshotAt string                              `json:"nextSnapshotAt"`
 	NumSnapshots   int                                 `json:"numSnapshots"`
-	Summary        string                              `json:"summary,omitempty"`
+	Summary        string                              `json:"summary"`
 }
 
 type StorageLocation struct {
@@ -88,9 +89,9 @@ type Restore struct {
 type RestoreSpec struct {
 	BackupFilename       string           `json:"backupFilename"`
 	StorageLocation      *StorageLocation `json:"storageLocation"`
-	Prune                bool             `json:"prune"`
-	DeleteTimeout        int              `json:"deleteTimeout"`
-	EncryptionConfigName string           `json:"encryptionConfigName"`
+	Prune                *bool            `json:"prune"` //prune by default
+	DeleteTimeout        int              `json:"deleteTimeout,omitempty"`
+	EncryptionConfigName string           `json:"encryptionConfigName,omitempty"`
 }
 
 type RestoreStatus struct {

@@ -6,35 +6,37 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/storage/value"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	backupControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/condition"
+	"github.com/robfig/cron"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 )
 
 type handler struct {
-	ctx             context.Context
-	backups         backupControllers.BackupController
-	resourceSets    backupControllers.ResourceSetController
-	secrets         v1core.SecretController
-	namespaces      v1core.NamespaceController
-	discoveryClient discovery.DiscoveryInterface
-	dynamicClient   dynamic.Interface
+	ctx                   context.Context
+	backups               backupControllers.BackupController
+	resourceSets          backupControllers.ResourceSetController
+	secrets               v1core.SecretController
+	namespaces            v1core.NamespaceController
+	discoveryClient       discovery.DiscoveryInterface
+	dynamicClient         dynamic.Interface
+	defaultBackupLocation string
 }
 
 func Register(
@@ -55,27 +57,37 @@ func Register(
 		discoveryClient: clientSet.Discovery(),
 		dynamicClient:   dynamicInterface,
 	}
-
+	defaultLocation, err := ioutil.TempDir("", "defaultbackuplocation")
+	if err != nil {
+		logrus.Errorf("Error setting default location")
+	}
+	controller.defaultBackupLocation = defaultLocation
+	logrus.Infof("Default location for storing backups is %v", defaultLocation)
 	// Register handlers
 	backups.OnChange(ctx, "backups", controller.OnBackupChange)
 }
 
 func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error) {
-	if backup.DeletionTimestamp != nil || backup == nil {
+	if backup == nil || backup.DeletionTimestamp != nil {
 		return backup, nil
 	}
-	if condition.Cond(v1.BackupConditionReady).IsTrue(backup) && condition.Cond(v1.BackupConditionUploaded).IsTrue(backup) {
+	//if condition.Cond(v1.BackupConditionReady).IsTrue(backup) && condition.Cond(v1.BackupConditionUploaded).IsTrue(backup) {
+	if backup.Status.LastSnapshotTS != "" {
 		if backup.Spec.Schedule == "" {
 			// one time backup
 			return backup, nil
 		}
-		// else recurring
-		// backup.Schedule = 2hr lastsnapshotTS, same check as the goroutine
-		// NO conditions
-		// TODO: switch to enqueueAfter instead of cron
-		if !condition.Cond(v1.BackupConditionTriggered).IsTrue(backup) {
-			// not triggered yet
-			return backup, nil
+		currTime := time.Now().Round(time.Minute).Format(time.RFC3339)
+		fmt.Printf("backup.Status.NextSnapshotAt: %v, time.Now(): %v", backup.Status.NextSnapshotAt, currTime)
+
+		if backup.Status.NextSnapshotAt != "" {
+			nextSnapshotTime, err := time.Parse(time.RFC3339, backup.Status.NextSnapshotAt)
+			if err != nil {
+				return backup, err
+			}
+			if nextSnapshotTime.After(time.Now().Round(time.Minute)) {
+				return backup, nil
+			}
 		}
 	}
 
@@ -86,7 +98,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 
 	currSnapshotTS := time.Now().Format(time.RFC3339)
 	// on OS X writing file with `:` converts colon to forward slash
-	currTSForFilename := strings.Replace(currSnapshotTS, ":", "-", -1)
+	currTSForFilename := strings.Replace(currSnapshotTS, ":", "#", -1)
 	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, kubeSystemNS.UID, currTSForFilename)
 
 	// create a temp dir to write all backup files to, delete this before returning
@@ -187,7 +199,15 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
 	gzipFile := backupFileName + ".tar.gz"
 	storageLocation := backup.Spec.StorageLocation
-	if storageLocation == nil || storageLocation.Local != "" {
+	if storageLocation == nil {
+		if err := CreateTarAndGzip(tmpBackupPath, h.defaultBackupLocation, gzipFile); err != nil {
+			removeDirErr := os.RemoveAll(tmpBackupPath)
+			if removeDirErr != nil {
+				return backup, errors.New(err.Error() + removeDirErr.Error())
+			}
+			return backup, err
+		}
+	} else if storageLocation.Local != "" {
 		// for local, to send backup tar to given local path, use that as the path when creating compressed file
 		if err := CreateTarAndGzip(tmpBackupPath, storageLocation.Local, gzipFile); err != nil {
 			removeDirErr := os.RemoveAll(tmpBackupPath)
@@ -210,13 +230,24 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 
 	condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
-	if condition.Cond(v1.BackupConditionTriggered).IsTrue(backup) {
-		// not triggered yet
-		condition.Cond(v1.BackupConditionTriggered).SetStatusBool(backup, false)
-	}
 
 	backup.Status.LastSnapshotTS = currSnapshotTS
 	backup.Status.NumSnapshots++
+	if backup.Spec.Schedule != "" {
+		cronSchedule, err := cron.ParseStandard(backup.Spec.Schedule)
+		if err != nil {
+			return backup, err
+		}
+		nextBackupAt := cronSchedule.Next(time.Now()).Round(time.Minute)
+		backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
+		after := nextBackupAt.Sub(time.Now().Round(time.Minute))
+		h.backups.EnqueueAfter(backup.Namespace, backup.Name, after)
+		//maxBackupsCount := backup.Spec.Retention
+		//if backup.Status.NumSnapshots > backup.Spec.Retention {
+		//	snapshotsToRemove
+		//}
+	}
+
 	if updBackup, err := h.backups.UpdateStatus(backup); err != nil {
 		return updBackup, err
 	}

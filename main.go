@@ -82,7 +82,7 @@ func main() {
 	restore.Register(ctx, backups.Resources().V1().Restore(), backups.Resources().V1().Backup(),
 		core.Core().V1().Secret(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
 
-	backup.StartRecurringBackupsDaemon(ctx, backups.Resources().V1().Backup(), "")
+	//backup.StartRecurringBackupsDaemon(ctx, backups.Resources().V1().Backup(), "")
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
 	}
