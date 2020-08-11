@@ -94,7 +94,7 @@ func main() {
 		clientSet, dynamicInterace, DefaultLocation)
 	restore.Register(ctx, backups.Resources().V1().Restore(), backups.Resources().V1().Backup(),
 		core.Core().V1().Secret(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
-	backup.StartBackupRetentionCheckDaemon(ctx, backups.Resources().V1().Backup(), "", DefaultLocation)
+	backup.StartBackupRetentionCheckDaemon(ctx, backups.Resources().V1().Backup(), core.Core().V1().Namespace(), "", DefaultLocation)
 
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())

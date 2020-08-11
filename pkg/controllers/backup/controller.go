@@ -39,6 +39,7 @@ type handler struct {
 	discoveryClient       discovery.DiscoveryInterface
 	dynamicClient         dynamic.Interface
 	defaultBackupLocation string
+	kubeSystemNS          string
 }
 
 func Register(
@@ -63,6 +64,11 @@ func Register(
 	}
 
 	logrus.Infof("Default location for storing backups is %v", controller.defaultBackupLocation)
+	kubeSystemNS, err := controller.namespaces.Get("kube-system", k8sv1.GetOptions{})
+	if err != nil {
+		logrus.Fatal("Error getting namespace kube-system %v", err)
+	}
+	controller.kubeSystemNS = string(kubeSystemNS.UID)
 	// Register handlers
 	backups.OnChange(ctx, "backups", controller.OnBackupChange)
 }
@@ -214,15 +220,10 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 }
 
 func (h *handler) generateBackupFilename(backup *v1.Backup) (string, error) {
-	kubeSystemNS, err := h.namespaces.Get("kube-system", k8sv1.GetOptions{})
-	if err != nil {
-		return "", err
-	}
-
 	currSnapshotTS := time.Now().Format(time.RFC3339)
 	// on OS X writing file with `:` converts colon to forward slash
 	currTSForFilename := strings.Replace(currSnapshotTS, ":", "#", -1)
-	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, kubeSystemNS.UID, currTSForFilename)
+	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, h.kubeSystemNS, currTSForFilename)
 	return backupFileName, nil
 }
 

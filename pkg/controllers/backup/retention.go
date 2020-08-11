@@ -5,13 +5,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	//"regexp"
+	//"strings"
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	resourceController "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
+	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/robfig/cron"
 	"github.com/sirupsen/logrus"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	//"github.com/minio/minio-go/v6"
+	//"github.com/prometheus/common/log"
 )
 
 const EnforceRetentionInterval = "@every 1m"
@@ -21,14 +26,16 @@ var recurringSync *backupRetentionSync
 type backupRetentionSync struct {
 	ctx                   context.Context
 	backups               resourceController.BackupController
+	namespaces            v1core.NamespaceController
 	defaultBackupLocation string
 }
 
-func StartBackupRetentionCheckDaemon(ctx context.Context, backups resourceController.BackupController,
+func StartBackupRetentionCheckDaemon(ctx context.Context, backups resourceController.BackupController, namespaces v1core.NamespaceController,
 	syncRecurringBackupsSchedule, DefaultBackupLocation string) {
 	recurringSync = &backupRetentionSync{
 		ctx:                   ctx,
 		backups:               backups,
+		namespaces:            namespaces,
 		defaultBackupLocation: DefaultBackupLocation,
 	}
 	logrus.Infof("in StartBackupRetentionCheckDaemon")
@@ -117,3 +124,62 @@ func (b backupRetentionSync) deleteBackupsFollowingRetentionPolicy(backup *v1.Ba
 	}
 	return nil
 }
+
+//func DeleteS3Backups(backupTime time.Time, retentionPeriod time.Duration, svc *minio.Client, objectStore *v1.S3ObjectStore) {
+//	var backupDeleteList []string
+//	cutoffTime := backupTime.Add(retentionPeriod * -1)
+//
+//	// Create a done channel to control 'ListObjectsV2' go routine.
+//	doneCh := make(chan struct{})
+//
+//	// Indicate to our routine to exit cleanly upon return.
+//	defer close(doneCh)
+//
+//	isRecursive := false
+//	prefix := ""
+//	if len(objectStore.Folder) != 0 {
+//		prefix = objectStore.Folder
+//		// Recurse will show us the files in the folder
+//		isRecursive = true
+//	}
+//	objectCh := svc.ListObjects(objectStore.BucketName, prefix, isRecursive, doneCh)
+//	re := regexp.MustCompile(fmt.Sprintf("%s-%s.+_etcd(|.%s)$", compressedExtension))
+//	for object := range objectCh {
+//		if object.Err != nil {
+//			log.Error("error to fetch s3 file:", object.Err)
+//			return
+//		}
+//		// only parse backup file names that matches *_etcd format
+//		if re.MatchString(object.Key) {
+//			filename := object.Key
+//
+//			if len(bc.Folder) != 0 {
+//				// example object.Key with folder: folder/timestamp_etcd.zip
+//				// folder and separator needs to be stripped so time can be parsed below
+//				log.Debugf("Stripping [%s] from [%s]", fmt.Sprintf("%s/", prefix), filename)
+//				filename = strings.TrimPrefix(filename, fmt.Sprintf("%s/", prefix))
+//			}
+//			log.Debugf("object.Key: [%s], filename: [%s]", object.Key, filename)
+//
+//			backupTime, err := time.Parse(time.RFC3339, strings.Split(filename, "_")[0])
+//			if err != nil {
+//
+//			} else if backupTime.Before(cutoffTime) {
+//				// We use object.Key here as we need the full path when a folder is used
+//				log.Debugf("Adding [%s] to files to delete, backupTime: [%q], cutoffTime: [%q]", object.Key, backupTime, cutoffTime)
+//				backupDeleteList = append(backupDeleteList, object.Key)
+//			}
+//		}
+//	}
+//	log.Debugf("Found %d files to delete", len(backupDeleteList))
+//
+//	for i := range backupDeleteList {
+//		log.Infof("Start to delete s3 backup file [%s]", backupDeleteList[i])
+//		err := svc.RemoveObject(bc.BucketName, backupDeleteList[i])
+//		if err != nil {
+//			log.Errorf("Error detected during deletion: %v", err)
+//		} else {
+//			log.Infof("Success delete s3 backup file [%s]", backupDeleteList[i])
+//		}
+//	}
+//}
