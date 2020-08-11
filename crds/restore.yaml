@@ -22,6 +22,7 @@ spec:
             encryptionConfigName:
               type: string
             prune:
+              nullable: true
               type: boolean
             storageLocation:
               nullable: true
@@ -68,6 +69,10 @@ spec:
                 type: object
               nullable: true
               type: array
+            observedGeneration:
+              type: integer
+            restoreCompletionTs:
+              type: string
             summary:
               type: string
           type: object

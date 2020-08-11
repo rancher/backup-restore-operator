@@ -28,6 +28,8 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
+const DefaultRetentionTime = "6h"
+
 type handler struct {
 	ctx                   context.Context
 	backups               backupControllers.BackupController
@@ -75,8 +77,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return backup, nil
 		}
 		currTime := time.Now().Round(time.Minute).Format(time.RFC3339)
-		fmt.Printf("backup.Status.NextSnapshotAt: %v, time.Now(): %v", backup.Status.NextSnapshotAt, currTime)
-
+		logrus.Infof("Next snapshot is scheduled for: %v, current time: %v", backup.Status.NextSnapshotAt, currTime)
 		if backup.Status.NextSnapshotAt != "" {
 			nextSnapshotTime, err := time.Parse(time.RFC3339, backup.Status.NextSnapshotAt)
 			if err != nil {
@@ -126,10 +127,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
 		after := nextBackupAt.Sub(time.Now().Round(time.Minute))
 		h.backups.EnqueueAfter(backup.Namespace, backup.Name, after)
-		//maxBackupsCount := backup.Spec.Retention
-		//if backup.Status.NumSnapshots > backup.Spec.Retention {
-		//	snapshotsToRemove
-		//}
 	}
 	backup.Status.ObservedGeneration = backup.Generation
 	if updBackup, err := h.backups.UpdateStatus(backup); err != nil {
@@ -213,7 +210,6 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 			return err
 		}
 	}
-
 	return nil
 }
 

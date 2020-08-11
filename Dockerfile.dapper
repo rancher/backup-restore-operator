@@ -19,7 +19,7 @@ RUN if [ "${ARCH}" == "amd64" ]; then \
 
 ENV GO111MODULE off
 ENV DAPPER_ENV REPO TAG DRONE_TAG CROSS
-ENV DAPPER_SOURCE /go/src/github.com/mrajashree/backup/
+ENV DAPPER_SOURCE /go/src/github.com/rancher/backup-restore-operator/
 ENV DAPPER_OUTPUT ./bin ./dist
 ENV DAPPER_DOCKER_SOCKET true
 ENV HOME ${DAPPER_SOURCE}

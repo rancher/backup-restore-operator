@@ -26,14 +26,16 @@ import (
 )
 
 var (
-	Version                   = "v0.0.0-dev"
-	GitCommit                 = "HEAD"
-	KubeConfig                string
-	DefaultTempBackupLocation = "defaultbackuplocation"
+	Version         = "v0.0.0-dev"
+	GitCommit       = "HEAD"
+	KubeConfig      string
+	DefaultLocation string
 )
 
 func init() {
 	flag.StringVar(&KubeConfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
+	flag.StringVar(&DefaultLocation, "defaultlocation", "", "Path in the temp dir where "+
+		"backups will be stored if no storage location is specified on backup CR")
 	flag.Parse()
 }
 
@@ -78,16 +80,21 @@ func main() {
 		logrus.Fatalf("Error generating shared client factory: %s", err.Error())
 	}
 
-	defaultLocation, err := ioutil.TempDir("", DefaultTempBackupLocation)
-	if err != nil {
-		logrus.Errorf("Error setting default location")
+	if DefaultLocation == "" {
+		logrus.Infof("No temporary backup location provided, creating a new default in the temp dir")
+		DefaultLocation, err = ioutil.TempDir("", "defaultbackuplocation")
+		if err != nil {
+			logrus.Errorf("Error setting default location")
+		}
 	}
+
 	backup.Register(ctx, backups.Resources().V1().Backup(), backups.Resources().V1().ResourceSet(),
 		core.Core().V1().Secret(),
 		core.Core().V1().Namespace(),
-		clientSet, dynamicInterace, defaultLocation)
+		clientSet, dynamicInterace, DefaultLocation)
 	restore.Register(ctx, backups.Resources().V1().Restore(), backups.Resources().V1().Backup(),
 		core.Core().V1().Secret(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
+	backup.StartBackupRetentionCheckDaemon(ctx, backups.Resources().V1().Backup(), "", DefaultLocation)
 
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())

@@ -20,7 +20,7 @@ spec:
             resourceSetName:
               type: string
             retention:
-              type: integer
+              type: string
             schedule:
               type: string
             storageLocation:
@@ -70,7 +70,11 @@ spec:
               type: array
             lastSnapshotTs:
               type: string
+            nextSnapshotAt:
+              type: string
             numSnapshots:
+              type: integer
+            observedGeneration:
               type: integer
             summary:
               type: string

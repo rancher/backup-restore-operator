@@ -31,7 +31,7 @@ type BackupSpec struct {
 	ResourceSetName      string           `json:"resourceSetName"`
 	EncryptionConfigName string           `json:"encryptionConfigName,omitempty"`
 	Schedule             string           `json:"schedule,omitempty"`
-	Retention            int              `json:"retention,omitempty"` //time to keep snapshot in hours
+	Retention            string           `json:"retention,omitempty"` //time to keep snapshot in hours
 }
 
 // +genclient

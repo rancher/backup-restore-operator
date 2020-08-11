@@ -1,12 +1,10 @@
 apiVersion: resources.cattle.io/v1
 kind: Backup
 metadata:
-  name: test-local-recurring-backup
+  name: test-default-location-recurring-backup
   namespace: default
 spec:
-  storageLocation:
-    local: test-backup-location-local
   resourceSetName: ecm-resource-set
   encryptionConfigName: test-encryptionconfig
   schedule: "@every 1m"
-  retention: "2m"
+  retention: "4m"

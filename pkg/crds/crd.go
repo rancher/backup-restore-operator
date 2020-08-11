@@ -2,7 +2,7 @@ package crds
 
 import (
 	"fmt"
-	backupper "github.com/mrajashree/backup/pkg/apis/resources.cattle.io/v1"
+	resources "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	_ "github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io"
 	"github.com/rancher/wrangler/pkg/crd"
 	"github.com/rancher/wrangler/pkg/yaml"
@@ -33,13 +33,13 @@ func WriteCRD() error {
 
 func List() []crd.CRD {
 	return []crd.CRD{
-		newCRD(&backupper.Backup{}, func(c crd.CRD) crd.CRD {
+		newCRD(&resources.Backup{}, func(c crd.CRD) crd.CRD {
 			return c
 		}),
-		newCRD(&backupper.ResourceSet{}, func(c crd.CRD) crd.CRD {
+		newCRD(&resources.ResourceSet{}, func(c crd.CRD) crd.CRD {
 			return c
 		}),
-		newCRD(&backupper.Restore{}, func(c crd.CRD) crd.CRD {
+		newCRD(&resources.Restore{}, func(c crd.CRD) crd.CRD {
 			return c
 		}),
 	}

@@ -23,7 +23,7 @@ spec:
                   type: string
                 nullable: true
                 type: array
-              kindsRegex:
+              kindsRegexp:
                 type: string
               labelSelectors:
                 nullable: true
@@ -49,14 +49,14 @@ spec:
                     nullable: true
                     type: object
                 type: object
-              namespaceRegex:
+              namespaceRegexp:
                 type: string
               namespaces:
                 items:
                   type: string
                 nullable: true
                 type: array
-              resourceNameRegex:
+              resourceNameRegexp:
                 type: string
               resourceNames:
                 items:
