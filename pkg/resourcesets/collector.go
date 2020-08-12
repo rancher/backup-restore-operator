@@ -128,14 +128,19 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 		}
 		// else filter out resource with regex match
 		for _, res := range resources.APIResources {
-			matched, err := regexp.MatchString(filter.KindsRegexp, res.Name)
+			kindMatched, err := regexp.MatchString(filter.KindsRegexp, res.Kind)
 			if err != nil {
 				return resourceList, err
 			}
-			if !matched {
+			pluralNameMatched, err := regexp.MatchString(filter.KindsRegexp, res.Name)
+			if err != nil {
+				return resourceList, err
+			}
+			if !kindMatched && !pluralNameMatched {
 				continue
 			}
-			logrus.Infof("resource kind %v matched regex %v", res.Name, filter.KindsRegexp)
+
+			logrus.Infof("resource kind %v, matched regex %v", res.Name, filter.KindsRegexp)
 			resourceListFromRegex = append(resourceListFromRegex, res)
 		}
 	}
@@ -145,16 +150,21 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 		resourceListAfterRegexMatch := make(map[string]bool)
 		// avoid adding same resource twice by checking what's in resourceListFromRegex
 		for _, res := range resourceListFromRegex {
+			// adding in both, resource.Name (plural) and resource.Kind (singular camelcase)
 			resourceListAfterRegexMatch[res.Name] = true
+			resourceListAfterRegexMatch[res.Kind] = true
 		}
 		resourceTypesToInclude := make(map[string]bool)
 		for _, kind := range filter.Kinds {
 			resourceTypesToInclude[kind] = true
 		}
 		for _, res := range resources.APIResources {
-			if resourceTypesToInclude[res.Name] && !resourceListAfterRegexMatch[res.Name] {
-				logrus.Infof("resource kind %v found in list of resources to include %v", res.Name)
-				resourceListFromNames = append(resourceListFromNames, res)
+			// comparing whatever is specified in the Kinds field with both, resource Name (plural) and Kind (singular)
+			if resourceTypesToInclude[res.Name] || resourceTypesToInclude[res.Kind] {
+				if !resourceListAfterRegexMatch[res.Name] && !resourceListAfterRegexMatch[res.Kind] {
+					logrus.Infof("resource kind %v found in list of resources to include %v", res.Name)
+					resourceListFromNames = append(resourceListFromNames, res)
+				}
 			}
 		}
 	}
