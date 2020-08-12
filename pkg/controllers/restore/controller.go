@@ -49,7 +49,7 @@ type handler struct {
 	namespacedResourceInfoToData    map[objInfo]unstructured.Unstructured
 	resourcesFromBackup             map[string]bool
 	resourcesWithStatusSubresource  map[string]bool
-	resourceSelectors               []v1.ResourceSelector
+	backupResourceSet               v1.ResourceSet
 }
 
 type objInfo struct {
@@ -111,7 +111,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	h.clusterscopedResourceInfoToData = make(map[objInfo]unstructured.Unstructured)
 	h.namespacedResourceInfoToData = make(map[objInfo]unstructured.Unstructured)
 	h.resourcesFromBackup = make(map[string]bool)
-	h.resourceSelectors = []v1.ResourceSelector{}
+	h.backupResourceSet = v1.ResourceSet{}
 
 	backupLocation := restore.Spec.StorageLocation
 	if backupLocation == nil {
@@ -149,6 +149,9 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		}
 	}
 
+	// first stop the controllers
+	h.scaleDownControllersFromResourceSet()
+
 	// first restore CRDs
 	logrus.Infof("Starting to restore CRDs for restore CR %v", restore.Name)
 	if err := h.restoreCRDs(created); err != nil {
@@ -172,7 +175,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	// prune by default
 	if restore.Spec.Prune == nil || *restore.Spec.Prune == true {
 		logrus.Infof("Pruning resources that are not part of the backup for restore CR %v", restore.Name)
-		if err := h.prune(h.resourceSelectors, transformerMap, restore.Spec.DeleteTimeout); err != nil {
+		if err := h.prune(h.backupResourceSet.ResourceSelectors, transformerMap, restore.Spec.DeleteTimeout); err != nil {
 			return h.setReconcilingCondition(restore, fmt.Errorf("error pruning during restore: %v", err))
 		}
 	}
@@ -180,6 +183,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	condition.Cond(v1.RestoreConditionReady).SetStatusBool(restore, true)
 	restore.Status.ObservedGeneration = restore.Generation
 	_, err = h.restores.UpdateStatus(restore)
+	h.scaleUpControllersFromResourceSet()
 	logrus.Infof("Done restoring")
 	return restore, err
 }

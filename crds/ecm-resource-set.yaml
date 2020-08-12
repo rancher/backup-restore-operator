@@ -25,3 +25,13 @@ resourceSelectors:
     kindsRegexp: "."
   - apiGroup: "project.cattle.io/v3"
     kindsRegexp: "."
+controllerReferences:
+  - apiVersion: "apps/v1"
+    resource: "deployments"
+    name: "nginx-deployment"
+    namespace: "default"
+  - apiVersion: "apps/v1"
+    resource: "statefulsets"
+    name: "web"
+    namespace: "default"
+

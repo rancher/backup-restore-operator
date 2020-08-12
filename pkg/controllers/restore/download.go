@@ -68,7 +68,7 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 		}
 		if strings.Contains(tarContent.Name, "filters") {
 			if strings.Contains(tarContent.Name, "filters.json") {
-				if err := json.Unmarshal(readData, &h.resourceSelectors); err != nil {
+				if err := json.Unmarshal(readData, &h.backupResourceSet); err != nil {
 					return fmt.Errorf("error unmarshaling backup filters file: %v", err)
 				}
 			}

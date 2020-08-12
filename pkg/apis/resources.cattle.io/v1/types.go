@@ -34,6 +34,15 @@ type BackupSpec struct {
 	Retention            string           `json:"retention,omitempty"` //time to keep snapshot in hours
 }
 
+type BackupStatus struct {
+	Conditions         []genericcondition.GenericCondition `json:"conditions"`
+	LastSnapshotTS     string                              `json:"lastSnapshotTs"`
+	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
+	NumSnapshots       int                                 `json:"numSnapshots"`
+	ObservedGeneration int64                               `json:"observedGeneration"`
+	Summary            string                              `json:"summary"`
+}
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -41,7 +50,8 @@ type ResourceSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	ResourceSelectors []ResourceSelector `json:"resourceSelectors"`
+	ResourceSelectors    []ResourceSelector    `json:"resourceSelectors"`
+	ControllerReferences []ControllerReference `json:"controllerReferences"`
 }
 
 // regex+list = OR //separate fields :AND
@@ -56,13 +66,12 @@ type ResourceSelector struct {
 	LabelSelectors     *metav1.LabelSelector `json:"labelSelectors,omitempty"`
 }
 
-type BackupStatus struct {
-	Conditions         []genericcondition.GenericCondition `json:"conditions"`
-	LastSnapshotTS     string                              `json:"lastSnapshotTs"`
-	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
-	NumSnapshots       int                                 `json:"numSnapshots"`
-	ObservedGeneration int64                               `json:"observedGeneration"`
-	Summary            string                              `json:"summary"`
+type ControllerReference struct {
+	ApiVersion string `json:"apiVersion"`
+	Resource   string `json:"resource"`
+	Namespace  string `json:"namespace"`
+	Name       string `json:"name"`
+	Replicas   int32
 }
 
 type StorageLocation struct {

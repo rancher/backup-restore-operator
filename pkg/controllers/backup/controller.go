@@ -186,7 +186,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	}
 
 	logrus.Infof("Saving resourceSet used for backup CR %v", backup.Name)
-	filters, err := json.Marshal(resourceSetTemplate.ResourceSelectors)
+	filters, err := json.Marshal(resourceSetTemplate)
 	if err != nil {
 		return err
 	}

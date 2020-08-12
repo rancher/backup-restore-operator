@@ -13,6 +13,22 @@ spec:
   validation:
     openAPIV3Schema:
       properties:
+        controllerReferences:
+          items:
+            properties:
+              apiVersion:
+                type: string
+              name:
+                type: string
+              namespace:
+                type: string
+              replicas:
+                type: integer
+              resource:
+                type: string
+            type: object
+          nullable: true
+          type: array
         resourceSelectors:
           items:
             properties:
