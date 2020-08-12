@@ -79,8 +79,16 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 				continue
 			}
 
-			// TODO: check for all rancher objects, use GET calls
-			if skipBackup(res) {
+			if !canListResource(res.Verbs) {
+				if canGetResource(res.Verbs) {
+					filteredObjects, err := h.gatherObjectsForNonListResource(ctx, res, gv, resourceSelector)
+					if err != nil {
+						return resourcesWithStatusSubresource, err
+					}
+					h.GVResourceToObjects[currGVResource] = filteredObjects
+				} else {
+					logrus.Infof("Not collecting objects for resource %v since it does not have list or get verbs", res.Name)
+				}
 				continue
 			}
 
@@ -231,8 +239,8 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 		for _, name := range filter.ResourceNames {
 			fieldSelector += fmt.Sprintf("metadata.name=%s,", name)
 		}
-		strings.TrimRight(fieldSelector, ",")
-		// TODO: NOT for preview-2: set resourceVersion later when it becomes clear how to use it
+		fieldSelector = strings.TrimSuffix(fieldSelector, ",")
+		// TODO: POST-preview-2: set resourceVersion later when it becomes clear how to use it
 		filteredObjectsList, err := dr.List(ctx, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector})
 		if err != nil {
 			return filteredByName, err
@@ -318,6 +326,51 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 	return filteredObjects, nil
 }
 
+// NOTE: Rancher types CollectionMethods or ResourceMethods verbs do not translate to verbs on k8sv1.APIResource
+// Resources that don't have list verb but do have get verb need to be gathered by GET calls. So the filter for them must
+// provide exact names and if needed namespaces. Regexp can't be matched in a GET call
+func (h *ResourceHandler) gatherObjectsForNonListResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.ResourceSelector) ([]unstructured.Unstructured, error) {
+	var gatheredObjects []unstructured.Unstructured
+
+	// these objects
+	if len(filter.ResourceNames) == 0 {
+		logrus.Infof("Cannot get objects for res %v since it doesn't allow list, and no resource names are provided", res.Name)
+		return gatheredObjects, nil
+	}
+
+	if res.Namespaced && len(filter.Namespaces) == 0 {
+		logrus.Infof("Cannot get objects for res %v since it doesn't allow list, and no namespaces are provided", res.Name)
+		return gatheredObjects, nil
+	}
+
+	gvr := gv.WithResource(res.Name)
+	var dr dynamic.ResourceInterface
+	dr = h.DynamicClient.Resource(gvr)
+	if res.Namespaced {
+		for _, ns := range filter.Namespaces {
+			dr = h.DynamicClient.Resource(gvr).Namespace(ns)
+			for _, name := range filter.ResourceNames {
+				obj, err := dr.Get(ctx, name, k8sv1.GetOptions{})
+				if err != nil {
+					return gatheredObjects, err
+				}
+				gatheredObjects = append(gatheredObjects, *obj)
+			}
+		}
+		return gatheredObjects, nil
+	}
+
+	for _, name := range filter.ResourceNames {
+		obj, err := dr.Get(ctx, name, k8sv1.GetOptions{})
+		if err != nil {
+			return gatheredObjects, err
+		}
+		gatheredObjects = append(gatheredObjects, *obj)
+	}
+
+	return gatheredObjects, nil
+}
+
 func (h *ResourceHandler) WriteBackupObjects(backupPath string) error {
 	for gvResource, resObjects := range h.GVResourceToObjects {
 		for _, resObj := range resObjects {
@@ -358,7 +411,7 @@ func (h *ResourceHandler) WriteBackupObjects(backupPath string) error {
 				}
 			}
 
-			// TODO: collect all objects first and then write??
+			// TODO: POST-preview-2: collect all objects first and then write??
 			err := writeToBackup(resObj.Object, resourcePath, objFilename, encryptionTransformer, additionalAuthenticatedData)
 			if err != nil {
 				return err
@@ -410,17 +463,18 @@ func writeToBackup(resource map[string]interface{}, backupPath, filename string,
 	return nil
 }
 
-func skipBackup(res k8sv1.APIResource) bool {
-	if !canListResource(res.Verbs) {
-		logrus.Infof("Cannot list resource %v, not backing up", res)
-		return true
+func canListResource(verbs k8sv1.Verbs) bool {
+	for _, v := range verbs {
+		if v == "list" {
+			return true
+		}
 	}
 	return false
 }
 
-func canListResource(verbs k8sv1.Verbs) bool {
+func canGetResource(verbs k8sv1.Verbs) bool {
 	for _, v := range verbs {
-		if v == "list" {
+		if v == "get" {
 			return true
 		}
 	}

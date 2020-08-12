@@ -236,6 +236,7 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 		name := resourceInfo.Name
 		namespace := resourceInfo.Namespace
 		gvr := resourceInfo.GVR
+		// TODO: Maybe restoreObj won't be needed
 		currRestoreObj := restoreObj{
 			Name:               name,
 			Namespace:          namespace,
@@ -282,7 +283,6 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 				apiGroup = split[0]
 				version = split[1]
 			}
-			// TODO: check if this object creation is needed
 			// kind + "." + apigroup + "#" + version
 			ownerDirPath := fmt.Sprintf("%s.%s#%s", ownerGVR.Resource, apiGroup, version)
 			ownerName := ownerRefData["name"].(string)

@@ -105,7 +105,6 @@ func (b backupRetentionSync) deleteBackupsFollowingRetentionPolicy(backup *v1.Ba
 	} else if backup.Spec.StorageLocation.Local != "" {
 		backupLocation = backup.Spec.StorageLocation.Local
 	} else if backup.Spec.StorageLocation.S3 != nil {
-		// TODO s3 deletion
 		s3Client, err := objectstore.GetS3Client(b.ctx, backup.Spec.StorageLocation.S3, backup.Namespace, b.dynamicClient)
 		if err != nil {
 			return err
