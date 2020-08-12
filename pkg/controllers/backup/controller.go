@@ -62,7 +62,7 @@ func Register(
 		dynamicClient:         dynamicInterface,
 		defaultBackupLocation: defaultBackupLocation,
 	}
-
+	// TODO: post-preview 2: also accept s3 as a controller-level default location
 	logrus.Infof("Default location for storing backups is %v", controller.defaultBackupLocation)
 	// Use the kube-system NS.UID as the unique ID for a cluster
 	kubeSystemNS, err := controller.namespaces.Get("kube-system", k8sv1.GetOptions{})
