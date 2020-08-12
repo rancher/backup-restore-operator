@@ -8,8 +8,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
-	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"os"
 	"path/filepath"
 
@@ -18,7 +16,6 @@ import (
 )
 
 func (h *handler) uploadToS3(backup *v1.Backup, objectStore *v1.S3ObjectStore, tmpBackupPath, gzipFile string) error {
-	var accessKey, secretKey string
 	tmpBackupGzipFilepath, err := ioutil.TempDir("", "uploadpath")
 	if err != nil {
 		return err
@@ -30,25 +27,9 @@ func (h *handler) uploadToS3(backup *v1.Backup, objectStore *v1.S3ObjectStore, t
 		gzipFile = fmt.Sprintf("%s/%s", objectStore.Folder, gzipFile)
 	}
 	if err := CreateTarAndGzip(tmpBackupPath, tmpBackupGzipFilepath, gzipFile, backup.Name); err != nil {
-		return err
+		return removeTempUploadDir(tmpBackupGzipFilepath, err)
 	}
-	if objectStore.CredentialSecretName != "" {
-		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
-		secrets := h.dynamicClient.Resource(gvr)
-		secretNs, secretName := backup.Namespace, objectStore.CredentialSecretName
-		s3secret, err := secrets.Namespace(secretNs).Get(h.ctx, secretName, k8sv1.GetOptions{})
-		if err != nil {
-			return removeTempUploadDir(tmpBackupGzipFilepath, err)
-		}
-		s3SecretData, ok := s3secret.Object["data"].(map[string]interface{})
-		if !ok {
-			return removeTempUploadDir(tmpBackupGzipFilepath, fmt.Errorf("malformed secret"))
-		}
-		accessKey, _ = s3SecretData["accessKey"].(string)
-		secretKey, _ = s3SecretData["secretKey"].(string)
-	}
-	// if no s3 credentials are provided, use IAM profile, this means passing empty access and secret keys to the SetS3Service call
-	s3Client, err := objectstore.SetS3Service(objectStore, accessKey, secretKey, false)
+	s3Client, err := objectstore.GetS3Client(h.ctx, objectStore, backup.Namespace, h.dynamicClient)
 	if err != nil {
 		return removeTempUploadDir(tmpBackupGzipFilepath, err)
 	}

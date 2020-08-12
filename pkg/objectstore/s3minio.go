@@ -1,6 +1,7 @@
 package objectstore
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -8,6 +9,9 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"net/http"
 	"os"
 	"path"
@@ -19,6 +23,8 @@ import (
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	log "github.com/sirupsen/logrus"
 )
+
+// Almost everything in this file is from rke-tools with some modifications https://github.com/rancher/rke-tools/blob/master/main.go
 
 const (
 	s3ServerRetries = 3
@@ -46,6 +52,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 		// if the s3 access key and secret is not set use iam role
 		if len(accessKey) == 0 && len(secretKey) == 0 {
 			log.Info("invoking set s3 service client use IAM role")
+			// This will work when run on an EC2 instance that has the right policy to access buckets
 			cred = credentials.NewIAM("")
 			if bc.Endpoint == "" {
 				bc.Endpoint = s3Endpoint
@@ -85,6 +92,31 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 		return nil, fmt.Errorf("bucket %s is not found", bc.BucketName)
 	}
 	return client, nil
+}
+
+func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, namespace string, dynamicClient dynamic.Interface) (*minio.Client, error) {
+	var accessKey, secretKey string
+	if objectStore.CredentialSecretName != "" {
+		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
+		secrets := dynamicClient.Resource(gvr)
+		secretNs, secretName := namespace, objectStore.CredentialSecretName
+		s3secret, err := secrets.Namespace(secretNs).Get(ctx, secretName, k8sv1.GetOptions{})
+		if err != nil {
+			return &minio.Client{}, err
+		}
+		s3SecretData, ok := s3secret.Object["data"].(map[string]interface{})
+		if !ok {
+			return &minio.Client{}, fmt.Errorf("malformed secret")
+		}
+		accessKey, _ = s3SecretData["accessKey"].(string)
+		secretKey, _ = s3SecretData["secretKey"].(string)
+	}
+	// if no s3 credentials are provided, use IAM profile, this means passing empty access and secret keys to the SetS3Service call
+	s3Client, err := SetS3Service(objectStore, accessKey, secretKey, false)
+	if err != nil {
+		return &minio.Client{}, err
+	}
+	return s3Client, nil
 }
 
 func getBucketLookupType(endpoint string) minio.BucketLookupType {

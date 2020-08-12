@@ -12,31 +12,14 @@ import (
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/objectstore"
-	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
 func (h *handler) downloadFromS3(restore *v1.Restore) (string, error) {
-	var accessKey, secretKey string
 	objStore := restore.Spec.StorageLocation.S3
-	if objStore.CredentialSecretName != "" {
-		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
-		secrets := h.dynamicClient.Resource(gvr)
-		secretNs, secretName := restore.Namespace, objStore.CredentialSecretName
-		s3secret, err := secrets.Namespace(secretNs).Get(h.ctx, secretName, k8sv1.GetOptions{})
-		if err != nil {
-			return "", err
-		}
-		s3SecretData, ok := s3secret.Object["data"].(map[string]interface{})
-		if !ok {
-			return "", fmt.Errorf("malformed secret")
-		}
-		accessKey, _ = s3SecretData["accessKey"].(string)
-		secretKey, _ = s3SecretData["secretKey"].(string)
-	}
-	s3Client, err := objectstore.SetS3Service(objStore, accessKey, secretKey, false)
+	s3Client, err := objectstore.GetS3Client(h.ctx, objStore, restore.Namespace, h.dynamicClient)
 	if err != nil {
 		return "", err
 	}

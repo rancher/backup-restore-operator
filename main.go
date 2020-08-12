@@ -84,9 +84,12 @@ func main() {
 	if DefaultLocation == "" {
 		logrus.Infof("No temporary backup location provided, creating a new default in the temp dir")
 		DefaultLocation = filepath.Join(os.TempDir(), "defaultbackuplocation")
-		err = os.Mkdir(filepath.Join(os.TempDir(), "defaultbackuplocation"), os.ModePerm)
-		if err != nil {
-			logrus.Errorf("Error setting default location")
+		_, err := os.Stat(DefaultLocation)
+		if os.IsNotExist(err) {
+			err = os.Mkdir(filepath.Join(os.TempDir(), "defaultbackuplocation"), os.ModePerm)
+			if err != nil {
+				logrus.Errorf("Error setting default location")
+			}
 		}
 	}
 
@@ -96,7 +99,7 @@ func main() {
 		clientSet, dynamicInterace, DefaultLocation)
 	restore.Register(ctx, backups.Resources().V1().Restore(), backups.Resources().V1().Backup(),
 		core.Core().V1().Secret(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
-	backup.StartBackupRetentionCheckDaemon(ctx, backups.Resources().V1().Backup(), core.Core().V1().Namespace(), "", DefaultLocation)
+	backup.StartBackupRetentionCheckDaemon(ctx, backups.Resources().V1().Backup(), core.Core().V1().Namespace(), dynamicInterace, "", DefaultLocation)
 
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
