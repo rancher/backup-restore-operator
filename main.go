@@ -27,15 +27,15 @@ import (
 )
 
 var (
-	Version         = "v0.0.0-dev"
-	GitCommit       = "HEAD"
-	KubeConfig      string
-	DefaultLocation string
+	Version                      = "v0.0.0-dev"
+	GitCommit                    = "HEAD"
+	KubeConfig                   string
+	DefaultBackupStorageLocation string
 )
 
 func init() {
 	flag.StringVar(&KubeConfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
-	flag.StringVar(&DefaultLocation, "defaultlocation", "", "Path in the temp dir where "+
+	flag.StringVar(&DefaultBackupStorageLocation, "defaultBackupStorageLocation", "", "Path in the temp dir where "+
 		"backups will be stored if no storage location is specified on backup CR")
 	flag.Parse()
 }
@@ -81,10 +81,10 @@ func main() {
 		logrus.Fatalf("Error generating shared client factory: %s", err.Error())
 	}
 
-	if DefaultLocation == "" {
+	if DefaultBackupStorageLocation == "" {
 		logrus.Infof("No temporary backup location provided, creating a new default in the temp dir")
-		DefaultLocation = filepath.Join(os.TempDir(), "defaultbackuplocation")
-		_, err := os.Stat(DefaultLocation)
+		DefaultBackupStorageLocation = filepath.Join(os.TempDir(), "defaultbackuplocation")
+		_, err := os.Stat(DefaultBackupStorageLocation)
 		if os.IsNotExist(err) {
 			err = os.Mkdir(filepath.Join(os.TempDir(), "defaultbackuplocation"), os.ModePerm)
 			if err != nil {
@@ -96,10 +96,10 @@ func main() {
 	backup.Register(ctx, backups.Resources().V1().Backup(), backups.Resources().V1().ResourceSet(),
 		core.Core().V1().Secret(),
 		core.Core().V1().Namespace(),
-		clientSet, dynamicInterace, DefaultLocation)
+		clientSet, dynamicInterace, DefaultBackupStorageLocation)
 	restore.Register(ctx, backups.Resources().V1().Restore(), backups.Resources().V1().Backup(),
 		core.Core().V1().Secret(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
-	backup.StartBackupRetentionCheckDaemon(ctx, backups.Resources().V1().Backup(), core.Core().V1().Namespace(), dynamicInterace, "", DefaultLocation)
+	backup.StartBackupRetentionCheckDaemon(ctx, backups.Resources().V1().Backup(), core.Core().V1().Namespace(), dynamicInterace, "", DefaultBackupStorageLocation)
 
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
