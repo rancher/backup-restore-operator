@@ -28,7 +28,7 @@ spec:
               properties:
                 local:
                   type: string
-                s3objectStore:
+                s3:
                   nullable: true
                   properties:
                     bucketName:
@@ -37,7 +37,7 @@ spec:
                       type: string
                     endpoint:
                       type: string
-                    endpointCa:
+                    endpointCA:
                       type: string
                     folder:
                       type: string

@@ -6,7 +6,7 @@ metadata:
 spec:
   backupFilename: default-s3-backup-demo-24e1b8ce-1f00-4bbe-94bb-248ad7606dc8-2020-08-10T15-29-53-07-00.tar.gz
   storageLocation:
-    s3objectStore:
+    s3:
       credentialSecretName: creds
       bucketName: rajashree-backup-test
       folder: ecm1

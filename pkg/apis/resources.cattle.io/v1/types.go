@@ -56,7 +56,7 @@ type ResourceSet struct {
 
 // regex+list = OR //separate fields :AND
 type ResourceSelector struct {
-	ApiGroup           string                `json:"apiGroup"`
+	ApiVersion         string                `json:"apiVersion"`
 	Kinds              []string              `json:"kinds,omitempty"`
 	KindsRegexp        string                `json:"kindsRegexp,omitempty"`
 	ResourceNames      []string              `json:"resourceNames,omitempty"`
@@ -75,13 +75,13 @@ type ControllerReference struct {
 }
 
 type StorageLocation struct {
-	S3    *S3ObjectStore `json:"s3objectStore"`
+	S3    *S3ObjectStore `json:"s3"`
 	Local string         `json:"local"`
 }
 
 type S3ObjectStore struct {
 	Endpoint              string `json:"endpoint"`
-	EndpointCA            string `json:"endpointCa"`
+	EndpointCA            string `json:"endpointCA"`
 	InsecureTLSSkipVerify bool   `json:"insecureTLSSkipVerify"`
 	CredentialSecretName  string `json:"credentialSecretName"`
 	BucketName            string `json:"bucketName"`

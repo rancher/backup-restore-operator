@@ -58,7 +58,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 		if err != nil {
 			return resourcesWithStatusSubresource, err
 		}
-		gv, err := schema.ParseGroupVersion(resourceSelector.ApiGroup)
+		gv, err := schema.ParseGroupVersion(resourceSelector.ApiVersion)
 		if err != nil {
 			return resourcesWithStatusSubresource, err
 		}
@@ -107,7 +107,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelector) ([]k8sv1.APIResource, error) {
 	var resourceList, resourceListFromRegex, resourceListFromNames []k8sv1.APIResource
 
-	groupVersion := filter.ApiGroup
+	groupVersion := filter.ApiVersion
 	logrus.Infof("Gathering resources for groupVersion: %v", groupVersion)
 
 	// first list all resources for given groupversion using discovery API

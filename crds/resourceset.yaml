@@ -32,7 +32,7 @@ spec:
         resourceSelectors:
           items:
             properties:
-              apiGroup:
+              apiVersion:
                 type: string
               kinds:
                 items:
