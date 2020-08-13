@@ -3,10 +3,11 @@ package crds
 import (
 	"fmt"
 	resources "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	_ "github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io"
+	_ "github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io/v1beta1"
 	"github.com/rancher/wrangler/pkg/crd"
 	"github.com/rancher/wrangler/pkg/yaml"
 	"io/ioutil"
+	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"strings"
 )
@@ -17,6 +18,15 @@ func WriteCRD() error {
 		if err != nil {
 			return err
 		}
+		switch bCrd.Name {
+		case "backups.resources.cattle.io":
+			customizeBackup(&bCrd)
+		case "resourcesets.resources.cattle.io":
+			customizeResourceSet(&bCrd)
+		case "restores.resources.cattle.io":
+			customizeRestore(&bCrd)
+		}
+
 		yamlBytes, err := yaml.Export(&bCrd)
 		if err != nil {
 			return err
@@ -43,6 +53,49 @@ func List() []crd.CRD {
 			return c
 		}),
 	}
+}
+
+func customizeBackup(backup *apiext.CustomResourceDefinition) {
+	properties := backup.Spec.Validation.OpenAPIV3Schema.Properties
+	spec := properties["spec"]
+	spec.Required = []string{"resourceSetName"}
+	retention := spec.Properties["retention"]
+	retention.Format = "duration"
+	spec.Properties["retention"] = retention
+	resourceSetName := spec.Properties["resourceSetName"]
+	resourceSetName.Description = "Name of resourceSet CR to use for backup, must be in the same namespace"
+	spec.Properties["resourceSetName"] = resourceSetName
+	encryptionConfig := spec.Properties["encryptionConfigName"]
+	encryptionConfig.Description = "Name of secret containing the encryption config, must be in the namespace of the chart: cattle-resources-system"
+	spec.Properties["encryptionConfigName"] = encryptionConfig
+	schedule := spec.Properties["schedule"]
+	schedule.Description = "Cron schedule for recurring backups"
+	spec.Properties["schedule"] = schedule
+	properties["spec"] = spec
+}
+
+func customizeResourceSet(resourceSetCRD *apiext.CustomResourceDefinition) {
+	resourceSet := resourceSetCRD.Spec.Validation.OpenAPIV3Schema
+	resourceSet.Required = []string{"resourceSelectors"}
+	resourceSelector := resourceSet.Properties["resourceSelectors"]
+	resourceSelector.Required = []string{"apiVersion"}
+	resourceSet.Properties["resourceSelectors"] = resourceSelector
+}
+
+func customizeRestore(restore *apiext.CustomResourceDefinition) {
+	maxDeleteTimeout := float64(5)
+	properties := restore.Spec.Validation.OpenAPIV3Schema.Properties
+	spec := properties["spec"]
+	spec.Required = []string{"backupFilename", "storageLocation"}
+	deleteTimeout := spec.Properties["deleteTimeout"]
+	deleteTimeout.Maximum = &maxDeleteTimeout
+	spec.Properties["deleteTimeout"] = deleteTimeout
+	storageLocation := spec.Properties["storageLocation"]
+	s3 := storageLocation.Properties["s3"]
+	local := storageLocation.Properties["local"]
+	storageLocation.AnyOf = []apiext.JSONSchemaProps{s3, local}
+	spec.Properties["storageLocation"] = storageLocation
+	properties["spec"] = spec
 }
 
 func newCRD(obj interface{}, customize func(crd.CRD) crd.CRD) crd.CRD {

@@ -81,7 +81,11 @@ spec:
                 type: array
             type: object
           nullable: true
+          required:
+          - apiVersion
           type: array
+      required:
+      - resourceSelectors
       type: object
   version: v1
   versions:

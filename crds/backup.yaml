@@ -16,12 +16,18 @@ spec:
         spec:
           properties:
             encryptionConfigName:
+              description: 'Name of secret containing the encryption config, must
+                be in the namespace of the chart: cattle-resources-system'
               type: string
             resourceSetName:
+              description: Name of resourceSet CR to use for backup, must be in the
+                same namespace
               type: string
             retention:
+              format: duration
               type: string
             schedule:
+              description: Cron schedule for recurring backups
               type: string
             storageLocation:
               nullable: true
@@ -47,6 +53,8 @@ spec:
                       type: string
                   type: object
               type: object
+          required:
+          - resourceSetName
           type: object
         status:
           properties:
