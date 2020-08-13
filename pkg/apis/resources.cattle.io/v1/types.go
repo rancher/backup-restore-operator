@@ -56,7 +56,7 @@ type ResourceSet struct {
 
 // regex+list = OR //separate fields :AND
 type ResourceSelector struct {
-	ApiVersion         string                `json:"apiVersion"`
+	APIVersion         string                `json:"apiVersion"`
 	Kinds              []string              `json:"kinds,omitempty"`
 	KindsRegexp        string                `json:"kindsRegexp,omitempty"`
 	ResourceNames      []string              `json:"resourceNames,omitempty"`
@@ -67,7 +67,7 @@ type ResourceSelector struct {
 }
 
 type ControllerReference struct {
-	ApiVersion string `json:"apiVersion"`
+	APIVersion string `json:"apiVersion"`
 	Resource   string `json:"resource"`
 	Namespace  string `json:"namespace"`
 	Name       string `json:"name"`

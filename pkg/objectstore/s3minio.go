@@ -9,14 +9,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+
+	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 
 	"github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
@@ -45,7 +46,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 
 	var err error
 	var client = &minio.Client{}
-	var cred = &credentials.Credentials{}
+	var cred credentials.Credentials
 	var tr = http.DefaultTransport
 	bucketLookup := getBucketLookupType(bc.Endpoint)
 	for retries := 0; retries <= s3ServerRetries; retries++ {
@@ -53,15 +54,15 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 		if len(accessKey) == 0 && len(secretKey) == 0 {
 			log.Info("invoking set s3 service client use IAM role")
 			// This will work when run on an EC2 instance that has the right policy to access buckets
-			cred = credentials.NewIAM("")
+			cred = *credentials.NewIAM("")
 			if bc.Endpoint == "" {
 				bc.Endpoint = s3Endpoint
 			}
 		} else {
-			cred = credentials.NewStatic(accessKey, secretKey, "", credentials.SignatureDefault)
+			cred = *credentials.NewStatic(accessKey, secretKey, "", credentials.SignatureDefault)
 		}
 		client, err = minio.NewWithOptions(bc.Endpoint, &minio.Options{
-			Creds:        cred,
+			Creds:        &cred,
 			Secure:       useSSL,
 			Region:       bc.Region,
 			BucketLookup: bucketLookup,

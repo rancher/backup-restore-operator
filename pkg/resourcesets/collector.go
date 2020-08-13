@@ -58,7 +58,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 		if err != nil {
 			return resourcesWithStatusSubresource, err
 		}
-		gv, err := schema.ParseGroupVersion(resourceSelector.ApiVersion)
+		gv, err := schema.ParseGroupVersion(resourceSelector.APIVersion)
 		if err != nil {
 			return resourcesWithStatusSubresource, err
 		}
@@ -97,7 +97,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 				return resourcesWithStatusSubresource, err
 			}
 			// currGVResource contains GV for resource type, its name and if its namespaced or not,
-			// exmaple: gv=v1, name=secrets, namespaced=true; filteredObjects are all the objects matching the resourceSelector
+			// example: gv=v1, name=secrets, namespaced=true; filteredObjects are all the objects matching the resourceSelector
 			h.GVResourceToObjects[currGVResource] = filteredObjects
 		}
 	}
@@ -107,7 +107,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelector) ([]k8sv1.APIResource, error) {
 	var resourceList, resourceListFromRegex, resourceListFromNames []k8sv1.APIResource
 
-	groupVersion := filter.ApiVersion
+	groupVersion := filter.APIVersion
 	logrus.Infof("Gathering resources for groupVersion: %v", groupVersion)
 
 	// first list all resources for given groupversion using discovery API
@@ -162,7 +162,7 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 			// comparing whatever is specified in the Kinds field with both, resource Name (plural) and Kind (singular)
 			if resourceTypesToInclude[res.Name] || resourceTypesToInclude[res.Kind] {
 				if !resourceListAfterRegexMatch[res.Name] && !resourceListAfterRegexMatch[res.Kind] {
-					logrus.Infof("resource kind %v found in list of resources to include %v", res.Name)
+					logrus.Infof("resource kind %v found in list of resources to include", res.Name)
 					resourceListFromNames = append(resourceListFromNames, res)
 				}
 			}

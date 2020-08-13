@@ -2,14 +2,15 @@ package crds
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strings"
+
 	resources "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	_ "github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io/v1beta1"
+	_ "github.com/rancher/wrangler-api/pkg/generated/controllers/apiextensions.k8s.io/v1beta1" // Imported to use init function
 	"github.com/rancher/wrangler/pkg/crd"
 	"github.com/rancher/wrangler/pkg/yaml"
-	"io/ioutil"
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"strings"
 )
 
 func WriteCRD() error {

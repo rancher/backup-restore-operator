@@ -3,8 +3,6 @@ package backup
 import (
 	"context"
 	"fmt"
-	"github.com/rancher/backup-restore-operator/pkg/objectstore"
-	"k8s.io/client-go/dynamic"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,13 +12,15 @@ import (
 	"github.com/minio/minio-go/v6"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	resourceController "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/objectstore"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/robfig/cron"
 	"github.com/sirupsen/logrus"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/dynamic"
 )
 
-const EnforceRetentionInterval = "@every 1m"
+const EnforceRetentionInterval = "@every 5m"
 
 var recurringSync *backupRetentionSync
 
@@ -57,7 +57,7 @@ func StartBackupRetentionCheckDaemon(ctx context.Context, backups resourceContro
 
 	kubeSystemNS, err := namespaces.Get("kube-system", k8sv1.GetOptions{})
 	if err != nil {
-		logrus.Fatal("Error getting namespace kube-system %v", err)
+		logrus.Fatalf("Error getting namespace kube-system %v", err)
 	}
 	recurringSync.kubeSystemNS = string(kubeSystemNS.UID)
 

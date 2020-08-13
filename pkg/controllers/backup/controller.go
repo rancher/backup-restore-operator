@@ -67,7 +67,8 @@ func Register(
 	// Use the kube-system NS.UID as the unique ID for a cluster
 	kubeSystemNS, err := controller.namespaces.Get("kube-system", k8sv1.GetOptions{})
 	if err != nil {
-		logrus.Fatal("Error getting namespace kube-system %v", err)
+		// fatal log here, because we need the kube-system ns UID while creating any backup file
+		logrus.Fatalf("Error getting namespace kube-system %v", err)
 	}
 	controller.kubeSystemNS = string(kubeSystemNS.UID)
 	// Register handlers

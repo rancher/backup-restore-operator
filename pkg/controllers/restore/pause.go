@@ -34,10 +34,10 @@ func (h *handler) scaleDownControllersFromResourceSet() {
 		h.backupResourceSet.ControllerReferences[ind] = controllerRef
 		spec["replicas"] = 0
 		// update controller to scale it down
-		logrus.Infof("Scaling down controllerRef %v/%v/%v to 0", controllerRef.ApiVersion, controllerRef.Resource, controllerRef.Name)
+		logrus.Infof("Scaling down controllerRef %v/%v/%v to 0", controllerRef.APIVersion, controllerRef.Resource, controllerRef.Name)
 		_, err := dr.Update(h.ctx, controllerObj, k8sv1.UpdateOptions{})
 		if err != nil {
-			logrus.Errorf("Error scaling down %v/%v/%v, skipping it", controllerRef.ApiVersion, controllerRef.Resource, controllerRef.Name)
+			logrus.Errorf("Error scaling down %v/%v/%v, skipping it", controllerRef.APIVersion, controllerRef.Resource, controllerRef.Name)
 		}
 	}
 }
@@ -50,20 +50,20 @@ func (h *handler) scaleUpControllersFromResourceSet() {
 		}
 		controllerObj.Object["spec"].(map[string]interface{})["replicas"] = controllerRef.Replicas
 		// update controller to scale it back up
-		logrus.Infof("Scaling up controllerRef %v/%v/%v to %v", controllerRef.ApiVersion, controllerRef.Resource, controllerRef.Name, controllerRef.Replicas)
+		logrus.Infof("Scaling up controllerRef %v/%v/%v to %v", controllerRef.APIVersion, controllerRef.Resource, controllerRef.Name, controllerRef.Replicas)
 		_, err := dr.Update(h.ctx, controllerObj, k8sv1.UpdateOptions{})
 		if err != nil {
-			logrus.Errorf("Error scaling up %v/%v/%v, edit it to scale back to %v", controllerRef.ApiVersion, controllerRef.Resource, controllerRef.Name, controllerRef.Replicas)
+			logrus.Errorf("Error scaling up %v/%v/%v, edit it to scale back to %v", controllerRef.APIVersion, controllerRef.Resource, controllerRef.Name, controllerRef.Replicas)
 		}
 	}
 }
 
 func (h *handler) getObjFromControllerRef(controllerRef v1.ControllerReference) (*unstructured.Unstructured, dynamic.ResourceInterface) {
-	logrus.Infof("Processing controllerRef %v/%v/%v", controllerRef.ApiVersion, controllerRef.Resource, controllerRef.Name)
+	logrus.Infof("Processing controllerRef %v/%v/%v", controllerRef.APIVersion, controllerRef.Resource, controllerRef.Name)
 	var dr dynamic.ResourceInterface
-	gv, err := schema.ParseGroupVersion(controllerRef.ApiVersion)
+	gv, err := schema.ParseGroupVersion(controllerRef.APIVersion)
 	if err != nil {
-		logrus.Errorf("Error parsing apiverion %v for controllerRef %v, skipping it", controllerRef.ApiVersion, controllerRef.Name)
+		logrus.Errorf("Error parsing apiverion %v for controllerRef %v, skipping it", controllerRef.APIVersion, controllerRef.Name)
 		return nil, dr
 	}
 	gvr := gv.WithResource(controllerRef.Resource)
