@@ -1,3 +1,3 @@
 FROM alpine
-COPY bin/backup /usr/bin/
+COPY bin/backup-restore-operator /usr/bin/
 CMD ["backup-restore-operator"]

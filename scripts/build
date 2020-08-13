@@ -9,10 +9,10 @@ mkdir -p bin
 if [ "$(uname)" = "Linux" ]; then
     OTHER_LINKFLAGS="-extldflags -static -s"
 fi
-LINKFLAGS="-X github.com/rancher/backup.Version=$VERSION"
-LINKFLAGS="-X github.com/rancher/backup.GitCommit=$COMMIT $LINKFLAGS"
-CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o bin/backup
+LINKFLAGS="-X github.com/rancher/backup-restore-operator.Version=$VERSION"
+LINKFLAGS="-X github.com/rancher/backup-restore-operator.GitCommit=$COMMIT $LINKFLAGS"
+CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o bin/backup-restore-operator
 if [ "$CROSS" = "true" ] && [ "$ARCH" = "amd64" ]; then
-    GOOS=darwin go build -ldflags "$LINKFLAGS" -o bin/backup-darwin
-    GOOS=windows go build -ldflags "$LINKFLAGS" -o bin/backup-windows
+    GOOS=darwin go build -ldflags "$LINKFLAGS" -o bin/backup-restore-operator-darwin
+    GOOS=windows go build -ldflags "$LINKFLAGS" -o bin/backup-restore-operator-windows
 fi
