@@ -44,7 +44,7 @@ func main() {
 	logrus.Info("Starting controller")
 	logrus.SetFormatter(&simplelog.StandardFormatter{})
 	ctx := signals.SetupSignalHandler(context.Background())
-
+	logrus.Infof("Using kubeconfig %v", KubeConfig)
 	restKubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
 	if err != nil {
 		logrus.Fatalf("failed to find kubeconfig: %v", err)
