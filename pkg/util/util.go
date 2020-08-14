@@ -14,14 +14,16 @@ import (
 )
 
 const (
-	ChartNamespace = "cattle-resources-system"
-	WorkerThreads  = 25
+	WorkerThreads = 25
 )
+
+var ChartNamespace string
 
 func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core.SecretController) (map[schema.GroupResource]value.Transformer, error) {
 	var transformerMap map[schema.GroupResource]value.Transformer
 	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
 	// kubectl create secret generic test-encryptionconfig --from-file=./encryptionConfig.yaml
+	logrus.Infof("Get encryption config from namespace %v", ChartNamespace)
 	encryptionConfigSecret, err := secrets.Get(ChartNamespace, encryptionConfigSecretName, k8sv1.GetOptions{})
 	if err != nil {
 		return transformerMap, err

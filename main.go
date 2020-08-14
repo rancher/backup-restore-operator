@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/backup-restore-operator/pkg/controllers/backup"
 	"github.com/rancher/backup-restore-operator/pkg/controllers/restore"
 	"github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io"
+	"github.com/rancher/backup-restore-operator/pkg/util"
 	lasso "github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/lasso/pkg/mapper"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core"
@@ -31,20 +32,20 @@ var (
 	GitCommit                    = "HEAD"
 	KubeConfig                   string
 	DefaultBackupStorageLocation string
+	ChartNamespace               string
 )
 
 func init() {
 	flag.StringVar(&KubeConfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
-	flag.StringVar(&DefaultBackupStorageLocation, "defaultBackupStorageLocation", "", "Path in the temp dir where "+
-		"backups will be stored if no storage location is specified on backup CR")
 	flag.Parse()
+	DefaultBackupStorageLocation = os.Getenv("DEFAULT_BACKUP_STORAGE_LOCATION")
+	ChartNamespace = os.Getenv("CHART_NAMESPACE")
 }
 
 func main() {
 	logrus.Info("Starting controller")
 	logrus.SetFormatter(&simplelog.StandardFormatter{})
 	ctx := signals.SetupSignalHandler(context.Background())
-	logrus.Infof("Using kubeconfig %v", KubeConfig)
 	restKubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
 	if err != nil {
 		logrus.Fatalf("failed to find kubeconfig: %v", err)
@@ -91,7 +92,12 @@ func main() {
 				logrus.Errorf("Error setting default location")
 			}
 		}
+	} else {
+		logrus.Infof("Default location for storing backups is set to %v", DefaultBackupStorageLocation)
 	}
+
+	util.ChartNamespace = ChartNamespace
+	logrus.Infof("Secrets containing encryption config files must be stored in the namespace %v", ChartNamespace)
 
 	backup.Register(ctx, backups.Resources().V1().Backup(), backups.Resources().V1().ResourceSet(),
 		core.Core().V1().Secret(),
