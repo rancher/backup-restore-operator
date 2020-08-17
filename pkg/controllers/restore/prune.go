@@ -2,6 +2,7 @@ package restore
 
 import (
 	"path/filepath"
+	"strings"
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
@@ -49,7 +50,7 @@ func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap 
 			resourceFilePath := filepath.Join(resourcePath, objName+".json")
 			logrus.Infof("resourceFilePath: %v", resourceFilePath)
 			if !h.resourcesFromBackup[resourceFilePath] {
-				logrus.Infof("Marking resource %v for deletion", resourceFilePath)
+				logrus.Infof("Marking resource %v for deletion", strings.TrimSuffix(resourceFilePath, ".json"))
 				resourcesToDelete = append(resourcesToDelete, pruneResourceInfo{
 					name:      objName,
 					namespace: objNs,

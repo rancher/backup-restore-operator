@@ -112,5 +112,6 @@ type RestoreStatus struct {
 	Conditions          []genericcondition.GenericCondition `json:"conditions,omitempty"`
 	RestoreCompletionTS string                              `json:"restoreCompletionTs"`
 	ObservedGeneration  int64                               `json:"observedGeneration"`
+	NumRetries          int                                 `json:"numRetries"`
 	Summary             string                              `json:"summary,omitempty"`
 }

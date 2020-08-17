@@ -98,8 +98,12 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	if restore.Status.RestoreCompletionTS != "" {
 		return restore, nil
 	}
+
 	backupName := restore.Spec.BackupFilename
 	logrus.Infof("Restoring from backup %v", restore.Spec.BackupFilename)
+	if restore.Status.NumRetries > 0 {
+		logrus.Infof("Retry #%v: Retrying restore from %v", restore.Status.NumRetries, backupName)
+	}
 
 	created := make(map[string]bool)
 	ownerToDependentsList := make(map[string][]restoreObj)
@@ -538,6 +542,8 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error) (*v1.Restore, error) {
+	time.Sleep(2 * time.Second)
+	restore.Status.NumRetries++
 	condition.Cond(v1.RestoreConditionReconciling).SetStatusBool(restore, true)
 	if updRestore, err := h.restores.UpdateStatus(restore); err != nil {
 		return updRestore, errors.New(originalErr.Error() + err.Error())
