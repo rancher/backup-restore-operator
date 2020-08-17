@@ -4,7 +4,7 @@ metadata:
   name: ecm-resource-set
 resourceSelectors:
   - apiVersion: "v1"
-    kindsRegexp: "^Namespaces$"
+    kindsRegexp: "^namespaces$"
     resourceNameRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"
   - apiVersion: "v1"
     kindsRegexp: "^Secret$|^serviceaccounts$"
