@@ -93,7 +93,9 @@ func main() {
 			}
 		}
 	} else {
+		// This path should exist on the node on which the backup-restore-operator pods are running
 		logrus.Infof("Default location for storing backups is set to %v", DefaultBackupStorageLocation)
+		logrus.Infof("The following path must exist on the node %v", DefaultBackupStorageLocation)
 	}
 
 	util.ChartNamespace = ChartNamespace

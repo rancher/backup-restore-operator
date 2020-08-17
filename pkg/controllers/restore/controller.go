@@ -256,25 +256,36 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 			continue
 		}
 		numOwners := 0
+		logrus.Infof("Checking ownerRefs for resource %v of type %v", name, gvr.String())
 		for _, owner := range ownerRefs {
 			numOwners++
 			ownerRefData, ok := owner.(map[string]interface{})
 			if !ok {
-				logrus.Errorf("invalid ownerRef")
+				logrus.Errorf("Invalid ownerRef for resource %v of type %v", name, gvr.String())
 				continue
 			}
 
 			groupVersion := ownerRefData["apiVersion"].(string)
 			gv, err := schema.ParseGroupVersion(groupVersion)
 			if err != nil {
-				logrus.Errorf(" err %v parsing ownerRef apiVersion", err)
+				logrus.Errorf("Error parsing ownerRef apiVersion %v for resource %v: %v", groupVersion, name, err)
 				continue
 			}
 			kind := ownerRefData["kind"].(string)
 			gvk := gv.WithKind(kind)
+			logrus.Infof("Getting GVR for ownerRef %v of resource %v", gvk.String(), name)
 			ownerGVR, isNamespaced, err := h.sharedClientFactory.ResourceForGVK(gvk)
 			if err != nil {
-				return fmt.Errorf("error getting resource for gvk %v: %v", gvk, err)
+				// Prior to Rancher 2.4.5, following resources had roles&rolebindings with malformed ownerRefs:
+				// Secrets for cloud creds; NodeTemplates; ClusterTemplates & Revisions; Multiclusterapps & GlobalDNS
+				// Kind was replaced by the resource name in plural and APIVersion field only contained the group and not version
+				// Error is of the kind:  Kind=nodetemplates: no matches for kind "nodetemplates" in version "management.cattle.io"
+				// this is an invalid ownerRef, can't restore current resource with this ownerRef. But if we continue and this resource has no valid ownerRef it won't get restored
+				// so decrement numOwners. if the curr object has at least one valid ownerRef, it will get added to ownersToDependents list
+				// but for objects like the rancher 2.4.5, check at the end of this loop if even a single ownerRef is found, if not add it to toRestore
+				numOwners--
+				logrus.Errorf("Invalid ownerRef %v, either of the fields is incorrect: APIVersion or Kind", gvk.String())
+				logrus.Errorf("Error getting ownerRef %v for object %v(of %v): %v", gvk.String(), name, gvr.String(), err)
 			}
 
 			var apiGroup, version string
@@ -310,7 +321,15 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 				ownerToDependentsList[ownerObj.ResourceConfigPath] = append(ownerObjDependents, currRestoreObj)
 			}
 		}
-		numOwnerReferences[currRestoreObj.ResourceConfigPath] = numOwners
+		if numOwners > 0 {
+			numOwnerReferences[currRestoreObj.ResourceConfigPath] = numOwners
+		} else {
+			// Errors were encountered while processing ownerRefs for this object, so it should get restored without any ownerRefs,
+			// add it to toRestore
+			logrus.Warnf("Resource %v of type %v has invalid ownerRefs, adding it to restore queue by dropping the ownerRefs", name, gvr.String())
+			delete(currRestoreObj.Data.Object[metadataMapKey].(map[string]interface{}), ownerRefsMapKey)
+			*toRestore = append(*toRestore, currRestoreObj)
+		}
 	}
 	return nil
 }
@@ -434,7 +453,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 		}
 	}
 
-	logrus.Infof("\nSuccessfully restored %v\n", name)
+	logrus.Infof("Successfully restored %v", name)
 	return nil
 }
 
