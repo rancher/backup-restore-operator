@@ -5,7 +5,9 @@ metadata:
 resourceSelectors:
   - apiVersion: "v1"
     kindsRegexp: "^namespaces$"
-    resourceNameRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"
+    resourceNameRegexp: "^cattle-|^p-|^c-|^user-|^u-"
+    resourceNames:
+      - "local"
   - apiVersion: "v1"
     kindsRegexp: "^Secret$|^serviceaccounts$"
     namespaceRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"

@@ -82,9 +82,11 @@ func main() {
 		logrus.Fatalf("Error generating shared client factory: %s", err.Error())
 	}
 
+	// we should decide and set this path, and on top accept it from the user
 	if DefaultBackupStorageLocation == "" {
 		logrus.Infof("No temporary backup location provided, creating a new default in the temp dir")
 		DefaultBackupStorageLocation = filepath.Join(os.TempDir(), "defaultbackuplocation")
+		// create dir using ioutil
 		_, err := os.Stat(DefaultBackupStorageLocation)
 		if os.IsNotExist(err) {
 			err = os.Mkdir(filepath.Join(os.TempDir(), "defaultbackuplocation"), os.ModePerm)

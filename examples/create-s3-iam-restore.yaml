@@ -7,7 +7,6 @@ spec:
   backupFilename: default-s3-backup-demo-c583d8f2-6daf-4648-8ead-ed826c591471-2020-08-18T17#44#32Z.tar.gz
   storageLocation:
     s3:
-      credentialSecretName: creds
       bucketName: rajashree-backup-test
       folder: ecm1
       region: us-west-2

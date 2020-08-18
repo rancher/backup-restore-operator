@@ -1,8 +1,0 @@
-apiVersion: backupper.cattle.io/v1
-kind: FakeTest
-metadata:
-  name: test-def
-  namespace: default
-spec:
-  valStr: "testval"
-  valInt: 7

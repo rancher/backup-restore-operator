@@ -59,7 +59,6 @@ func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap 
 			}
 		}
 	}
-	logrus.Infof("Pruning following resources %v", resourcesToDelete)
 	return h.pruneClusterScopedResources(resourcesToDelete, deleteTimeout)
 }
 
