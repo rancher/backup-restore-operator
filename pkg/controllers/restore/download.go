@@ -17,9 +17,9 @@ import (
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
-func (h *handler) downloadFromS3(restore *v1.Restore) (string, error) {
-	objStore := restore.Spec.StorageLocation.S3
-	s3Client, err := objectstore.GetS3Client(h.ctx, objStore, restore.Namespace, h.dynamicClient)
+func (h *handler) downloadFromS3(restore *v1.Restore, objStore *v1.S3ObjectStore, namespace string) (string, error) {
+	fmt.Printf("\nobjStore: %v, namespace: %v\n", objStore, namespace)
+	s3Client, err := objectstore.GetS3Client(h.ctx, objStore, namespace, h.dynamicClient)
 	if err != nil {
 		return "", err
 	}

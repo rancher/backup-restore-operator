@@ -31,7 +31,7 @@ type BackupSpec struct {
 	ResourceSetName      string           `json:"resourceSetName"`
 	EncryptionConfigName string           `json:"encryptionConfigName,omitempty"`
 	Schedule             string           `json:"schedule,omitempty"`
-	Retention            string           `json:"retention,omitempty"` //time to keep snapshot in hours
+	RetentionCount       int64            `json:"retentionCount,omitempty"`
 }
 
 type BackupStatus struct {
@@ -75,8 +75,7 @@ type ControllerReference struct {
 }
 
 type StorageLocation struct {
-	S3    *S3ObjectStore `json:"s3"`
-	Local string         `json:"local"`
+	S3 *S3ObjectStore `json:"s3"`
 }
 
 type S3ObjectStore struct {

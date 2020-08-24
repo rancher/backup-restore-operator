@@ -60,9 +60,10 @@ func customizeBackup(backup *apiext.CustomResourceDefinition) {
 	properties := backup.Spec.Validation.OpenAPIV3Schema.Properties
 	spec := properties["spec"]
 	spec.Required = []string{"resourceSetName"}
-	retention := spec.Properties["retention"]
-	retention.Format = "duration"
-	spec.Properties["retention"] = retention
+	//retentionCount := spec.Properties["retentionCount"]
+	//defaultRetention, _ := json.Marshal(10)
+	//retentionCount.Default = &apiext.JSON{Raw: defaultRetention}
+	//spec.Properties["retentionCount"] = retentionCount
 	resourceSetName := spec.Properties["resourceSetName"]
 	resourceSetName.Description = "Name of resourceSet CR to use for backup, must be in the same namespace"
 	spec.Properties["resourceSetName"] = resourceSetName
@@ -87,16 +88,9 @@ func customizeRestore(restore *apiext.CustomResourceDefinition) {
 	maxDeleteTimeout := float64(5)
 	properties := restore.Spec.Validation.OpenAPIV3Schema.Properties
 	spec := properties["spec"]
-	spec.Required = []string{"backupFilename", "storageLocation"}
 	deleteTimeout := spec.Properties["deleteTimeout"]
 	deleteTimeout.Maximum = &maxDeleteTimeout
 	spec.Properties["deleteTimeout"] = deleteTimeout
-	storageLocation := spec.Properties["storageLocation"]
-	s3 := storageLocation.Properties["s3"]
-	local := storageLocation.Properties["local"]
-	storageLocation.AnyOf = []apiext.JSONSchemaProps{s3, local}
-	spec.Properties["storageLocation"] = storageLocation
-	properties["spec"] = spec
 }
 
 func newCRD(obj interface{}, customize func(crd.CRD) crd.CRD) crd.CRD {

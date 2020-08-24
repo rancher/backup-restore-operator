@@ -6,11 +6,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
 
-	"github.com/ehazlett/simplelog"
+	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/controllers/backup"
 	"github.com/rancher/backup-restore-operator/pkg/controllers/restore"
 	"github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io"
@@ -24,27 +25,38 @@ import (
 	"github.com/rancher/wrangler/pkg/start"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 )
 
+const (
+	LogFormat = "2006/01/02 15:04:05"
+)
+
 var (
-	Version                      = "v0.0.0-dev"
-	GitCommit                    = "HEAD"
-	KubeConfig                   string
-	DefaultBackupStorageLocation string
-	ChartNamespace               string
+	Version                         = "v0.0.0-dev"
+	GitCommit                       = "HEAD"
+	LocalBackupStorageLocation      = "/var/lib/backups" // local within the pod, this is the mountPath for PVC
+	KubeConfig                      string
+	OperatorPVCName                 string
+	OperatorS3BackupStorageLocation string
+	ChartNamespace                  string
 )
 
 func init() {
 	flag.StringVar(&KubeConfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.Parse()
-	DefaultBackupStorageLocation = os.Getenv("DEFAULT_BACKUP_STORAGE_LOCATION")
+	OperatorPVCName = os.Getenv("DEFAULT_PVC_BACKUP_STORAGE_LOCATION")
+	OperatorS3BackupStorageLocation = os.Getenv("DEFAULT_S3_BACKUP_STORAGE_LOCATION")
 	ChartNamespace = os.Getenv("CHART_NAMESPACE")
 }
 
 func main() {
+	var defaultS3 *v1.S3ObjectStore
+	var defaultMountPath string
+
 	logrus.Info("Starting controller")
-	logrus.SetFormatter(&simplelog.StandardFormatter{})
+	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true, ForceColors: true, TimestampFormat: LogFormat})
 	ctx := signals.SetupSignalHandler(context.Background())
 	restKubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
 	if err != nil {
@@ -82,34 +94,71 @@ func main() {
 		logrus.Fatalf("Error generating shared client factory: %s", err.Error())
 	}
 
-	// we should decide and set this path, and on top accept it from the user
-	if DefaultBackupStorageLocation == "" {
-		logrus.Infof("No temporary backup location provided, creating a new default in the temp dir")
-		DefaultBackupStorageLocation = filepath.Join(os.TempDir(), "defaultbackuplocation")
-		// create dir using ioutil
-		_, err := os.Stat(DefaultBackupStorageLocation)
-		if os.IsNotExist(err) {
-			err = os.Mkdir(filepath.Join(os.TempDir(), "defaultbackuplocation"), os.ModePerm)
-			if err != nil {
-				logrus.Errorf("Error setting default location")
+	if OperatorPVCName != "" && OperatorS3BackupStorageLocation != "" {
+		logrus.Fatal("Cannot configure PVC and S3 both as default backup storage locations")
+	}
+	if OperatorPVCName == "" && OperatorS3BackupStorageLocation == "" {
+		// when neither PVC nor s3 are provided, for dev mode, backups will be stored at /backups
+		if dm := os.Getenv("CATTLE_DEV_MODE"); dm != "" {
+			if dir, err := os.Getwd(); err == nil {
+				dmPath := filepath.Join(dir, "backups")
+				err := os.MkdirAll(dmPath, 0700)
+				if err != nil {
+					logrus.Fatalf("Error setting default location %v: %v", dmPath, err)
+				}
+				logrus.Infof("No temporary backup location provided, saving backups at %v", dmPath)
+				OperatorPVCName = dmPath
 			}
+		} else {
+			// else, this log tells user that each backup needs to contain StorageLocation details
+			logrus.Infof("No PVC or S3 details provided for storing backups by default. User must specify storageLocation" +
+				"on each Backup CR")
+			// TODO: add to the operator status,
+			// TODO: add printer columns for backup indicate storageLocation
+			// TODO: document this, and add to chart notes
 		}
-	} else {
-		// This path should exist on the node on which the backup-restore-operator pods are running
-		logrus.Infof("Default location for storing backups is set to %v", DefaultBackupStorageLocation)
-		logrus.Infof("The following path must exist on the node %v", DefaultBackupStorageLocation)
+	} else if OperatorPVCName != "" {
+		// Get the PVC using the name, and it should be in the chart's namespace
+		pvc, err := core.Core().V1().PersistentVolumeClaim().Get(ChartNamespace, OperatorPVCName, k8sv1.GetOptions{})
+		if err != nil {
+			logrus.Fatalf("Error getting pvc details %v: %v", OperatorPVCName, err)
+		}
+		// pvc must have only one access mode, that is RWO
+		if !(len(pvc.Spec.AccessModes) == 1 && pvc.Spec.AccessModes[0] == "ReadWriteOnce") {
+			logrus.Fatalf("PVC %v access mode must be ReadWriteOnce", OperatorPVCName)
+		}
+		defaultMountPath = LocalBackupStorageLocation
+	} else if OperatorS3BackupStorageLocation != "" {
+		// read the secret from chart's namespace, with OperatorS3BackupStorageLocation as the name
+		s3Secret, err := core.Core().V1().Secret().Get(ChartNamespace, OperatorS3BackupStorageLocation, k8sv1.GetOptions{})
+		if err != nil {
+			logrus.Fatalf("Error getting default s3 details %v: %v", OperatorS3BackupStorageLocation, err)
+		}
+		secStringData := make(map[string]interface{})
+		for key, val := range s3Secret.Data {
+			secStringData[key] = string(val)
+		}
+		secretData, err := json.Marshal(secStringData)
+		if err != nil {
+			logrus.Fatalf("Error marshaling s3 details secret: %v", err)
+		}
+		if err := json.Unmarshal(secretData, &defaultS3); err != nil {
+			logrus.Fatalf("Error unmarshaling s3 details secret: %v", err)
+		}
 	}
 
 	util.ChartNamespace = ChartNamespace
 	logrus.Infof("Secrets containing encryption config files must be stored in the namespace %v", ChartNamespace)
 
-	backup.Register(ctx, backups.Resources().V1().Backup(), backups.Resources().V1().ResourceSet(),
+	backup.Register(ctx, backups.Resources().V1().Backup(),
+		backups.Resources().V1().ResourceSet(),
 		core.Core().V1().Secret(),
 		core.Core().V1().Namespace(),
-		clientSet, dynamicInterace, DefaultBackupStorageLocation)
-	restore.Register(ctx, backups.Resources().V1().Restore(), backups.Resources().V1().Backup(),
-		core.Core().V1().Secret(), clientSet, dynamicInterace, sharedClientFactory, restmapper)
-	backup.StartBackupRetentionCheckDaemon(ctx, backups.Resources().V1().Backup(), core.Core().V1().Namespace(), dynamicInterace, "", DefaultBackupStorageLocation)
+		clientSet, dynamicInterace, defaultMountPath, defaultS3)
+	restore.Register(ctx, backups.Resources().V1().Restore(),
+		backups.Resources().V1().Backup(),
+		core.Core().V1().Secret(),
+		clientSet, dynamicInterace, sharedClientFactory, restmapper, defaultMountPath, defaultS3)
 
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())

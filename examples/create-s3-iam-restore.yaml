@@ -4,7 +4,7 @@ metadata:
   name: restore-s3-demo
   namespace: default
 spec:
-  backupFilename: default-s3-backup-demo-c583d8f2-6daf-4648-8ead-ed826c591471-2020-08-18T17#44#32Z.tar.gz
+  backupFilename: default-test-s3-recurring-backup-84bf8dd8-0ef3-4240-8ad1-fc7ec308e216-2020-08-24T10#52#44-07#00.tar.gz
   storageLocation:
     s3:
       bucketName: rajashree-backup-test

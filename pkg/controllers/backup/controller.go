@@ -26,20 +26,22 @@ import (
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/util/retry"
 )
 
 const DefaultRetentionTime = "6h"
 
 type handler struct {
-	ctx                   context.Context
-	backups               backupControllers.BackupController
-	resourceSets          backupControllers.ResourceSetController
-	secrets               v1core.SecretController
-	namespaces            v1core.NamespaceController
-	discoveryClient       discovery.DiscoveryInterface
-	dynamicClient         dynamic.Interface
-	defaultBackupLocation string
-	kubeSystemNS          string
+	ctx                     context.Context
+	backups                 backupControllers.BackupController
+	resourceSets            backupControllers.ResourceSetController
+	secrets                 v1core.SecretController
+	namespaces              v1core.NamespaceController
+	discoveryClient         discovery.DiscoveryInterface
+	dynamicClient           dynamic.Interface
+	defaultBackupMountPath  string
+	defaultS3BackupLocation *v1.S3ObjectStore
+	kubeSystemNS            string
 }
 
 func Register(
@@ -50,20 +52,27 @@ func Register(
 	namespaces v1core.NamespaceController,
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface,
-	defaultBackupLocation string) {
+	defaultLocalBackupLocation string,
+	defaultS3 *v1.S3ObjectStore) {
 
 	controller := &handler{
-		ctx:                   ctx,
-		backups:               backups,
-		resourceSets:          resourceSets,
-		secrets:               secrets,
-		namespaces:            namespaces,
-		discoveryClient:       clientSet.Discovery(),
-		dynamicClient:         dynamicInterface,
-		defaultBackupLocation: defaultBackupLocation,
+		ctx:                     ctx,
+		backups:                 backups,
+		resourceSets:            resourceSets,
+		secrets:                 secrets,
+		namespaces:              namespaces,
+		discoveryClient:         clientSet.Discovery(),
+		dynamicClient:           dynamicInterface,
+		defaultBackupMountPath:  defaultLocalBackupLocation,
+		defaultS3BackupLocation: defaultS3,
 	}
-	// TODO: post-preview 2: also accept s3 as a controller-level default location
-	logrus.Infof("Default location for storing backups is %v", controller.defaultBackupLocation)
+	if controller.defaultBackupMountPath != "" {
+		logrus.Infof("Default location for storing backups is %v", controller.defaultBackupMountPath)
+	} else if controller.defaultS3BackupLocation != nil {
+		logrus.Infof("Default s3 location for storing backups is %v", controller.defaultS3BackupLocation)
+		logrus.Infof("If credentials are used for default s3, the secret containing creds must exist in chart's namespace %v", util.ChartNamespace)
+	}
+
 	// Use the kube-system NS.UID as the unique ID for a cluster
 	kubeSystemNS, err := controller.namespaces.Get("kube-system", k8sv1.GetOptions{})
 	if err != nil {
@@ -122,33 +131,49 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		if removeDirErr != nil {
 			return h.setReconcilingCondition(backup, errors.New(err.Error()+removeDirErr.Error()))
 		}
-		return backup, err
+		return h.setReconcilingCondition(backup, err)
 	}
 
 	if err := os.RemoveAll(tmpBackupPath); err != nil {
 		return h.setReconcilingCondition(backup, err)
 	}
-
-	condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
-
-	backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
-	backup.Status.NumSnapshots++
+	// check for retention
+	var cronSchedule cron.Schedule
 	if backup.Spec.Schedule != "" {
-		cronSchedule, err := cron.ParseStandard(backup.Spec.Schedule)
+		if err := h.deleteBackupsFollowingRetentionPolicy(backup); err != nil {
+			return h.setReconcilingCondition(backup, err)
+		}
+		cronSchedule, err = cron.ParseStandard(backup.Spec.Schedule)
 		if err != nil {
 			return h.setReconcilingCondition(backup, err)
 		}
-		nextBackupAt := cronSchedule.Next(time.Now()).Round(time.Minute)
-		backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
-		after := nextBackupAt.Sub(time.Now().Round(time.Minute))
-		h.backups.EnqueueAfter(backup.Namespace, backup.Name, after)
 	}
-	backup.Status.ObservedGeneration = backup.Generation
-	if updBackup, err := h.backups.UpdateStatus(backup); err != nil {
-		return h.setReconcilingCondition(updBackup, err)
+
+	updateErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var err error
+		backup, err = h.backups.Get(backup.Namespace, backup.Name, k8sv1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
+		backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
+		backup.Status.NumSnapshots++
+		if cronSchedule != nil {
+			nextBackupAt := cronSchedule.Next(time.Now()).Round(time.Minute)
+			backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
+			after := nextBackupAt.Sub(time.Now().Round(time.Minute))
+			h.backups.EnqueueAfter(backup.Namespace, backup.Name, after)
+		}
+		backup.Status.ObservedGeneration = backup.Generation
+
+		_, err = h.backups.UpdateStatus(backup)
+		return err
+	})
+	if updateErr != nil {
+		return h.setReconcilingCondition(backup, updateErr)
 	}
 	logrus.Infof("Done with backup")
-
 	return backup, err
 }
 
@@ -217,17 +242,22 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	gzipFile := backupFileName + ".tar.gz"
 	storageLocation := backup.Spec.StorageLocation
 	if storageLocation == nil {
+		logrus.Infof("No storage location specified, checking for default PVC and S3")
 		// use the default location that the controller is configured with
-		if err := CreateTarAndGzip(tmpBackupPath, h.defaultBackupLocation, gzipFile, backup.Name); err != nil {
-			return err
-		}
-	} else if storageLocation.Local != "" {
-		// for local, to send backup tar to given local path, use that as the path when creating compressed file
-		if err := CreateTarAndGzip(tmpBackupPath, storageLocation.Local, gzipFile, backup.Name); err != nil {
-			return err
+		if h.defaultBackupMountPath != "" {
+			if err := CreateTarAndGzip(tmpBackupPath, h.defaultBackupMountPath, gzipFile, backup.Name); err != nil {
+				return err
+			}
+		} else if h.defaultS3BackupLocation != nil {
+			// not checking for nil, since if this wasn't provided, the default local location would get used
+			if err := h.uploadToS3(backup, h.defaultS3BackupLocation, util.ChartNamespace, tmpBackupPath, gzipFile); err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("backup %v needs to specify S3 details, or configure storage location at the operator level", backup.Name)
 		}
 	} else if storageLocation.S3 != nil {
-		if err := h.uploadToS3(backup, storageLocation.S3, tmpBackupPath, gzipFile); err != nil {
+		if err := h.uploadToS3(backup, storageLocation.S3, backup.Namespace, tmpBackupPath, gzipFile); err != nil {
 			return err
 		}
 	}
@@ -245,10 +275,21 @@ func (h *handler) generateBackupFilename(backup *v1.Backup) (string, error) {
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) (*v1.Backup, error) {
-	condition.Cond(v1.BackupConditionReconciling).SetStatusBool(backup, true)
-	updBackup, err := h.backups.UpdateStatus(backup)
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var err error
+		updBackup, err := h.backups.Get(backup.Namespace, backup.Name, k8sv1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		condition.Cond(v1.BackupConditionReconciling).SetStatusBool(updBackup, true)
+		condition.Cond(v1.BackupConditionReconciling).SetError(updBackup, "", originalErr)
+
+		_, err = h.backups.UpdateStatus(updBackup)
+		return err
+	})
 	if err != nil {
-		return updBackup, errors.New(originalErr.Error() + err.Error())
+		return backup, errors.New(originalErr.Error() + err.Error())
 	}
-	return updBackup, originalErr
+	return backup, originalErr
 }

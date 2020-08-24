@@ -26,29 +26,8 @@ spec:
               nullable: true
               type: boolean
             storageLocation:
-              anyOf:
-              - nullable: true
-                properties:
-                  bucketName:
-                    type: string
-                  credentialSecretName:
-                    type: string
-                  endpoint:
-                    type: string
-                  endpointCA:
-                    type: string
-                  folder:
-                    type: string
-                  insecureTLSSkipVerify:
-                    type: boolean
-                  region:
-                    type: string
-                type: object
-              - type: string
               nullable: true
               properties:
-                local:
-                  type: string
                 s3:
                   nullable: true
                   properties:
@@ -68,9 +47,6 @@ spec:
                       type: string
                   type: object
               type: object
-          required:
-          - backupFilename
-          - storageLocation
           type: object
         status:
           properties:

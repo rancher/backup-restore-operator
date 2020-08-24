@@ -10,5 +10,5 @@ spec:
       folder: ecm1
       region: us-west-2
       endpoint: s3.us-west-2.amazonaws.com
-  resourceSetName: ecm-resource-settwo
+  resourceSetName: ecm-resource-set
   encryptionConfigName: test-encryptionconfig

@@ -25,6 +25,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/util/retry"
 )
 
 const (
@@ -49,6 +50,8 @@ type handler struct {
 	resourcesFromBackup             map[string]bool
 	resourcesWithStatusSubresource  map[string]bool
 	backupResourceSet               v1.ResourceSet
+	defaultBackupMountPath          string
+	defaultS3BackupLocation         *v1.S3ObjectStore
 }
 
 type objInfo struct {
@@ -74,17 +77,21 @@ func Register(
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface,
 	sharedClientFactory lasso.SharedClientFactory,
-	restmapper meta.RESTMapper) {
+	restmapper meta.RESTMapper,
+	defaultLocalBackupLocation string,
+	defaultS3 *v1.S3ObjectStore) {
 
 	controller := &handler{
-		ctx:                 ctx,
-		restores:            restores,
-		backups:             backups,
-		secrets:             secrets,
-		dynamicClient:       dynamicInterface,
-		discoveryClient:     clientSet.Discovery(),
-		sharedClientFactory: sharedClientFactory,
-		restmapper:          restmapper,
+		ctx:                     ctx,
+		restores:                restores,
+		backups:                 backups,
+		secrets:                 secrets,
+		dynamicClient:           dynamicInterface,
+		discoveryClient:         clientSet.Discovery(),
+		sharedClientFactory:     sharedClientFactory,
+		restmapper:              restmapper,
+		defaultBackupMountPath:  defaultLocalBackupLocation,
+		defaultS3BackupLocation: defaultS3,
 	}
 
 	// Register handlers
@@ -116,11 +123,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	h.resourcesFromBackup = make(map[string]bool)
 	h.backupResourceSet = v1.ResourceSet{}
 
-	backupLocation := restore.Spec.StorageLocation
-	if backupLocation == nil {
-		return h.setReconcilingCondition(restore, fmt.Errorf("specify backup location during restore"))
-	}
-
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
 	var err error
 	if restore.Spec.EncryptionConfigName != "" {
@@ -131,14 +133,32 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		}
 	}
 
-	if backupLocation.Local != "" {
-		// if local, backup tar.gz must be present at the "Local" path
-		backupFilePath := filepath.Join(backupLocation.Local, backupName)
-		if err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
-			return h.setReconcilingCondition(restore, err)
+	backupLocation := restore.Spec.StorageLocation
+	var foundBackup bool
+	if backupLocation == nil {
+		if h.defaultS3BackupLocation != nil {
+			backupFilePath, err := h.downloadFromS3(restore, h.defaultS3BackupLocation, util.ChartNamespace)
+			if err != nil {
+				return h.setReconcilingCondition(restore, err)
+			}
+			if err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
+				return h.setReconcilingCondition(restore, err)
+			}
+			// remove the downloaded gzip file from s3
+			removeFileErr := os.Remove(backupFilePath)
+			if removeFileErr != nil {
+				return restore, removeFileErr
+			}
+			foundBackup = true
+		} else if h.defaultBackupMountPath != "" {
+			backupFilePath := filepath.Join(h.defaultBackupMountPath, backupName)
+			if err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
+				return h.setReconcilingCondition(restore, err)
+			}
+			foundBackup = true
 		}
 	} else if backupLocation.S3 != nil {
-		backupFilePath, err := h.downloadFromS3(restore)
+		backupFilePath, err := h.downloadFromS3(restore, restore.Spec.StorageLocation.S3, restore.Namespace)
 		if err != nil {
 			return h.setReconcilingCondition(restore, err)
 		}
@@ -150,6 +170,10 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		if removeFileErr != nil {
 			return restore, removeFileErr
 		}
+		foundBackup = true
+	}
+	if !foundBackup {
+		return h.setReconcilingCondition(restore, fmt.Errorf("Backup location not specified on the restore CR, and not configured at the operator level"))
 	}
 
 	// first stop the controllers
@@ -182,11 +206,24 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			return h.setReconcilingCondition(restore, fmt.Errorf("error pruning during restore: %v", err))
 		}
 	}
-	restore.Status.RestoreCompletionTS = time.Now().Format(time.RFC3339)
-	condition.Cond(v1.RestoreConditionReady).SetStatusBool(restore, true)
-	restore.Status.ObservedGeneration = restore.Generation
-	_, err = h.restores.UpdateStatus(restore)
 	h.scaleUpControllersFromResourceSet()
+
+	updateErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		restore, err = h.restores.Get(restore.Namespace, restore.Name, k8sv1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		condition.Cond(v1.RestoreConditionReady).SetStatusBool(restore, true)
+		restore.Status.RestoreCompletionTS = time.Now().Format(time.RFC3339)
+		restore.Status.ObservedGeneration = restore.Generation
+
+		_, err = h.restores.UpdateStatus(restore)
+		return err
+	})
+	if updateErr != nil {
+		return h.setReconcilingCondition(restore, updateErr)
+	}
 	logrus.Infof("Done restoring")
 	return restore, err
 }
@@ -543,10 +580,22 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error) (*v1.Restore, error) {
 	time.Sleep(2 * time.Second)
-	restore.Status.NumRetries++
-	condition.Cond(v1.RestoreConditionReconciling).SetStatusBool(restore, true)
-	if updRestore, err := h.restores.UpdateStatus(restore); err != nil {
-		return updRestore, errors.New(originalErr.Error() + err.Error())
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var err error
+		updRestore, err := h.restores.Get(restore.Namespace, restore.Name, k8sv1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		updRestore.Status.NumRetries++
+		condition.Cond(v1.RestoreConditionReconciling).SetStatusBool(updRestore, true)
+		condition.Cond(v1.RestoreConditionReconciling).SetError(updRestore, "", originalErr)
+
+		_, err = h.restores.UpdateStatus(updRestore)
+		return err
+	})
+	if err != nil {
+		return restore, errors.New(originalErr.Error() + err.Error())
 	}
-	return restore, originalErr
+	return restore, err
 }

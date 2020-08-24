@@ -3,7 +3,7 @@ kind: Restore
 metadata:
   name: my-restore
 spec:
-  backupFilename: default-test-ecm-backup-6b04ba1f-3df7-41fc-a677-c4d493030920-2020-08-16T17#36#02-07#00.tar.gz
+  backupFilename: default-test-ecm-backup-061e9637-6671-468e-abf5-2cee7e2fd817-2020-08-19T13#43#37-07#00.tar.gz
   encryptionConfigName: test-encryptionconfig
   deleteTimeout: 5
   storageLocation:
