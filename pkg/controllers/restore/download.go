@@ -18,7 +18,6 @@ import (
 )
 
 func (h *handler) downloadFromS3(restore *v1.Restore, objStore *v1.S3ObjectStore, namespace string) (string, error) {
-	fmt.Printf("\nobjStore: %v, namespace: %v\n", objStore, namespace)
 	s3Client, err := objectstore.GetS3Client(h.ctx, objStore, namespace, h.dynamicClient)
 	if err != nil {
 		return "", err

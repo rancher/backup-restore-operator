@@ -60,10 +60,6 @@ func customizeBackup(backup *apiext.CustomResourceDefinition) {
 	properties := backup.Spec.Validation.OpenAPIV3Schema.Properties
 	spec := properties["spec"]
 	spec.Required = []string{"resourceSetName"}
-	//retentionCount := spec.Properties["retentionCount"]
-	//defaultRetention, _ := json.Marshal(10)
-	//retentionCount.Default = &apiext.JSON{Raw: defaultRetention}
-	//spec.Properties["retentionCount"] = retentionCount
 	resourceSetName := spec.Properties["resourceSetName"]
 	resourceSetName.Description = "Name of resourceSet CR to use for backup, must be in the same namespace"
 	spec.Properties["resourceSetName"] = resourceSetName
@@ -88,9 +84,11 @@ func customizeRestore(restore *apiext.CustomResourceDefinition) {
 	maxDeleteTimeout := float64(5)
 	properties := restore.Spec.Validation.OpenAPIV3Schema.Properties
 	spec := properties["spec"]
+	spec.Required = []string{"backupFilename"}
 	deleteTimeout := spec.Properties["deleteTimeout"]
 	deleteTimeout.Maximum = &maxDeleteTimeout
 	spec.Properties["deleteTimeout"] = deleteTimeout
+	properties["spec"] = spec
 }
 
 func newCRD(obj interface{}, customize func(crd.CRD) crd.CRD) crd.CRD {

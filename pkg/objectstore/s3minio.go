@@ -99,7 +99,6 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, namespace string, dynamicClient dynamic.Interface) (*minio.Client, error) {
 	var accessKey, secretKey string
 	if objectStore.CredentialSecretName != "" {
-		fmt.Printf("\ngetting creds secret %v from %v\n", objectStore.CredentialSecretName, namespace)
 		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 		secrets := dynamicClient.Resource(gvr)
 		secretNs, secretName := namespace, objectStore.CredentialSecretName
@@ -111,8 +110,21 @@ func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, namespace s
 		if !ok {
 			return &minio.Client{}, fmt.Errorf("malformed secret")
 		}
-		accessKey, _ = s3SecretData["accessKey"].(string)
-		secretKey, _ = s3SecretData["secretKey"].(string)
+		accessKeyEncoded, foundAccessKey := s3SecretData["accessKey"].(string)
+		secretKeyEncoded, foundSecretKey := s3SecretData["secretKey"].(string)
+		if !foundAccessKey || !foundSecretKey {
+			return &minio.Client{}, fmt.Errorf("malformed secret, incorrect access and secret key")
+		}
+		accessKeyBytes, err := base64.StdEncoding.DecodeString(accessKeyEncoded)
+		if err != nil {
+			return &minio.Client{}, fmt.Errorf("malformed secret, access key must be base64 encoded")
+		}
+		accessKey = string(accessKeyBytes)
+		secretKeyBytes, err := base64.StdEncoding.DecodeString(secretKeyEncoded)
+		if err != nil {
+			return &minio.Client{}, fmt.Errorf("malformed secret, secret key must be base64 encoded")
+		}
+		secretKey = string(secretKeyBytes)
 	}
 	// if no s3 credentials are provided, use IAM profile, this means passing empty access and secret keys to the SetS3Service call
 	s3Client, err := SetS3Service(objectStore, accessKey, secretKey, false)
