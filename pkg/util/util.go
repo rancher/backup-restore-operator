@@ -15,6 +15,8 @@ import (
 
 const (
 	WorkerThreads = 25
+	S3Backup      = "S3"
+	PVCBackup     = "PVC"
 )
 
 var ChartNamespace string

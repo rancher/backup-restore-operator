@@ -46,7 +46,7 @@ var (
 func init() {
 	flag.StringVar(&KubeConfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.Parse()
-	OperatorPVCName = os.Getenv("DEFAULT_PVC_BACKUP_STORAGE_LOCATION")
+	OperatorPVCName = os.Getenv("DEFAULT_PVC_NAME")
 	OperatorS3BackupStorageLocation = os.Getenv("DEFAULT_S3_BACKUP_STORAGE_LOCATION")
 	ChartNamespace = os.Getenv("CHART_NAMESPACE")
 }
@@ -107,26 +107,14 @@ func main() {
 					logrus.Fatalf("Error setting default location %v: %v", dmPath, err)
 				}
 				logrus.Infof("No temporary backup location provided, saving backups at %v", dmPath)
-				OperatorPVCName = dmPath
+				defaultMountPath = dmPath
 			}
 		} else {
 			// else, this log tells user that each backup needs to contain StorageLocation details
 			logrus.Infof("No PVC or S3 details provided for storing backups by default. User must specify storageLocation" +
 				"on each Backup CR")
-			// TODO: add to the operator status,
-			// TODO: add printer columns for backup indicate storageLocation
-			// TODO: document this, and add to chart notes
 		}
 	} else if OperatorPVCName != "" {
-		// Get the PVC using the name, and it should be in the chart's namespace
-		pvc, err := core.Core().V1().PersistentVolumeClaim().Get(ChartNamespace, OperatorPVCName, k8sv1.GetOptions{})
-		if err != nil {
-			logrus.Fatalf("Error getting pvc details %v: %v", OperatorPVCName, err)
-		}
-		// pvc must have only one access mode, that is RWO
-		if !(len(pvc.Spec.AccessModes) == 1 && pvc.Spec.AccessModes[0] == "ReadWriteOnce") {
-			logrus.Fatalf("PVC %v access mode must be ReadWriteOnce", OperatorPVCName)
-		}
 		defaultMountPath = LocalBackupStorageLocation
 	} else if OperatorS3BackupStorageLocation != "" {
 		// read the secret from chart's namespace, with OperatorS3BackupStorageLocation as the name

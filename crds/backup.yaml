@@ -3,6 +3,22 @@ kind: CustomResourceDefinition
 metadata:
   name: backups.resources.cattle.io
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.storageLocation
+    name: Storage-Location
+    type: string
+  - JSONPath: .status.backupType
+    name: Backup-Type
+    type: string
+  - JSONPath: .status.numSnapshots
+    name: Backups-Saved
+    type: string
+  - JSONPath: .status.prefix
+    name: Backupfile-Prefix
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].message
+    name: Status
+    type: string
   group: resources.cattle.io
   names:
     kind: Backup
@@ -16,12 +32,12 @@ spec:
         spec:
           properties:
             encryptionConfigName:
-              description: 'Name of secret containing the encryption config, must
+              description: 'Name of the Secret containing the encryption config, must
                 be in the namespace of the chart: cattle-resources-system'
               type: string
             resourceSetName:
-              description: Name of resourceSet CR to use for backup, must be in the
-                same namespace
+              description: Name of the ResourceSet CR to use for backup, must be in
+                the same namespace
               type: string
             retentionCount:
               type: integer
@@ -55,6 +71,8 @@ spec:
           type: object
         status:
           properties:
+            backupType:
+              type: string
             conditions:
               items:
                 properties:
@@ -73,6 +91,8 @@ spec:
                 type: object
               nullable: true
               type: array
+            filename:
+              type: string
             lastSnapshotTs:
               type: string
             nextSnapshotAt:
@@ -81,6 +101,10 @@ spec:
               type: integer
             observedGeneration:
               type: integer
+            prefix:
+              type: string
+            storageLocation:
+              type: string
             summary:
               type: string
           type: object

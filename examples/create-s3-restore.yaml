@@ -4,7 +4,7 @@ metadata:
   name: restore-s3-demo
   namespace: default
 spec:
-  backupFilename: default-s3-backup-demo-84bf8dd8-0ef3-4240-8ad1-fc7ec308e216-2020-08-24T12#49#25-07#00.tar.gz
+  backupFilename: default-s3-backup-demo-df56e4f4-d5f6-4b9d-8a78-b8c89757df30-2020-08-27T09#59#53-07#00.tar.gz
   storageLocation:
     s3:
       credentialSecretName: creds

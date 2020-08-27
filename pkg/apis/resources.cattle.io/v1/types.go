@@ -40,6 +40,10 @@ type BackupStatus struct {
 	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
 	NumSnapshots       int                                 `json:"numSnapshots"`
 	ObservedGeneration int64                               `json:"observedGeneration"`
+	StorageLocation    string                              `json:"storageLocation"`
+	BackupType         string                              `json:"backupType"`
+	Filename           string                              `json:"filename"`
+	Prefix             string                              `json:"prefix"`
 	Summary            string                              `json:"summary"`
 }
 
@@ -103,7 +107,7 @@ type RestoreSpec struct {
 	BackupFilename       string           `json:"backupFilename"`
 	StorageLocation      *StorageLocation `json:"storageLocation"`
 	Prune                *bool            `json:"prune"` //prune by default
-	DeleteTimeout        int              `json:"deleteTimeout,omitempty"`
+	DeleteTimeoutSeconds int              `json:"deleteTimeoutSeconds,omitempty"`
 	EncryptionConfigName string           `json:"encryptionConfigName,omitempty"`
 }
 
@@ -112,5 +116,6 @@ type RestoreStatus struct {
 	RestoreCompletionTS string                              `json:"restoreCompletionTs"`
 	ObservedGeneration  int64                               `json:"observedGeneration"`
 	NumRetries          int                                 `json:"numRetries"`
-	Summary             string                              `json:"summary,omitempty"`
+	BackupSource        string                              `json:"backupSource"`
+	Summary             string                              `json:"summary"`
 }

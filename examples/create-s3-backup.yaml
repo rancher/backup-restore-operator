@@ -2,7 +2,6 @@ apiVersion: resources.cattle.io/v1
 kind: Backup
 metadata:
   name: s3-backup-demo
-  namespace: default
 spec:
   storageLocation:
     s3:

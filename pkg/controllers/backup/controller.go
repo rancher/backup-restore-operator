@@ -112,7 +112,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		}
 	}
 
-	backupFileName, err := h.generateBackupFilename(backup)
+	backupFileName, prefix, err := h.generateBackupFilename(backup)
 	if err != nil {
 		return h.setReconcilingCondition(backup, err)
 	}
@@ -148,14 +148,15 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return h.setReconcilingCondition(backup, err)
 		}
 	}
-
+	storageLocationType := backup.Status.StorageLocation
 	updateErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
 		backup, err = h.backups.Get(backup.Namespace, backup.Name, k8sv1.GetOptions{})
 		if err != nil {
 			return err
 		}
-
+		condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
+		condition.Cond(v1.BackupConditionReady).Message(backup, "Completed")
 		condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
 		backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
 		backup.Status.NumSnapshots++
@@ -164,9 +165,14 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
 			after := nextBackupAt.Sub(time.Now().Round(time.Minute))
 			h.backups.EnqueueAfter(backup.Namespace, backup.Name, after)
+			backup.Status.BackupType = "Recurring"
+		} else {
+			backup.Status.BackupType = "One-time"
 		}
 		backup.Status.ObservedGeneration = backup.Generation
-
+		backup.Status.StorageLocation = storageLocationType
+		backup.Status.Filename = backupFileName + ".tar.gz"
+		backup.Status.Prefix = prefix
 		_, err = h.backups.UpdateStatus(backup)
 		return err
 	})
@@ -248,15 +254,18 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 			if err := CreateTarAndGzip(tmpBackupPath, h.defaultBackupMountPath, gzipFile, backup.Name); err != nil {
 				return err
 			}
+			backup.Status.StorageLocation = util.PVCBackup
 		} else if h.defaultS3BackupLocation != nil {
 			// not checking for nil, since if this wasn't provided, the default local location would get used
 			if err := h.uploadToS3(backup, h.defaultS3BackupLocation, util.ChartNamespace, tmpBackupPath, gzipFile); err != nil {
 				return err
 			}
+			backup.Status.StorageLocation = util.S3Backup
 		} else {
 			return fmt.Errorf("backup %v needs to specify S3 details, or configure storage location at the operator level", backup.Name)
 		}
 	} else if storageLocation.S3 != nil {
+		backup.Status.StorageLocation = util.S3Backup
 		if err := h.uploadToS3(backup, storageLocation.S3, backup.Namespace, tmpBackupPath, gzipFile); err != nil {
 			return err
 		}
@@ -264,12 +273,13 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	return nil
 }
 
-func (h *handler) generateBackupFilename(backup *v1.Backup) (string, error) {
+func (h *handler) generateBackupFilename(backup *v1.Backup) (string, string, error) {
 	currSnapshotTS := time.Now().Format(time.RFC3339)
 	// on OS X writing file with `:` converts colon to forward slash
 	currTSForFilename := strings.Replace(currSnapshotTS, ":", "#", -1)
 	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, h.kubeSystemNS, currTSForFilename)
-	return backupFileName, nil
+	prefix := fmt.Sprintf("%s-%s-%s", backup.Namespace, backup.Name, h.kubeSystemNS)
+	return backupFileName, prefix, nil
 }
 
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
@@ -284,6 +294,7 @@ func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) 
 
 		condition.Cond(v1.BackupConditionReconciling).SetStatusBool(updBackup, true)
 		condition.Cond(v1.BackupConditionReconciling).SetError(updBackup, "", originalErr)
+		condition.Cond(v1.BackupConditionReady).Message(updBackup, "Retrying")
 
 		_, err = h.backups.UpdateStatus(updBackup)
 		return err

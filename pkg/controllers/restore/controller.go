@@ -106,6 +106,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return restore, nil
 	}
 
+	var backupSource string
 	backupName := restore.Spec.BackupFilename
 	logrus.Infof("Restoring from backup %v", restore.Spec.BackupFilename)
 	if restore.Status.NumRetries > 0 {
@@ -150,12 +151,14 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 				return restore, removeFileErr
 			}
 			foundBackup = true
+			backupSource = util.S3Backup
 		} else if h.defaultBackupMountPath != "" {
 			backupFilePath := filepath.Join(h.defaultBackupMountPath, backupName)
 			if err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
 				return h.setReconcilingCondition(restore, err)
 			}
 			foundBackup = true
+			backupSource = util.PVCBackup
 		}
 	} else if backupLocation.S3 != nil {
 		backupFilePath, err := h.downloadFromS3(restore, restore.Spec.StorageLocation.S3, restore.Namespace)
@@ -171,6 +174,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			return restore, removeFileErr
 		}
 		foundBackup = true
+		backupSource = util.S3Backup
 	}
 	if !foundBackup {
 		return h.setReconcilingCondition(restore, fmt.Errorf("Backup location not specified on the restore CR, and not configured at the operator level"))
@@ -202,7 +206,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	// prune by default
 	if restore.Spec.Prune == nil || *restore.Spec.Prune == true {
 		logrus.Infof("Pruning resources that are not part of the backup for restore CR %v", restore.Name)
-		if err := h.prune(h.backupResourceSet.ResourceSelectors, transformerMap, restore.Spec.DeleteTimeout); err != nil {
+		if err := h.prune(h.backupResourceSet.ResourceSelectors, transformerMap, restore.Spec.DeleteTimeoutSeconds); err != nil {
 			return h.setReconcilingCondition(restore, fmt.Errorf("error pruning during restore: %v", err))
 		}
 	}
@@ -215,9 +219,10 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		}
 
 		condition.Cond(v1.RestoreConditionReady).SetStatusBool(restore, true)
+		condition.Cond(v1.BackupConditionReady).Message(restore, "Completed")
 		restore.Status.RestoreCompletionTS = time.Now().Format(time.RFC3339)
 		restore.Status.ObservedGeneration = restore.Generation
-
+		restore.Status.BackupSource = backupSource
 		_, err = h.restores.UpdateStatus(restore)
 		return err
 	})
@@ -579,6 +584,8 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error) (*v1.Restore, error) {
+	// scale back up controller before returning error
+	h.scaleUpControllersFromResourceSet()
 	time.Sleep(2 * time.Second)
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
@@ -590,6 +597,7 @@ func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error
 		updRestore.Status.NumRetries++
 		condition.Cond(v1.RestoreConditionReconciling).SetStatusBool(updRestore, true)
 		condition.Cond(v1.RestoreConditionReconciling).SetError(updRestore, "", originalErr)
+		condition.Cond(v1.BackupConditionReady).Message(updRestore, "Retrying")
 
 		_, err = h.restores.UpdateStatus(updRestore)
 		return err

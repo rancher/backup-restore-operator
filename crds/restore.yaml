@@ -3,6 +3,16 @@ kind: CustomResourceDefinition
 metadata:
   name: restores.resources.cattle.io
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.numRetries
+    name: Retries
+    type: string
+  - JSONPath: .status.backupSource
+    name: Backup-Source
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].message
+    name: Status
+    type: string
   group: resources.cattle.io
   names:
     kind: Restore
@@ -18,7 +28,8 @@ spec:
             backupFilename:
               type: string
             deleteTimeout:
-              maximum: 5
+              maximum: 10
+            deleteTimeoutSeconds:
               type: integer
             encryptionConfigName:
               type: string
@@ -52,6 +63,8 @@ spec:
           type: object
         status:
           properties:
+            backupSource:
+              type: string
             conditions:
               items:
                 properties:

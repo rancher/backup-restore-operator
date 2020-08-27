@@ -56,7 +56,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 	for _, resourceSelector := range resourceSelectors {
 		resourceList, err := h.gatherResourcesForGroupVersion(resourceSelector)
 		if err != nil {
-			return resourcesWithStatusSubresource, err
+			return resourcesWithStatusSubresource, fmt.Errorf("error gathering resouce for %v: %v", resourceSelector.APIVersion, err)
 		}
 		gv, err := schema.ParseGroupVersion(resourceSelector.APIVersion)
 		if err != nil {

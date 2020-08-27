@@ -45,12 +45,20 @@ func WriteCRD() error {
 func List() []crd.CRD {
 	return []crd.CRD{
 		newCRD(&resources.Backup{}, func(c crd.CRD) crd.CRD {
-			return c
-		}),
-		newCRD(&resources.ResourceSet{}, func(c crd.CRD) crd.CRD {
-			return c
+			return c.
+				WithColumn("Storage-Location", ".status.storageLocation").
+				WithColumn("Backup-Type", ".status.backupType").
+				WithColumn("Backups-Saved", ".status.numSnapshots").
+				WithColumn("Backupfile-Prefix", ".status.prefix").
+				WithColumn("Status", ".status.conditions[?(@.type==\"Ready\")].message")
 		}),
 		newCRD(&resources.Restore{}, func(c crd.CRD) crd.CRD {
+			return c.
+				WithColumn("Retries", ".status.numRetries").
+				WithColumn("Backup-Source", ".status.backupSource").
+				WithColumn("Status", ".status.conditions[?(@.type==\"Ready\")].message")
+		}),
+		newCRD(&resources.ResourceSet{}, func(c crd.CRD) crd.CRD {
 			return c
 		}),
 	}
@@ -61,10 +69,10 @@ func customizeBackup(backup *apiext.CustomResourceDefinition) {
 	spec := properties["spec"]
 	spec.Required = []string{"resourceSetName"}
 	resourceSetName := spec.Properties["resourceSetName"]
-	resourceSetName.Description = "Name of resourceSet CR to use for backup, must be in the same namespace"
+	resourceSetName.Description = "Name of the ResourceSet CR to use for backup, must be in the same namespace"
 	spec.Properties["resourceSetName"] = resourceSetName
 	encryptionConfig := spec.Properties["encryptionConfigName"]
-	encryptionConfig.Description = "Name of secret containing the encryption config, must be in the namespace of the chart: cattle-resources-system"
+	encryptionConfig.Description = "Name of the Secret containing the encryption config, must be in the namespace of the chart: cattle-resources-system"
 	spec.Properties["encryptionConfigName"] = encryptionConfig
 	schedule := spec.Properties["schedule"]
 	schedule.Description = "Cron schedule for recurring backups"
@@ -81,7 +89,7 @@ func customizeResourceSet(resourceSetCRD *apiext.CustomResourceDefinition) {
 }
 
 func customizeRestore(restore *apiext.CustomResourceDefinition) {
-	maxDeleteTimeout := float64(5)
+	maxDeleteTimeout := float64(10)
 	properties := restore.Spec.Validation.OpenAPIV3Schema.Properties
 	spec := properties["spec"]
 	spec.Required = []string{"backupFilename"}
