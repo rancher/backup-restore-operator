@@ -1,0 +1,14 @@
+apiVersion: resources.cattle.io/v1
+kind: Restore
+metadata:
+  name: restore-minio
+  namespace: default
+spec:
+  backupFilename: default-minio-backup-demo-aa5c04b7-4dba-4c48-9ac4-ab7916812eaa-2020-08-30T13#18#17-07#00.tar.gz
+  storageLocation:
+    s3:
+      credentialSecretName: minio-creds
+      bucketName: rancherbackups
+      endpoint: minio.xip.io
+      endpointCA: LS0tLS1CRUdJTi3VUFNQkl5UUT.....pbEpWaVzNkRS0tLS0t
+  encryptionConfigName: test-encryptionconfig
