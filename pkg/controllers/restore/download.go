@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"os"
@@ -111,17 +112,24 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 	if decryptionTransformer != nil {
 		var encryptedBytes []byte
 		if err := json.Unmarshal(readData, &encryptedBytes); err != nil {
-			return err
+			logrus.Errorf("Error unmarshaling encrypted data for resource [%v]: %v", gvr.GroupResource(), err)
+			return fmt.Errorf("error unmarshaling encrypted data for resource [%v]: %v", gvr.GroupResource(), err)
 		}
 		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(additionalAuthenticatedData))
 		if err != nil {
-			return err
+			logrus.Errorf("Error decrypting encrypted resource [%v]: %v, provide same encryption config as used for backup", gvr.GroupResource(), err)
+			return fmt.Errorf("error decrypting encrypted resource [%v]: %v, provide same encryption config as used for backup", gvr.GroupResource(), err)
 		}
 		readData = decrypted
 	}
 	fileMap := make(map[string]interface{})
 	err := json.Unmarshal(readData, &fileMap)
 	if err != nil {
+		if strings.Contains(err.Error(), "json: cannot unmarshal string into Go value") && decryptionTransformer == nil {
+			// This will be the case if we try to unmarshal an encrypted resource without decrypting it first
+			logrus.Errorf("Error unmarshaling encryped resource [%v], no encryption config provided ", gvr.GroupResource())
+			return fmt.Errorf("error unmarshaling encryped resource [%v], no encryption config provided", gvr.GroupResource())
+		}
 		return err
 	}
 	info := objInfo{

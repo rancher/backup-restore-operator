@@ -10,6 +10,9 @@ spec:
   - JSONPath: .status.backupSource
     name: Backup-Source
     type: string
+  - JSONPath: .spec.backupFilename
+    name: Backup-File
+    type: string
   - JSONPath: .status.conditions[?(@.type=="Ready")].message
     name: Status
     type: string

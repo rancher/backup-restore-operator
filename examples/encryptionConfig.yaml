@@ -4,7 +4,6 @@ resources:
   - resources:
       - secrets
     providers:
-      - identity: {}
       - aesgcm:
           keys:
             - name: key1

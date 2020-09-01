@@ -137,6 +137,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		logrus.Infof("Processing encryption config %v for restore CR %v", restore.Spec.EncryptionConfigName, restore.Name)
 		transformerMap, err = util.GetEncryptionTransformers(restore.Spec.EncryptionConfigName, h.secrets)
 		if err != nil {
+			logrus.Errorf("Error processing encryption config: %v", err)
 			return h.setReconcilingCondition(restore, err)
 		}
 	}
@@ -598,7 +599,6 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error) (*v1.Restore, error) {
-	// scale back up controller before returning error
 	time.Sleep(2 * time.Second)
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error

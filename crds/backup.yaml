@@ -16,6 +16,9 @@ spec:
   - JSONPath: .status.prefix
     name: Backupfile-Prefix
     type: string
+  - JSONPath: .spec.resourceSetName
+    name: ResourceSet
+    type: string
   - JSONPath: .status.conditions[?(@.type=="Ready")].message
     name: Status
     type: string

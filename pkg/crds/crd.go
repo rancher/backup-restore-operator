@@ -51,12 +51,14 @@ func List() []crd.CRD {
 				WithColumn("Backup-Type", ".status.backupType").
 				WithColumn("Backups-Saved", ".status.numSnapshots").
 				WithColumn("Backupfile-Prefix", ".status.prefix").
+				WithColumn("ResourceSet", ".spec.resourceSetName").
 				WithColumn("Status", ".status.conditions[?(@.type==\"Ready\")].message")
 		}),
 		newCRD(&resources.Restore{}, func(c crd.CRD) crd.CRD {
 			return c.
 				WithColumn("Retries", ".status.numRetries").
 				WithColumn("Backup-Source", ".status.backupSource").
+				WithColumn("Backup-File", ".spec.backupFilename").
 				WithColumn("Status", ".status.conditions[?(@.type==\"Ready\")].message")
 		}),
 		newCRD(&resources.ResourceSet{}, func(c crd.CRD) crd.CRD {
