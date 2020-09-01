@@ -21,6 +21,8 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
+const ListObjectsLimit = 200
+
 type GVResource struct {
 	GroupVersion schema.GroupVersion
 	Name         string
@@ -212,7 +214,7 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 		logrus.Infof("Listing objects using label selector %v", labelSelector)
 	}
 
-	resourceObjectsList, err := dr.List(ctx, k8sv1.ListOptions{LabelSelector: labelSelector})
+	resourceObjectsList, err := paginateListResults(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
 		return filteredByName, err
 	}
@@ -251,7 +253,7 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 		}
 		fieldSelector = strings.TrimSuffix(fieldSelector, ",")
 		// TODO: POST-preview-2: set resourceVersion later when it becomes clear how to use it
-		filteredObjectsList, err := dr.List(ctx, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector})
+		filteredObjectsList, err := paginateListResults(ctx, dr, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector})
 		if err != nil {
 			return filteredByName, err
 		}
@@ -334,6 +336,27 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 	}
 	filteredObjects = append(filteredByNamespace, filteredByNamespaceRegex...)
 	return filteredObjects, nil
+}
+
+func paginateListResults(ctx context.Context, dr dynamic.ResourceInterface, listOptions k8sv1.ListOptions) (*unstructured.UnstructuredList, error) {
+	var resourceObjectsList *unstructured.UnstructuredList
+	listOptions.Limit = ListObjectsLimit
+	resourceObjectsListFirst, err := dr.List(ctx, listOptions)
+	if err != nil {
+		return resourceObjectsList, err
+	}
+	resourceObjectsList = resourceObjectsListFirst
+	continueList := resourceObjectsListFirst.GetContinue()
+	for continueList != "" {
+		listOptions.Continue = continueList
+		resourceObjectsListCurr, err := dr.List(ctx, listOptions)
+		if err != nil {
+			return resourceObjectsList, err
+		}
+		continueList = resourceObjectsListCurr.GetContinue()
+		resourceObjectsList.Items = append(resourceObjectsList.Items, resourceObjectsListCurr.Items...)
+	}
+	return resourceObjectsList, nil
 }
 
 // NOTE: Rancher types CollectionMethods or ResourceMethods verbs do not translate to verbs on k8sv1.APIResource
