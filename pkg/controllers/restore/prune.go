@@ -25,7 +25,7 @@ type pruneResourceInfo struct {
 }
 
 func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap map[schema.GroupResource]value.Transformer,
-	deleteTimeout int) error {
+	cr ObjectsFromBackupCR, deleteTimeout int) error {
 	var resourcesToDelete []pruneResourceInfo
 	rh := resourcesets.ResourceHandler{
 		DiscoveryClient: h.discoveryClient,
@@ -49,7 +49,7 @@ func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap 
 			}
 			resourceFilePath := filepath.Join(resourcePath, objName+".json")
 			logrus.Infof("resourceFilePath: %v", resourceFilePath)
-			if !h.resourcesFromBackup[resourceFilePath] {
+			if !cr.resourcesFromBackup[resourceFilePath] {
 				logrus.Infof("Marking resource %v for deletion", strings.TrimSuffix(resourceFilePath, ".json"))
 				resourcesToDelete = append(resourcesToDelete, pruneResourceInfo{
 					name:      objName,

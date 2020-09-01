@@ -9,8 +9,8 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
-func (h *handler) scaleDownControllersFromResourceSet() {
-	for ind, controllerRef := range h.backupResourceSet.ControllerReferences {
+func (h *handler) scaleDownControllersFromResourceSet(objFromBackupCR ObjectsFromBackupCR) {
+	for ind, controllerRef := range objFromBackupCR.backupResourceSet.ControllerReferences {
 		controllerObj, dr := h.getObjFromControllerRef(controllerRef)
 		if controllerObj == nil {
 			continue
@@ -31,7 +31,7 @@ func (h *handler) scaleDownControllersFromResourceSet() {
 		}
 		// save the current replicas
 		controllerRef.Replicas = replicas
-		h.backupResourceSet.ControllerReferences[ind] = controllerRef
+		objFromBackupCR.backupResourceSet.ControllerReferences[ind] = controllerRef
 		spec["replicas"] = 0
 		// update controller to scale it down
 		logrus.Infof("Scaling down controllerRef %v/%v/%v to 0", controllerRef.APIVersion, controllerRef.Resource, controllerRef.Name)
@@ -42,8 +42,8 @@ func (h *handler) scaleDownControllersFromResourceSet() {
 	}
 }
 
-func (h *handler) scaleUpControllersFromResourceSet() {
-	for _, controllerRef := range h.backupResourceSet.ControllerReferences {
+func (h *handler) scaleUpControllersFromResourceSet(objFromBackupCR ObjectsFromBackupCR) {
+	for _, controllerRef := range objFromBackupCR.backupResourceSet.ControllerReferences {
 		controllerObj, dr := h.getObjFromControllerRef(controllerRef)
 		if controllerObj == nil {
 			continue

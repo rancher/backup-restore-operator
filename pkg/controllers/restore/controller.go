@@ -15,7 +15,9 @@ import (
 	lasso "github.com/rancher/lasso/pkg/client"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/condition"
+	"github.com/rancher/wrangler/pkg/genericcondition"
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -36,22 +38,25 @@ const (
 )
 
 type handler struct {
-	ctx                             context.Context
-	restores                        restoreControllers.RestoreController
-	backups                         restoreControllers.BackupController
-	secrets                         v1core.SecretController
-	discoveryClient                 discovery.DiscoveryInterface
-	dynamicClient                   dynamic.Interface
-	sharedClientFactory             lasso.SharedClientFactory
-	restmapper                      meta.RESTMapper
+	ctx                     context.Context
+	restores                restoreControllers.RestoreController
+	backups                 restoreControllers.BackupController
+	secrets                 v1core.SecretController
+	discoveryClient         discovery.DiscoveryInterface
+	dynamicClient           dynamic.Interface
+	sharedClientFactory     lasso.SharedClientFactory
+	restmapper              meta.RESTMapper
+	defaultBackupMountPath  string
+	defaultS3BackupLocation *v1.S3ObjectStore
+}
+
+type ObjectsFromBackupCR struct {
 	crdInfoToData                   map[objInfo]unstructured.Unstructured
 	clusterscopedResourceInfoToData map[objInfo]unstructured.Unstructured
 	namespacedResourceInfoToData    map[objInfo]unstructured.Unstructured
 	resourcesFromBackup             map[string]bool
 	resourcesWithStatusSubresource  map[string]bool
 	backupResourceSet               v1.ResourceSet
-	defaultBackupMountPath          string
-	defaultS3BackupLocation         *v1.S3ObjectStore
 }
 
 type objInfo struct {
@@ -117,12 +122,14 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	ownerToDependentsList := make(map[string][]restoreObj)
 	var toRestore []restoreObj
 	numOwnerReferences := make(map[string]int)
-	h.resourcesWithStatusSubresource = make(map[string]bool)
-	h.crdInfoToData = make(map[objInfo]unstructured.Unstructured)
-	h.clusterscopedResourceInfoToData = make(map[objInfo]unstructured.Unstructured)
-	h.namespacedResourceInfoToData = make(map[objInfo]unstructured.Unstructured)
-	h.resourcesFromBackup = make(map[string]bool)
-	h.backupResourceSet = v1.ResourceSet{}
+	objFromBackupCR := ObjectsFromBackupCR{
+		crdInfoToData:                   make(map[objInfo]unstructured.Unstructured),
+		clusterscopedResourceInfoToData: make(map[objInfo]unstructured.Unstructured),
+		namespacedResourceInfoToData:    make(map[objInfo]unstructured.Unstructured),
+		resourcesFromBackup:             make(map[string]bool),
+		resourcesWithStatusSubresource:  make(map[string]bool),
+		backupResourceSet:               v1.ResourceSet{},
+	}
 
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
 	var err error
@@ -142,7 +149,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			if err != nil {
 				return h.setReconcilingCondition(restore, err)
 			}
-			if err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
+			if err = h.LoadFromTarGzip(backupFilePath, transformerMap, &objFromBackupCR); err != nil {
 				return h.setReconcilingCondition(restore, err)
 			}
 			// remove the downloaded gzip file from s3
@@ -154,7 +161,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			backupSource = util.S3Backup
 		} else if h.defaultBackupMountPath != "" {
 			backupFilePath := filepath.Join(h.defaultBackupMountPath, backupName)
-			if err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
+			if err = h.LoadFromTarGzip(backupFilePath, transformerMap, &objFromBackupCR); err != nil {
 				return h.setReconcilingCondition(restore, err)
 			}
 			foundBackup = true
@@ -165,7 +172,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		if err != nil {
 			return h.setReconcilingCondition(restore, err)
 		}
-		if err = h.LoadFromTarGzip(backupFilePath, transformerMap); err != nil {
+		if err = h.LoadFromTarGzip(backupFilePath, transformerMap, &objFromBackupCR); err != nil {
 			return h.setReconcilingCondition(restore, err)
 		}
 		// remove the downloaded gzip file from s3
@@ -181,17 +188,19 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 
 	// first stop the controllers
-	h.scaleDownControllersFromResourceSet()
+	h.scaleDownControllersFromResourceSet(objFromBackupCR)
 
 	// first restore CRDs
 	logrus.Infof("Starting to restore CRDs for restore CR %v", restore.Name)
-	if err := h.restoreCRDs(created); err != nil {
+	if err := h.restoreCRDs(created, objFromBackupCR); err != nil {
+		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		return h.setReconcilingCondition(restore, err)
 	}
 
 	logrus.Infof("Starting to restore clusterscoped resources for restore CR %v", restore.Name)
 	// then restore clusterscoped resources, by first generating dependency graph for cluster scoped resources, and create from the graph
-	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created); err != nil {
+	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR); err != nil {
+		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		return h.setReconcilingCondition(restore, err)
 	}
 
@@ -199,18 +208,20 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	// now restore namespaced resources: generate adjacency lists for dependents and ownerRefs for namespaced resources
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
-	if err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created); err != nil {
+	if err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR); err != nil {
+		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		return h.setReconcilingCondition(restore, err)
 	}
 
 	// prune by default
 	if restore.Spec.Prune == nil || *restore.Spec.Prune == true {
 		logrus.Infof("Pruning resources that are not part of the backup for restore CR %v", restore.Name)
-		if err := h.prune(h.backupResourceSet.ResourceSelectors, transformerMap, restore.Spec.DeleteTimeoutSeconds); err != nil {
+		if err := h.prune(objFromBackupCR.backupResourceSet.ResourceSelectors, transformerMap, objFromBackupCR, restore.Spec.DeleteTimeoutSeconds); err != nil {
+			h.scaleUpControllersFromResourceSet(objFromBackupCR)
 			return h.setReconcilingCondition(restore, fmt.Errorf("error pruning during restore: %v", err))
 		}
 	}
-	h.scaleUpControllersFromResourceSet()
+	h.scaleUpControllersFromResourceSet(objFromBackupCR)
 
 	updateErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		restore, err = h.restores.Get(restore.Namespace, restore.Name, k8sv1.GetOptions{})
@@ -218,8 +229,11 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			return err
 		}
 
+		// reset conditions to remove the reconciling condition, because as per kstatus lib its presence is considered an error
+		restore.Status.Conditions = []genericcondition.GenericCondition{}
 		condition.Cond(v1.RestoreConditionReady).SetStatusBool(restore, true)
-		condition.Cond(v1.BackupConditionReady).Message(restore, "Completed")
+		condition.Cond(v1.RestoreConditionReady).Message(restore, "Completed")
+
 		restore.Status.RestoreCompletionTS = time.Now().Format(time.RFC3339)
 		restore.Status.ObservedGeneration = restore.Generation
 		restore.Status.BackupSource = backupSource
@@ -233,9 +247,9 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	return restore, err
 }
 
-func (h *handler) restoreCRDs(created map[string]bool) error {
+func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
 	// Both CRD apiversions have different way of indicating presence of status subresource
-	for crdInfo, crdData := range h.crdInfoToData {
+	for crdInfo, crdData := range objFromBackupCR.crdInfoToData {
 		err := h.restoreResource(crdInfo, crdData, false)
 		if err != nil {
 			return fmt.Errorf("restoreCRDs: %v", err)
@@ -246,21 +260,21 @@ func (h *handler) restoreCRDs(created map[string]bool) error {
 }
 
 func (h *handler) restoreClusterScopedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int, created map[string]bool) error {
+	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
 	// generate adjacency lists for dependents and ownerRefs first for clusterscoped resources
-	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, clusterScoped); err != nil {
+	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, clusterScoped); err != nil {
 		return err
 	}
-	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, *toRestore)
+	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore)
 }
 
 func (h *handler) restoreNamespacedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int, created map[string]bool) error {
+	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
 	// generate adjacency lists for dependents and ownerRefs first for clusterscoped resources
-	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, namespaceScoped); err != nil {
+	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, namespaceScoped); err != nil {
 		return err
 	}
-	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, *toRestore)
+	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore)
 }
 
 // generateDependencyGraph creates a graph "ownerToDependentsList" to track objects with ownerReferences
@@ -272,13 +286,13 @@ func (h *handler) restoreNamespacedResources(ownerToDependentsList map[string][]
 2. creates an entry for each owner in ownerToDependentsList", with the current object in the value list
 3. gets total count of ownerRefs and adds current object to "numOwnerReferences" map to indicate the count*/
 func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int, scope string) error {
+	numOwnerReferences map[string]int, objFromBackupCR ObjectsFromBackupCR, scope string) error {
 	var resourceInfoToData map[objInfo]unstructured.Unstructured
 	switch scope {
 	case clusterScoped:
-		resourceInfoToData = h.clusterscopedResourceInfoToData
+		resourceInfoToData = objFromBackupCR.clusterscopedResourceInfoToData
 	case namespaceScoped:
-		resourceInfoToData = h.namespacedResourceInfoToData
+		resourceInfoToData = objFromBackupCR.namespacedResourceInfoToData
 	}
 	for resourceInfo, resourceData := range resourceInfoToData {
 		// add to adjacency list
@@ -381,7 +395,7 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 }
 
 func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]restoreObj, created map[string]bool,
-	numOwnerReferences map[string]int, toRestore []restoreObj) error {
+	numOwnerReferences map[string]int, objFromBackupCR ObjectsFromBackupCR, toRestore []restoreObj) error {
 	numTotalDependents := 0
 	for _, dependents := range ownerToDependentsList {
 		numTotalDependents += len(dependents)
@@ -407,11 +421,11 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		}
 		var resourceData unstructured.Unstructured
 		if curr.Namespace != "" {
-			resourceData = h.namespacedResourceInfoToData[currResourceInfo]
+			resourceData = objFromBackupCR.namespacedResourceInfoToData[currResourceInfo]
 		} else {
-			resourceData = h.clusterscopedResourceInfoToData[currResourceInfo]
+			resourceData = objFromBackupCR.clusterscopedResourceInfoToData[currResourceInfo]
 		}
-		if err := h.restoreResource(currResourceInfo, resourceData, h.resourcesWithStatusSubresource[curr.GVR.String()]); err != nil {
+		if err := h.restoreResource(currResourceInfo, resourceData, objFromBackupCR.resourcesWithStatusSubresource[curr.GVR.String()]); err != nil {
 			logrus.Errorf("Error restoring resource %v of type %v", currResourceInfo.Name, currResourceInfo.GVR)
 			errList = append(errList, fmt.Errorf("error restoring %v of type %v: %v", currResourceInfo.Name, currResourceInfo.GVR, err))
 			continue
@@ -585,7 +599,6 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error) (*v1.Restore, error) {
 	// scale back up controller before returning error
-	h.scaleUpControllersFromResourceSet()
 	time.Sleep(2 * time.Second)
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
@@ -605,5 +618,6 @@ func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error
 	if err != nil {
 		return restore, errors.New(originalErr.Error() + err.Error())
 	}
+
 	return restore, err
 }
