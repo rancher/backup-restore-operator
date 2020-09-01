@@ -127,7 +127,7 @@ func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, namespace s
 		secretKey = string(secretKeyBytes)
 	}
 	// if no s3 credentials are provided, use IAM profile, this means passing empty access and secret keys to the SetS3Service call
-	s3Client, err := SetS3Service(objectStore, accessKey, secretKey, false)
+	s3Client, err := SetS3Service(objectStore, accessKey, secretKey, true)
 	if err != nil {
 		return &minio.Client{}, err
 	}
@@ -196,7 +196,10 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 				return "", fmt.Errorf("unable to download backup file for [%s]: %v", filename, err)
 			}
 		}
-		log.Infof("Successfully downloaded [%s]", filename)
+		if err == nil {
+			log.Infof("Successfully downloaded [%s]", filename)
+			break
+		}
 	}
 
 	localFile, err := os.Create(targetFileLocation)
@@ -223,6 +226,7 @@ func setTransportCA(tr http.RoundTripper, endpointCA string, insecureSkipVerify 
 	if !isValidCertificate(ca) {
 		return tr, fmt.Errorf("s3-endpoint-ca is not a valid x509 certificate")
 	}
+
 	certPool := x509.NewCertPool()
 	certPool.AppendCertsFromPEM(ca)
 
@@ -240,10 +244,10 @@ func readS3EndpointCA(endpointCA string) ([]byte, error) {
 	// to the backup container filesystem.
 	ca, err := base64.StdEncoding.DecodeString(endpointCA)
 	if err == nil {
-		log.Debug("reading s3-endpoint-ca as a base64 string")
+		log.Info("reading s3-endpoint-ca as a base64 string")
 	} else {
 		ca, err = ioutil.ReadFile(endpointCA)
-		log.Debugf("reading s3-endpoint-ca from [%v]", endpointCA)
+		log.Infof("reading s3-endpoint-ca from [%v]", endpointCA)
 	}
 	return ca, err
 }

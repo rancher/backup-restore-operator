@@ -1,6 +1,7 @@
 package crds
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -69,13 +70,20 @@ func customizeBackup(backup *apiext.CustomResourceDefinition) {
 	spec := properties["spec"]
 	spec.Required = []string{"resourceSetName"}
 	resourceSetName := spec.Properties["resourceSetName"]
-	resourceSetName.Description = "Name of the ResourceSet CR to use for backup, must be in the same namespace"
+	resourceSetName.Description = "Name of the ResourceSet CR to use for backup, must be in the same namespace as the operator"
 	spec.Properties["resourceSetName"] = resourceSetName
 	encryptionConfig := spec.Properties["encryptionConfigName"]
-	encryptionConfig.Description = "Name of the Secret containing the encryption config, must be in the namespace of the chart: cattle-resources-system"
+	encryptionConfig.Description = "Name of the Secret containing the encryption config, must be in the same namespace as the operator"
 	spec.Properties["encryptionConfigName"] = encryptionConfig
 	schedule := spec.Properties["schedule"]
 	schedule.Description = "Cron schedule for recurring backups"
+	examples := make(map[string]interface{})
+	examples["Standard crontab specs"] = "* * * * ?"
+	examples["Descriptors"] = "@midnight"
+	byteArr, err := json.Marshal(examples)
+	if err == nil {
+		schedule.Example = &apiext.JSON{Raw: byteArr}
+	}
 	spec.Properties["schedule"] = schedule
 	properties["spec"] = spec
 }

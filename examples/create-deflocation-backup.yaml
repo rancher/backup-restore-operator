@@ -3,5 +3,5 @@ kind: Backup
 metadata:
   name: test-default-location-recurring-backup
 spec:
-  resourceSetName: ecm-resource-set
+  resourceSetName: rancher-resource-set
   encryptionConfigName: test-encryptionconfig

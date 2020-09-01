@@ -32,17 +32,20 @@ spec:
         spec:
           properties:
             encryptionConfigName:
-              description: 'Name of the Secret containing the encryption config, must
-                be in the namespace of the chart: cattle-resources-system'
+              description: Name of the Secret containing the encryption config, must
+                be in the same namespace as the operator
               type: string
             resourceSetName:
               description: Name of the ResourceSet CR to use for backup, must be in
-                the same namespace
+                the same namespace as the operator
               type: string
             retentionCount:
               type: integer
             schedule:
               description: Cron schedule for recurring backups
+              example:
+                Descriptors: '@midnight'
+                Standard crontab specs: '* * * * ?'
               type: string
             storageLocation:
               nullable: true

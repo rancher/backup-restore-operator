@@ -1,0 +1,13 @@
+apiVersion: resources.cattle.io/v1
+kind: Backup
+metadata:
+  name: minio-backup-demo
+spec:
+  storageLocation:
+    s3:
+      credentialSecretName: minio-creds
+      bucketName: rancherbackups
+      endpoint: minio.xip.io
+      endpointCA: LS0tLS1CRUdJTi3VUFNQkl5UUT.....pbEpWaVzNkRS0tLS0t
+  resourceSetName: rancher-resource-set
+  encryptionConfigName: test-encryptionconfig
