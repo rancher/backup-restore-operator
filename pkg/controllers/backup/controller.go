@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/condition"
+	"github.com/rancher/wrangler/pkg/genericcondition"
 	"github.com/robfig/cron"
 	"github.com/sirupsen/logrus"
 
@@ -28,8 +29,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/util/retry"
 )
-
-const DefaultRetentionTime = "6h"
 
 type handler struct {
 	ctx                     context.Context
@@ -155,9 +154,13 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		if err != nil {
 			return err
 		}
+		// reset conditions to remove the reconciling condition, because as per kstatus lib its presence is considered an error
+		backup.Status.Conditions = []genericcondition.GenericCondition{}
+
 		condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
 		condition.Cond(v1.BackupConditionReady).Message(backup, "Completed")
 		condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
+
 		backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
 		backup.Status.NumSnapshots++
 		if cronSchedule != nil {
