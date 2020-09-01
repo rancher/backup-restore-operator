@@ -93,6 +93,11 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		if backup.Spec.Schedule == "" {
 			// Backup CR was meant for one-time backup, and the backup has been completed. Probably here from UpdateStatus call
 			logrus.Infof("Backup CR %v has been processed for one-time backup, returning", backup.Name)
+			// This could also mean backup CR was updated from recurring to one-time, in which case observedGeneration needs to be updated
+			if backup.Generation != backup.Status.ObservedGeneration {
+				backup.Status.ObservedGeneration = backup.Generation
+				return h.backups.UpdateStatus(backup)
+			}
 			return backup, nil
 		}
 		if backup.Status.NextSnapshotAt != "" {
