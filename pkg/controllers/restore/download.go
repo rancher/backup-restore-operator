@@ -38,7 +38,8 @@ func (h *handler) downloadFromS3(restore *v1.Restore, objStore *v1.S3ObjectStore
 }
 
 // very initial parts: https://medium.com/@skdomino/taring-untaring-files-in-go-6b07cf56bc07
-func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schema.GroupResource]value.Transformer) error {
+func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schema.GroupResource]value.Transformer,
+	cr *ObjectsFromBackupCR) error {
 	r, err := os.Open(tarGzFilePath)
 	if err != nil {
 		return fmt.Errorf("error opening tar.gz backup fike %v", err)
@@ -67,12 +68,12 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 		}
 		if strings.Contains(tarContent.Name, "filters") {
 			if strings.Contains(tarContent.Name, "filters.json") {
-				if err := json.Unmarshal(readData, &h.backupResourceSet); err != nil {
+				if err := json.Unmarshal(readData, &cr.backupResourceSet); err != nil {
 					return fmt.Errorf("error unmarshaling backup filters file: %v", err)
 				}
 			}
 			if strings.Contains(tarContent.Name, "statussubresource.json") {
-				if err := json.Unmarshal(readData, &h.resourcesWithStatusSubresource); err != nil {
+				if err := json.Unmarshal(readData, &cr.resourcesWithStatusSubresource); err != nil {
 					return fmt.Errorf("error unmarshaling status subresource info file: %v", err)
 				}
 			}
@@ -80,7 +81,7 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 		}
 
 		// tarContent.Name = serviceaccounts.#v1/cattle-system/cattle.json OR users.management.cattle.io#v3/u-lqx8j.json
-		err = h.loadDataFromFile(tarContent, readData, transformerMap)
+		err = h.loadDataFromFile(tarContent, readData, transformerMap, cr)
 		if err != nil {
 			return err
 		}
@@ -88,10 +89,10 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 }
 
 func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
-	transformerMap map[schema.GroupResource]value.Transformer) error {
+	transformerMap map[schema.GroupResource]value.Transformer, cr *ObjectsFromBackupCR) error {
 	var name, namespace, additionalAuthenticatedData string
 
-	h.resourcesFromBackup[tarContent.Name] = true
+	cr.resourcesFromBackup[tarContent.Name] = true
 	splitPath := strings.Split(tarContent.Name, "/")
 	if len(splitPath) == 2 {
 		// cluster scoped resource, since no subdir for namespace
@@ -129,13 +130,13 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 		ConfigPath: tarContent.Name,
 	}
 	if strings.EqualFold(gvr.Resource, "customresourcedefinitions") {
-		h.crdInfoToData[info] = unstructured.Unstructured{Object: fileMap}
+		cr.crdInfoToData[info] = unstructured.Unstructured{Object: fileMap}
 	} else {
 		if namespace != "" {
 			info.Namespace = namespace
-			h.namespacedResourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
+			cr.namespacedResourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
 		} else {
-			h.clusterscopedResourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
+			cr.clusterscopedResourceInfoToData[info] = unstructured.Unstructured{Object: fileMap}
 		}
 	}
 	return nil
