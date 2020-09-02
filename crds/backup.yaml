@@ -40,6 +40,7 @@ spec:
                 the same namespace as the operator
               type: string
             retentionCount:
+              minimum: 1
               type: integer
             schedule:
               description: Cron schedule for recurring backups

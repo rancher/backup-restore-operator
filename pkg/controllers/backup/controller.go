@@ -43,6 +43,8 @@ type handler struct {
 	kubeSystemNS            string
 }
 
+const DefaultRetentionCount = 10
+
 func Register(
 	ctx context.Context,
 	backups backupControllers.BackupController,
@@ -122,6 +124,10 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 				return h.setReconcilingCondition(backup, err)
 			}
 			if nextSnapshotTime.After(time.Now().Round(time.Minute)) {
+				if backup.Generation != backup.Status.ObservedGeneration {
+					backup.Status.ObservedGeneration = backup.Generation
+					return h.backups.UpdateStatus(backup)
+				}
 				return backup, nil
 			}
 			// proceed with backup only if current time is same as or after nextSnapshotTime
@@ -300,7 +306,7 @@ func (h *handler) validateBackupSpec(backup *v1.Backup) error {
 			return fmt.Errorf("error parsing invalid cron string for schedule: %v", err)
 		}
 		if backup.Spec.RetentionCount == 0 {
-			return fmt.Errorf("provide a valid retention count for recurring backups")
+			backup.Spec.RetentionCount = DefaultRetentionCount
 		}
 	}
 	return nil

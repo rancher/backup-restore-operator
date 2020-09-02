@@ -85,6 +85,10 @@ func customizeBackup(backup *apiext.CustomResourceDefinition) {
 		schedule.Example = &apiext.JSON{Raw: byteArr}
 	}
 	spec.Properties["schedule"] = schedule
+	minRetentionCount := float64(1)
+	retentionCount := spec.Properties["retentionCount"]
+	retentionCount.Minimum = &minRetentionCount
+	spec.Properties["retentionCount"] = retentionCount
 	properties["spec"] = spec
 }
 
