@@ -114,9 +114,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	var backupSource string
 	backupName := restore.Spec.BackupFilename
 	logrus.Infof("Restoring from backup %v", restore.Spec.BackupFilename)
-	if restore.Status.NumRetries > 0 {
-		logrus.Infof("Retry #%v: Retrying restore from %v", restore.Status.NumRetries, backupName)
-	}
 
 	created := make(map[string]bool)
 	ownerToDependentsList := make(map[string][]restoreObj)
@@ -599,7 +596,15 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error) (*v1.Restore, error) {
-	time.Sleep(2 * time.Second)
+	if !condition.Cond(v1.RestoreConditionReconciling).IsUnknown(restore) && condition.Cond(v1.RestoreConditionReconciling).GetReason(restore) == "Error" {
+		reconcileMsg := condition.Cond(v1.RestoreConditionReconciling).GetMessage(restore)
+		if strings.Contains(reconcileMsg, originalErr.Error()) {
+			// no need to update object status again, because if another UpdateStatus is called without needing it, controller will
+			// process the same object immediately without its default backoff
+			return restore, originalErr
+		}
+	}
+
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
 		updRestore, err := h.restores.Get(restore.Namespace, restore.Name, k8sv1.GetOptions{})
@@ -607,7 +612,6 @@ func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error
 			return err
 		}
 
-		updRestore.Status.NumRetries++
 		condition.Cond(v1.RestoreConditionReconciling).SetStatusBool(updRestore, true)
 		condition.Cond(v1.RestoreConditionReconciling).SetError(updRestore, "", originalErr)
 		condition.Cond(v1.BackupConditionReady).Message(updRestore, "Retrying")

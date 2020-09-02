@@ -38,7 +38,6 @@ type BackupStatus struct {
 	Conditions         []genericcondition.GenericCondition `json:"conditions"`
 	LastSnapshotTS     string                              `json:"lastSnapshotTs"`
 	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
-	NumSnapshots       int                                 `json:"numSnapshots"`
 	ObservedGeneration int64                               `json:"observedGeneration"`
 	StorageLocation    string                              `json:"storageLocation"`
 	BackupType         string                              `json:"backupType"`

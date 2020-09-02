@@ -10,9 +10,6 @@ spec:
   - JSONPath: .status.backupType
     name: Backup-Type
     type: string
-  - JSONPath: .status.numSnapshots
-    name: Backups-Saved
-    type: string
   - JSONPath: .status.prefix
     name: Backupfile-Prefix
     type: string
@@ -103,8 +100,6 @@ spec:
               type: string
             nextSnapshotAt:
               type: string
-            numSnapshots:
-              type: integer
             observedGeneration:
               type: integer
             prefix:

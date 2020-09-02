@@ -89,6 +89,10 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 	logrus.Infof("Processing backup %v", backup.Name)
 
+	if err := h.validateBackupSpec(backup); err != nil {
+		return h.setReconcilingCondition(backup, err)
+	}
+
 	if backup.Status.LastSnapshotTS != "" {
 		if backup.Spec.Schedule == "" {
 			// Backup CR was meant for one-time backup, and the backup has been completed. Probably here from UpdateStatus call
@@ -176,7 +180,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
 
 		backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
-		backup.Status.NumSnapshots++
 		if cronSchedule != nil {
 			nextBackupAt := cronSchedule.Next(time.Now()).Round(time.Minute)
 			backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
@@ -290,6 +293,19 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	return nil
 }
 
+func (h *handler) validateBackupSpec(backup *v1.Backup) error {
+	if backup.Spec.Schedule != "" {
+		_, err := cron.ParseStandard(backup.Spec.Schedule)
+		if err != nil {
+			return fmt.Errorf("error parsing invalid cron string for schedule: %v", err)
+		}
+		if backup.Spec.RetentionCount == 0 {
+			return fmt.Errorf("provide a valid retention count for recurring backups")
+		}
+	}
+	return nil
+}
+
 func (h *handler) generateBackupFilename(backup *v1.Backup) (string, string, error) {
 	currSnapshotTS := time.Now().Format(time.RFC3339)
 	// on OS X writing file with `:` converts colon to forward slash
@@ -302,6 +318,14 @@ func (h *handler) generateBackupFilename(backup *v1.Backup) (string, string, err
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) (*v1.Backup, error) {
+	if !condition.Cond(v1.BackupConditionReconciling).IsUnknown(backup) && condition.Cond(v1.BackupConditionReconciling).GetReason(backup) == "Error" {
+		reconcileMsg := condition.Cond(v1.BackupConditionReconciling).GetMessage(backup)
+		if strings.Contains(reconcileMsg, originalErr.Error()) {
+			// no need to update object status again, because if another UpdateStatus is called without needing it, controller will
+			// process the same object immediately without its default backoff
+			return backup, originalErr
+		}
+	}
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
 		updBackup, err := h.backups.Get(backup.Namespace, backup.Name, k8sv1.GetOptions{})

@@ -4,9 +4,6 @@ metadata:
   name: restores.resources.cattle.io
 spec:
   additionalPrinterColumns:
-  - JSONPath: .status.numRetries
-    name: Retries
-    type: string
   - JSONPath: .status.backupSource
     name: Backup-Source
     type: string
