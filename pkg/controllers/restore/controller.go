@@ -163,7 +163,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 				return h.setReconcilingCondition(restore, err)
 			}
 			foundBackup = true
-			backupSource = util.PVCBackup
+			backupSource = util.PVBackup
 		}
 	} else if backupLocation.S3 != nil {
 		backupFilePath, err := h.downloadFromS3(restore, restore.Spec.StorageLocation.S3, restore.Namespace)

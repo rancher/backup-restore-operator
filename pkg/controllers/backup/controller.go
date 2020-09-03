@@ -280,7 +280,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 			if err := CreateTarAndGzip(tmpBackupPath, h.defaultBackupMountPath, gzipFile, backup.Name); err != nil {
 				return err
 			}
-			backup.Status.StorageLocation = util.PVCBackup
+			backup.Status.StorageLocation = util.PVBackup
 		} else if h.defaultS3BackupLocation != nil {
 			// not checking for nil, since if this wasn't provided, the default local location would get used
 			if err := h.uploadToS3(backup, h.defaultS3BackupLocation, util.ChartNamespace, tmpBackupPath, gzipFile); err != nil {

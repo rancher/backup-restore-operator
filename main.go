@@ -38,7 +38,7 @@ var (
 	GitCommit                       = "HEAD"
 	LocalBackupStorageLocation      = "/var/lib/backups" // local within the pod, this is the mountPath for PVC
 	KubeConfig                      string
-	OperatorPVCName                 string
+	OperatorPVEnabled               string
 	OperatorS3BackupStorageLocation string
 	ChartNamespace                  string
 )
@@ -46,7 +46,7 @@ var (
 func init() {
 	flag.StringVar(&KubeConfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.Parse()
-	OperatorPVCName = os.Getenv("DEFAULT_PVC_NAME")
+	OperatorPVEnabled = os.Getenv("DEFAULT_PERSISTENCE_ENABLED")
 	OperatorS3BackupStorageLocation = os.Getenv("DEFAULT_S3_BACKUP_STORAGE_LOCATION")
 	ChartNamespace = os.Getenv("CHART_NAMESPACE")
 }
@@ -94,10 +94,10 @@ func main() {
 		logrus.Fatalf("Error generating shared client factory: %s", err.Error())
 	}
 
-	if OperatorPVCName != "" && OperatorS3BackupStorageLocation != "" {
+	if OperatorPVEnabled != "" && OperatorS3BackupStorageLocation != "" {
 		logrus.Fatal("Cannot configure PVC and S3 both as default backup storage locations")
 	}
-	if OperatorPVCName == "" && OperatorS3BackupStorageLocation == "" {
+	if OperatorPVEnabled == "" && OperatorS3BackupStorageLocation == "" {
 		// when neither PVC nor s3 are provided, for dev mode, backups will be stored at /backups
 		if dm := os.Getenv("CATTLE_DEV_MODE"); dm != "" {
 			if dir, err := os.Getwd(); err == nil {
@@ -114,7 +114,7 @@ func main() {
 			logrus.Infof("No PVC or S3 details provided for storing backups by default. User must specify storageLocation" +
 				"on each Backup CR")
 		}
-	} else if OperatorPVCName != "" {
+	} else if OperatorPVEnabled != "" {
 		defaultMountPath = LocalBackupStorageLocation
 	} else if OperatorS3BackupStorageLocation != "" {
 		// read the secret from chart's namespace, with OperatorS3BackupStorageLocation as the name
