@@ -49,7 +49,7 @@ func List() []crd.CRD {
 			return c.
 				WithColumn("Storage-Location", ".status.storageLocation").
 				WithColumn("Backup-Type", ".status.backupType").
-				WithColumn("Backupfile-Prefix", ".status.prefix").
+				WithColumn("Latest-Backup", ".status.filename").
 				WithColumn("ResourceSet", ".spec.resourceSetName").
 				WithColumn("Status", ".status.conditions[?(@.type==\"Ready\")].message")
 		}),
