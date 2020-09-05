@@ -12,7 +12,6 @@ import (
 	"github.com/minio/minio-go/v6"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/objectstore"
-	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -25,17 +24,17 @@ func (h *handler) deleteBackupsFollowingRetentionPolicy(backup *v1.Backup) error
 	retentionCount := int(backup.Spec.RetentionCount)
 	if backup.Spec.StorageLocation == nil {
 		if h.defaultBackupMountPath != "" {
-			return h.deleteBackupsFromMountPath(retentionCount, h.defaultBackupMountPath, backup.Namespace, backup.Name)
+			return h.deleteBackupsFromMountPath(retentionCount, h.defaultBackupMountPath, backup.Name)
 		} else if h.defaultS3BackupLocation != nil {
 			// not checking for nil, since if this wasn't provided, the default local location would get used
-			s3Client, err := objectstore.GetS3Client(h.ctx, h.defaultS3BackupLocation, util.ChartNamespace, h.dynamicClient)
+			s3Client, err := objectstore.GetS3Client(h.ctx, h.defaultS3BackupLocation, h.dynamicClient)
 			if err != nil {
 				return err
 			}
 			return h.deleteS3Backups(backup, h.defaultS3BackupLocation, s3Client, retentionCount)
 		}
 	} else if backup.Spec.StorageLocation.S3 != nil {
-		s3Client, err := objectstore.GetS3Client(h.ctx, backup.Spec.StorageLocation.S3, backup.Namespace, h.dynamicClient)
+		s3Client, err := objectstore.GetS3Client(h.ctx, backup.Spec.StorageLocation.S3, h.dynamicClient)
 		if err != nil {
 			return err
 		}
@@ -44,8 +43,8 @@ func (h *handler) deleteBackupsFollowingRetentionPolicy(backup *v1.Backup) error
 	return nil
 }
 
-func (h *handler) deleteBackupsFromMountPath(retentionCount int, backupLocation, ns, name string) error {
-	fileMatchPattern := filepath.Join(backupLocation, fmt.Sprintf("%s-%s-%s*.tar.gz", ns, name, h.kubeSystemNS))
+func (h *handler) deleteBackupsFromMountPath(retentionCount int, backupLocation, name string) error {
+	fileMatchPattern := filepath.Join(backupLocation, fmt.Sprintf("%s-%s*.tar.gz", name, h.kubeSystemNS))
 	logrus.Infof("Finding files starting with %v", fileMatchPattern)
 	fileMatches, err := filepath.Glob(fileMatchPattern)
 	if err != nil {
@@ -96,7 +95,7 @@ func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *
 	objectCh := svc.ListObjects(s3.BucketName, prefix, isRecursive, doneCh)
 	// default-backup-([a-z0-9-]).*([tar]).gz
 	// default-test-ecm-backup-24e1b8ce-1f00-4bbe-94bb-248ad7606dc8-([0-9-#]).*tar.gz$
-	re := regexp.MustCompile(fmt.Sprintf("%s-%s-%s-([0-9-#]).*tar.gz$", backup.Namespace, backup.Name, h.kubeSystemNS))
+	re := regexp.MustCompile(fmt.Sprintf("%s-%s-([0-9-#]).*tar.gz$", backup.Name, h.kubeSystemNS))
 	var backupFiles []backupInfo
 	for object := range objectCh {
 		if object.Err != nil {

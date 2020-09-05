@@ -2,7 +2,6 @@ apiVersion: resources.cattle.io/v1
 kind: Restore
 metadata:
   name: restore-s3-demo
-  namespace: default
 spec:
   backupFilename: default-test-s3-def-backup-c583d8f2-6daf-4648-8ead-ed826c591471-2020-08-24T20#47#05Z.tar.gz
-  encryptionConfigName: test-encryptionconfig
+  encryptionConfigSecretName: test-encryptionconfig

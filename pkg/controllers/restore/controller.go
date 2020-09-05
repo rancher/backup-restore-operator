@@ -143,7 +143,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	var foundBackup bool
 	if backupLocation == nil {
 		if h.defaultS3BackupLocation != nil {
-			backupFilePath, err := h.downloadFromS3(restore, h.defaultS3BackupLocation, util.ChartNamespace)
+			backupFilePath, err := h.downloadFromS3(restore, h.defaultS3BackupLocation)
 			if err != nil {
 				return h.setReconcilingCondition(restore, err)
 			}
@@ -166,7 +166,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			backupSource = util.PVBackup
 		}
 	} else if backupLocation.S3 != nil {
-		backupFilePath, err := h.downloadFromS3(restore, restore.Spec.StorageLocation.S3, restore.Namespace)
+		backupFilePath, err := h.downloadFromS3(restore, restore.Spec.StorageLocation.S3)
 		if err != nil {
 			return h.setReconcilingCondition(restore, err)
 		}
@@ -222,7 +222,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	h.scaleUpControllersFromResourceSet(objFromBackupCR)
 
 	updateErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		restore, err = h.restores.Get(restore.Namespace, restore.Name, k8sv1.GetOptions{})
+		restore, err = h.restores.Get(restore.Name, k8sv1.GetOptions{})
 		if err != nil {
 			return err
 		}
@@ -607,7 +607,7 @@ func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
-		updRestore, err := h.restores.Get(restore.Namespace, restore.Name, k8sv1.GetOptions{})
+		updRestore, err := h.restores.Get(restore.Name, k8sv1.GetOptions{})
 		if err != nil {
 			return err
 		}

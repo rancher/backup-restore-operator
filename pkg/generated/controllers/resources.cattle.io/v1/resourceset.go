@@ -46,8 +46,8 @@ type ResourceSetController interface {
 
 	OnChange(ctx context.Context, name string, sync ResourceSetHandler)
 	OnRemove(ctx context.Context, name string, sync ResourceSetHandler)
-	Enqueue(namespace, name string)
-	EnqueueAfter(namespace, name string, duration time.Duration)
+	Enqueue(name string)
+	EnqueueAfter(name string, duration time.Duration)
 
 	Cache() ResourceSetCache
 }
@@ -56,16 +56,16 @@ type ResourceSetClient interface {
 	Create(*v1.ResourceSet) (*v1.ResourceSet, error)
 	Update(*v1.ResourceSet) (*v1.ResourceSet, error)
 
-	Delete(namespace, name string, options *metav1.DeleteOptions) error
-	Get(namespace, name string, options metav1.GetOptions) (*v1.ResourceSet, error)
-	List(namespace string, opts metav1.ListOptions) (*v1.ResourceSetList, error)
-	Watch(namespace string, opts metav1.ListOptions) (watch.Interface, error)
-	Patch(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.ResourceSet, err error)
+	Delete(name string, options *metav1.DeleteOptions) error
+	Get(name string, options metav1.GetOptions) (*v1.ResourceSet, error)
+	List(opts metav1.ListOptions) (*v1.ResourceSetList, error)
+	Watch(opts metav1.ListOptions) (watch.Interface, error)
+	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.ResourceSet, err error)
 }
 
 type ResourceSetCache interface {
-	Get(namespace, name string) (*v1.ResourceSet, error)
-	List(namespace string, selector labels.Selector) ([]*v1.ResourceSet, error)
+	Get(name string) (*v1.ResourceSet, error)
+	List(selector labels.Selector) ([]*v1.ResourceSet, error)
 
 	AddIndexer(indexName string, indexer ResourceSetIndexer)
 	GetByIndex(indexName, key string) ([]*v1.ResourceSet, error)
@@ -151,12 +151,12 @@ func (c *resourceSetController) OnRemove(ctx context.Context, name string, sync 
 	c.AddGenericHandler(ctx, name, generic.NewRemoveHandler(name, c.Updater(), FromResourceSetHandlerToHandler(sync)))
 }
 
-func (c *resourceSetController) Enqueue(namespace, name string) {
-	c.controller.Enqueue(namespace, name)
+func (c *resourceSetController) Enqueue(name string) {
+	c.controller.Enqueue("", name)
 }
 
-func (c *resourceSetController) EnqueueAfter(namespace, name string, duration time.Duration) {
-	c.controller.EnqueueAfter(namespace, name, duration)
+func (c *resourceSetController) EnqueueAfter(name string, duration time.Duration) {
+	c.controller.EnqueueAfter("", name, duration)
 }
 
 func (c *resourceSetController) Informer() cache.SharedIndexInformer {
@@ -176,38 +176,38 @@ func (c *resourceSetController) Cache() ResourceSetCache {
 
 func (c *resourceSetController) Create(obj *v1.ResourceSet) (*v1.ResourceSet, error) {
 	result := &v1.ResourceSet{}
-	return result, c.client.Create(context.TODO(), obj.Namespace, obj, result, metav1.CreateOptions{})
+	return result, c.client.Create(context.TODO(), "", obj, result, metav1.CreateOptions{})
 }
 
 func (c *resourceSetController) Update(obj *v1.ResourceSet) (*v1.ResourceSet, error) {
 	result := &v1.ResourceSet{}
-	return result, c.client.Update(context.TODO(), obj.Namespace, obj, result, metav1.UpdateOptions{})
+	return result, c.client.Update(context.TODO(), "", obj, result, metav1.UpdateOptions{})
 }
 
-func (c *resourceSetController) Delete(namespace, name string, options *metav1.DeleteOptions) error {
+func (c *resourceSetController) Delete(name string, options *metav1.DeleteOptions) error {
 	if options == nil {
 		options = &metav1.DeleteOptions{}
 	}
-	return c.client.Delete(context.TODO(), namespace, name, *options)
+	return c.client.Delete(context.TODO(), "", name, *options)
 }
 
-func (c *resourceSetController) Get(namespace, name string, options metav1.GetOptions) (*v1.ResourceSet, error) {
+func (c *resourceSetController) Get(name string, options metav1.GetOptions) (*v1.ResourceSet, error) {
 	result := &v1.ResourceSet{}
-	return result, c.client.Get(context.TODO(), namespace, name, result, options)
+	return result, c.client.Get(context.TODO(), "", name, result, options)
 }
 
-func (c *resourceSetController) List(namespace string, opts metav1.ListOptions) (*v1.ResourceSetList, error) {
+func (c *resourceSetController) List(opts metav1.ListOptions) (*v1.ResourceSetList, error) {
 	result := &v1.ResourceSetList{}
-	return result, c.client.List(context.TODO(), namespace, result, opts)
+	return result, c.client.List(context.TODO(), "", result, opts)
 }
 
-func (c *resourceSetController) Watch(namespace string, opts metav1.ListOptions) (watch.Interface, error) {
-	return c.client.Watch(context.TODO(), namespace, opts)
+func (c *resourceSetController) Watch(opts metav1.ListOptions) (watch.Interface, error) {
+	return c.client.Watch(context.TODO(), "", opts)
 }
 
-func (c *resourceSetController) Patch(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (*v1.ResourceSet, error) {
+func (c *resourceSetController) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*v1.ResourceSet, error) {
 	result := &v1.ResourceSet{}
-	return result, c.client.Patch(context.TODO(), namespace, name, pt, data, result, metav1.PatchOptions{}, subresources...)
+	return result, c.client.Patch(context.TODO(), "", name, pt, data, result, metav1.PatchOptions{}, subresources...)
 }
 
 type resourceSetCache struct {
@@ -215,8 +215,8 @@ type resourceSetCache struct {
 	resource schema.GroupResource
 }
 
-func (c *resourceSetCache) Get(namespace, name string) (*v1.ResourceSet, error) {
-	obj, exists, err := c.indexer.GetByKey(namespace + "/" + name)
+func (c *resourceSetCache) Get(name string) (*v1.ResourceSet, error) {
+	obj, exists, err := c.indexer.GetByKey(name)
 	if err != nil {
 		return nil, err
 	}
@@ -226,9 +226,9 @@ func (c *resourceSetCache) Get(namespace, name string) (*v1.ResourceSet, error) 
 	return obj.(*v1.ResourceSet), nil
 }
 
-func (c *resourceSetCache) List(namespace string, selector labels.Selector) (ret []*v1.ResourceSet, err error) {
+func (c *resourceSetCache) List(selector labels.Selector) (ret []*v1.ResourceSet, err error) {
 
-	err = cache.ListAllByNamespace(c.indexer, namespace, selector, func(m interface{}) {
+	err = cache.ListAll(c.indexer, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1.ResourceSet))
 	})
 

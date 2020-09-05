@@ -10,6 +10,9 @@ spec:
   - JSONPath: .spec.backupFilename
     name: Backup-File
     type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
   - JSONPath: .status.conditions[?(@.type=="Ready")].message
     name: Status
     type: string
@@ -17,7 +20,7 @@ spec:
   names:
     kind: Restore
     plural: restores
-  scope: Namespaced
+  scope: Cluster
   subresources:
     status: {}
   validation:
@@ -27,9 +30,8 @@ spec:
           properties:
             backupFilename:
               type: string
-            deleteTimeout:
-              maximum: 10
             deleteTimeoutSeconds:
+              maximum: 10
               type: integer
             encryptionConfigName:
               type: string
@@ -45,6 +47,8 @@ spec:
                     bucketName:
                       type: string
                     credentialSecretName:
+                      type: string
+                    credentialSecretNamespace:
                       type: string
                     endpoint:
                       type: string
@@ -83,8 +87,6 @@ spec:
                 type: object
               nullable: true
               type: array
-            numRetries:
-              type: integer
             observedGeneration:
               type: integer
             restoreCompletionTs:

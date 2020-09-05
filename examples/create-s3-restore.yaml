@@ -2,14 +2,14 @@ apiVersion: resources.cattle.io/v1
 kind: Restore
 metadata:
   name: restore-s3-demo
-  namespace: default
 spec:
   backupFilename: default-s3-backup-demo-6cd7fa89-b66e-4b81-8a62-3204f43fd1db-2020-08-29T19#51#35-07#00.tar.gz
   storageLocation:
     s3:
       credentialSecretName: s3-creds
+      credentialSecretNamespace: default
       bucketName: rajashree-backup-test
       folder: ecm1
       region: us-west-2
       endpoint: s3.us-west-2.amazonaws.com
-  encryptionConfigName: test-encryptionconfig
+  encryptionConfigSecretName: test-encryptionconfig

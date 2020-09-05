@@ -47,16 +47,18 @@ func List() []crd.CRD {
 	return []crd.CRD{
 		newCRD(&resources.Backup{}, func(c crd.CRD) crd.CRD {
 			return c.
-				WithColumn("Storage-Location", ".status.storageLocation").
-				WithColumn("Backup-Type", ".status.backupType").
+				WithColumn("Location", ".status.storageLocation").
+				WithColumn("Type", ".status.backupType").
 				WithColumn("Latest-Backup", ".status.filename").
 				WithColumn("ResourceSet", ".spec.resourceSetName").
+				WithCustomColumn(apiext.CustomResourceColumnDefinition{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"}).
 				WithColumn("Status", ".status.conditions[?(@.type==\"Ready\")].message")
 		}),
 		newCRD(&resources.Restore{}, func(c crd.CRD) crd.CRD {
 			return c.
 				WithColumn("Backup-Source", ".status.backupSource").
 				WithColumn("Backup-File", ".spec.backupFilename").
+				WithCustomColumn(apiext.CustomResourceColumnDefinition{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"}).
 				WithColumn("Status", ".status.conditions[?(@.type==\"Ready\")].message")
 		}),
 		newCRD(&resources.ResourceSet{}, func(c crd.CRD) crd.CRD {
@@ -70,15 +72,15 @@ func customizeBackup(backup *apiext.CustomResourceDefinition) {
 	spec := properties["spec"]
 	spec.Required = []string{"resourceSetName"}
 	resourceSetName := spec.Properties["resourceSetName"]
-	resourceSetName.Description = "Name of the ResourceSet CR to use for backup, must be in the same namespace as the operator"
+	resourceSetName.Description = "Name of the ResourceSet CR to use for backup"
 	spec.Properties["resourceSetName"] = resourceSetName
-	encryptionConfig := spec.Properties["encryptionConfigName"]
-	encryptionConfig.Description = "Name of the Secret containing the encryption config, must be in the same namespace as the operator"
-	spec.Properties["encryptionConfigName"] = encryptionConfig
+	encryptionConfig := spec.Properties["encryptionConfigSecretName"]
+	encryptionConfig.Description = "Name of the Secret containing the encryption config"
+	spec.Properties["encryptionConfigSecretName"] = encryptionConfig
 	schedule := spec.Properties["schedule"]
 	schedule.Description = "Cron schedule for recurring backups"
 	examples := make(map[string]interface{})
-	examples["Standard crontab specs"] = "* * * * ?"
+	examples["Standard crontab specs"] = "0 0 * * *"
 	examples["Descriptors"] = "@midnight"
 	byteArr, err := json.Marshal(examples)
 	if err == nil {
@@ -105,9 +107,9 @@ func customizeRestore(restore *apiext.CustomResourceDefinition) {
 	properties := restore.Spec.Validation.OpenAPIV3Schema.Properties
 	spec := properties["spec"]
 	spec.Required = []string{"backupFilename"}
-	deleteTimeout := spec.Properties["deleteTimeout"]
+	deleteTimeout := spec.Properties["deleteTimeoutSeconds"]
 	deleteTimeout.Maximum = &maxDeleteTimeout
-	spec.Properties["deleteTimeout"] = deleteTimeout
+	spec.Properties["deleteTimeoutSeconds"] = deleteTimeout
 	properties["spec"] = spec
 }
 
@@ -119,6 +121,7 @@ func newCRD(obj interface{}, customize func(crd.CRD) crd.CRD) crd.CRD {
 		},
 		Status:       true,
 		SchemaObject: obj,
+		NonNamespace: true,
 	}
 	if customize != nil {
 		crd = customize(crd)

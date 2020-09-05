@@ -2,9 +2,8 @@ apiVersion: resources.cattle.io/v1
 kind: Backup
 metadata:
   name: test-s3-recurring-backup
-  namespace: default
 spec:
   resourceSetName: ecm-resource-set
-  encryptionConfigName: test-encryptionconfig
+  encryptionConfigSecretName: test-encryptionconfig
   schedule: "@every 1m"
   retentionCount: 3

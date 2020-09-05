@@ -16,6 +16,7 @@ var (
 )
 
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type Backup struct {
@@ -27,11 +28,11 @@ type Backup struct {
 }
 
 type BackupSpec struct {
-	StorageLocation      *StorageLocation `json:"storageLocation"`
-	ResourceSetName      string           `json:"resourceSetName"`
-	EncryptionConfigName string           `json:"encryptionConfigName,omitempty"`
-	Schedule             string           `json:"schedule,omitempty"`
-	RetentionCount       int64            `json:"retentionCount,omitempty"`
+	StorageLocation            *StorageLocation `json:"storageLocation"`
+	ResourceSetName            string           `json:"resourceSetName"`
+	EncryptionConfigSecretName string           `json:"encryptionConfigSecretName,omitempty"`
+	Schedule                   string           `json:"schedule,omitempty"`
+	RetentionCount             int64            `json:"retentionCount,omitempty"`
 }
 
 type BackupStatus struct {
@@ -47,6 +48,7 @@ type BackupStatus struct {
 }
 
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ResourceSet struct {
@@ -82,16 +84,18 @@ type StorageLocation struct {
 }
 
 type S3ObjectStore struct {
-	Endpoint              string `json:"endpoint"`
-	EndpointCA            string `json:"endpointCA"`
-	InsecureTLSSkipVerify bool   `json:"insecureTLSSkipVerify"`
-	CredentialSecretName  string `json:"credentialSecretName"`
-	BucketName            string `json:"bucketName"`
-	Region                string `json:"region"`
-	Folder                string `json:"folder"`
+	Endpoint                  string `json:"endpoint"`
+	EndpointCA                string `json:"endpointCA"`
+	InsecureTLSSkipVerify     bool   `json:"insecureTLSSkipVerify"`
+	CredentialSecretName      string `json:"credentialSecretName"`
+	CredentialSecretNamespace string `json:"credentialSecretNamespace"`
+	BucketName                string `json:"bucketName"`
+	Region                    string `json:"region"`
+	Folder                    string `json:"folder"`
 }
 
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type Restore struct {

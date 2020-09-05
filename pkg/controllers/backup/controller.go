@@ -174,7 +174,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	storageLocationType := backup.Status.StorageLocation
 	updateErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
-		backup, err = h.backups.Get(backup.Namespace, backup.Name, k8sv1.GetOptions{})
+		backup, err = h.backups.Get(backup.Name, k8sv1.GetOptions{})
 		if err != nil {
 			return err
 		}
@@ -190,7 +190,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			nextBackupAt := cronSchedule.Next(time.Now()).Round(time.Minute)
 			backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
 			after := nextBackupAt.Sub(time.Now().Round(time.Minute))
-			h.backups.EnqueueAfter(backup.Namespace, backup.Name, after)
+			h.backups.EnqueueAfter(backup.Name, after)
 			backup.Status.BackupType = "Recurring"
 		} else {
 			backup.Status.BackupType = "One-time"
@@ -212,16 +212,16 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName string) error {
 	var err error
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
-	if backup.Spec.EncryptionConfigName != "" {
-		logrus.Infof("Processing encryption config %v for backup CR %v", backup.Spec.EncryptionConfigName, backup.Name)
-		transformerMap, err = util.GetEncryptionTransformers(backup.Spec.EncryptionConfigName, h.secrets)
+	if backup.Spec.EncryptionConfigSecretName != "" {
+		logrus.Infof("Processing encryption config %v for backup CR %v", backup.Spec.EncryptionConfigSecretName, backup.Name)
+		transformerMap, err = util.GetEncryptionTransformers(backup.Spec.EncryptionConfigSecretName, h.secrets)
 		if err != nil {
 			return err
 		}
 	}
 
 	logrus.Infof("Using resourceSet %v for gathering resources for backup CR %v", backup.Spec.ResourceSetName, backup.Name)
-	resourceSetTemplate, err := h.resourceSets.Get(backup.Namespace, backup.Spec.ResourceSetName, k8sv1.GetOptions{})
+	resourceSetTemplate, err := h.resourceSets.Get(backup.Spec.ResourceSetName, k8sv1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 			backup.Status.StorageLocation = util.PVBackup
 		} else if h.defaultS3BackupLocation != nil {
 			// not checking for nil, since if this wasn't provided, the default local location would get used
-			if err := h.uploadToS3(backup, h.defaultS3BackupLocation, util.ChartNamespace, tmpBackupPath, gzipFile); err != nil {
+			if err := h.uploadToS3(backup, h.defaultS3BackupLocation, tmpBackupPath, gzipFile); err != nil {
 				return err
 			}
 			backup.Status.StorageLocation = util.S3Backup
@@ -292,7 +292,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		}
 	} else if storageLocation.S3 != nil {
 		backup.Status.StorageLocation = util.S3Backup
-		if err := h.uploadToS3(backup, storageLocation.S3, backup.Namespace, tmpBackupPath, gzipFile); err != nil {
+		if err := h.uploadToS3(backup, storageLocation.S3, tmpBackupPath, gzipFile); err != nil {
 			return err
 		}
 	}
@@ -316,8 +316,8 @@ func (h *handler) generateBackupFilename(backup *v1.Backup) (string, string, err
 	currSnapshotTS := time.Now().Format(time.RFC3339)
 	// on OS X writing file with `:` converts colon to forward slash
 	currTSForFilename := strings.Replace(currSnapshotTS, ":", "#", -1)
-	backupFileName := fmt.Sprintf("%s-%s-%s-%s", backup.Namespace, backup.Name, h.kubeSystemNS, currTSForFilename)
-	prefix := fmt.Sprintf("%s-%s-%s", backup.Namespace, backup.Name, h.kubeSystemNS)
+	backupFileName := fmt.Sprintf("%s-%s-%s", backup.Name, h.kubeSystemNS, currTSForFilename)
+	prefix := fmt.Sprintf("%s-%s", backup.Name, h.kubeSystemNS)
 	return backupFileName, prefix, nil
 }
 
@@ -334,7 +334,7 @@ func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) 
 	}
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
-		updBackup, err := h.backups.Get(backup.Namespace, backup.Name, k8sv1.GetOptions{})
+		updBackup, err := h.backups.Get(backup.Name, k8sv1.GetOptions{})
 		if err != nil {
 			return err
 		}

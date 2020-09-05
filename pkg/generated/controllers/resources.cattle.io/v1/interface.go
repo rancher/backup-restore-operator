@@ -46,11 +46,11 @@ type version struct {
 }
 
 func (c *version) Backup() BackupController {
-	return NewBackupController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "Backup"}, "backups", true, c.controllerFactory)
+	return NewBackupController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "Backup"}, "backups", false, c.controllerFactory)
 }
 func (c *version) ResourceSet() ResourceSetController {
-	return NewResourceSetController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "ResourceSet"}, "resourcesets", true, c.controllerFactory)
+	return NewResourceSetController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "ResourceSet"}, "resourcesets", false, c.controllerFactory)
 }
 func (c *version) Restore() RestoreController {
-	return NewRestoreController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "Restore"}, "restores", true, c.controllerFactory)
+	return NewRestoreController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "Restore"}, "restores", false, c.controllerFactory)
 }

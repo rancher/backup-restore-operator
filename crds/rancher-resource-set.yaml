@@ -2,7 +2,6 @@ apiVersion: resources.cattle.io/v1
 kind: ResourceSet
 metadata:
   name: rancher-resource-set
-  namespace: default
 resourceSelectors:
   - apiVersion: "v1"
     kindsRegexp: "^namespaces$"

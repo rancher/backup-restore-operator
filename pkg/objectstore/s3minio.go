@@ -96,12 +96,12 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 }
 
 // TODO: namespace should be backup.NS only if backup CR contains storage location, for using operator's s3, use chart's ns
-func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, namespace string, dynamicClient dynamic.Interface) (*minio.Client, error) {
+func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClient dynamic.Interface) (*minio.Client, error) {
 	var accessKey, secretKey string
 	if objectStore.CredentialSecretName != "" {
 		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 		secrets := dynamicClient.Resource(gvr)
-		secretNs, secretName := namespace, objectStore.CredentialSecretName
+		secretNs, secretName := objectStore.CredentialSecretNamespace, objectStore.CredentialSecretName
 		s3secret, err := secrets.Namespace(secretNs).Get(ctx, secretName, k8sv1.GetOptions{})
 		if err != nil {
 			return &minio.Client{}, err

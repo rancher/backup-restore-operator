@@ -4,4 +4,4 @@ metadata:
   name: test-default-location-recurring-backup
 spec:
   resourceSetName: rancher-resource-set
-  encryptionConfigName: test-encryptionconfig
+  encryptionConfigSecretName: test-encryptionconfig

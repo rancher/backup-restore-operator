@@ -2,7 +2,6 @@ apiVersion: resources.cattle.io/v1
 kind: Backup
 metadata:
   name: test-s3-def-backup
-  namespace: default
 spec:
   resourceSetName: rancher-resource-set
-  encryptionConfigName: test-encryptionconfig
+  encryptionConfigSecretName: test-encryptionconfig

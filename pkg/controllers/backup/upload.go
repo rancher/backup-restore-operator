@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (h *handler) uploadToS3(backup *v1.Backup, objectStore *v1.S3ObjectStore, namespace, tmpBackupPath, gzipFile string) error {
+func (h *handler) uploadToS3(backup *v1.Backup, objectStore *v1.S3ObjectStore, tmpBackupPath, gzipFile string) error {
 	tmpBackupGzipFilepath, err := ioutil.TempDir("", "uploadpath")
 	if err != nil {
 		return err
@@ -29,7 +29,7 @@ func (h *handler) uploadToS3(backup *v1.Backup, objectStore *v1.S3ObjectStore, n
 	if err := CreateTarAndGzip(tmpBackupPath, tmpBackupGzipFilepath, gzipFile, backup.Name); err != nil {
 		return removeTempUploadDir(tmpBackupGzipFilepath, err)
 	}
-	s3Client, err := objectstore.GetS3Client(h.ctx, objectStore, namespace, h.dynamicClient)
+	s3Client, err := objectstore.GetS3Client(h.ctx, objectStore, h.dynamicClient)
 	if err != nil {
 		return removeTempUploadDir(tmpBackupGzipFilepath, err)
 	}

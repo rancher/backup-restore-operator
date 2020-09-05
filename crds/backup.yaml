@@ -5,17 +5,20 @@ metadata:
 spec:
   additionalPrinterColumns:
   - JSONPath: .status.storageLocation
-    name: Storage-Location
+    name: Location
     type: string
   - JSONPath: .status.backupType
-    name: Backup-Type
+    name: Type
     type: string
-  - JSONPath: .status.prefix
-    name: Backupfile-Prefix
+  - JSONPath: .status.filename
+    name: Latest-Backup
     type: string
   - JSONPath: .spec.resourceSetName
     name: ResourceSet
     type: string
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
   - JSONPath: .status.conditions[?(@.type=="Ready")].message
     name: Status
     type: string
@@ -23,7 +26,7 @@ spec:
   names:
     kind: Backup
     plural: backups
-  scope: Namespaced
+  scope: Cluster
   subresources:
     status: {}
   validation:
@@ -31,13 +34,11 @@ spec:
       properties:
         spec:
           properties:
-            encryptionConfigName:
-              description: Name of the Secret containing the encryption config, must
-                be in the same namespace as the operator
+            encryptionConfigSecretName:
+              description: Name of the Secret containing the encryption config
               type: string
             resourceSetName:
-              description: Name of the ResourceSet CR to use for backup, must be in
-                the same namespace as the operator
+              description: Name of the ResourceSet CR to use for backup
               type: string
             retentionCount:
               minimum: 1
@@ -46,7 +47,7 @@ spec:
               description: Cron schedule for recurring backups
               example:
                 Descriptors: '@midnight'
-                Standard crontab specs: '* * * * ?'
+                Standard crontab specs: 0 0 * * *
               type: string
             storageLocation:
               nullable: true
@@ -57,6 +58,8 @@ spec:
                     bucketName:
                       type: string
                     credentialSecretName:
+                      type: string
+                    credentialSecretNamespace:
                       type: string
                     endpoint:
                       type: string

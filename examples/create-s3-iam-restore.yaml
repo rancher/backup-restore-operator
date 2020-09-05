@@ -2,7 +2,6 @@ apiVersion: resources.cattle.io/v1
 kind: Restore
 metadata:
   name: restore-s3-demo
-  namespace: default
 spec:
   backupFilename: default-test-s3-recurring-backup-84bf8dd8-0ef3-4240-8ad1-fc7ec308e216-2020-08-24T10#52#44-07#00.tar.gz
   storageLocation:
@@ -11,4 +10,4 @@ spec:
       folder: ecm1
       region: us-west-2
       endpoint: s3.us-west-2.amazonaws.com
-  encryptionConfigName: test-encryptionconfig
+  encryptionConfigSecretName: test-encryptionconfig

@@ -7,7 +7,7 @@ spec:
   names:
     kind: ResourceSet
     plural: resourcesets
-  scope: Namespaced
+  scope: Cluster
   subresources:
     status: {}
   validation:

@@ -6,8 +6,9 @@ spec:
   storageLocation:
     s3:
       credentialSecretName: minio-creds
+      credentialSecretNamespace: default
       bucketName: rancherbackups
       endpoint: minio.xip.io
       endpointCA: LS0tLS1CRUdJTi3VUFNQkl5UUT.....pbEpWaVzNkRS0tLS0t
   resourceSetName: rancher-resource-set
-  encryptionConfigName: test-encryptionconfig
+  encryptionConfigSecretName: test-encryptionconfig
