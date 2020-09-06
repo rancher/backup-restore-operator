@@ -43,7 +43,6 @@ type BackupStatus struct {
 	StorageLocation    string                              `json:"storageLocation"`
 	BackupType         string                              `json:"backupType"`
 	Filename           string                              `json:"filename"`
-	Prefix             string                              `json:"prefix"`
 	Summary            string                              `json:"summary"`
 }
 

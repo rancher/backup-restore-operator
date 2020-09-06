@@ -24,27 +24,32 @@ func (h *handler) deleteBackupsFollowingRetentionPolicy(backup *v1.Backup) error
 	retentionCount := int(backup.Spec.RetentionCount)
 	if backup.Spec.StorageLocation == nil {
 		if h.defaultBackupMountPath != "" {
-			return h.deleteBackupsFromMountPath(retentionCount, h.defaultBackupMountPath, backup.Name)
+			return h.deleteBackupsFromMountPath(retentionCount, h.defaultBackupMountPath, backup.Name, backup.Spec.EncryptionConfigSecretName != "")
 		} else if h.defaultS3BackupLocation != nil {
 			// not checking for nil, since if this wasn't provided, the default local location would get used
 			s3Client, err := objectstore.GetS3Client(h.ctx, h.defaultS3BackupLocation, h.dynamicClient)
 			if err != nil {
 				return err
 			}
-			return h.deleteS3Backups(backup, h.defaultS3BackupLocation, s3Client, retentionCount)
+			return h.deleteS3Backups(backup, h.defaultS3BackupLocation, s3Client, retentionCount, backup.Spec.EncryptionConfigSecretName != "")
 		}
 	} else if backup.Spec.StorageLocation.S3 != nil {
 		s3Client, err := objectstore.GetS3Client(h.ctx, backup.Spec.StorageLocation.S3, h.dynamicClient)
 		if err != nil {
 			return err
 		}
-		return h.deleteS3Backups(backup, backup.Spec.StorageLocation.S3, s3Client, retentionCount)
+		return h.deleteS3Backups(backup, backup.Spec.StorageLocation.S3, s3Client, retentionCount, backup.Spec.EncryptionConfigSecretName != "")
 	}
 	return nil
 }
 
-func (h *handler) deleteBackupsFromMountPath(retentionCount int, backupLocation, name string) error {
-	fileMatchPattern := filepath.Join(backupLocation, fmt.Sprintf("%s-%s*.tar.gz", name, h.kubeSystemNS))
+func (h *handler) deleteBackupsFromMountPath(retentionCount int, backupLocation, name string, encrypted bool) error {
+	var fileMatchPattern string
+	if encrypted {
+		fileMatchPattern = filepath.Join(backupLocation, fmt.Sprintf("%s-%s*.tar.gz.enc", name, h.kubeSystemNS))
+	} else {
+		fileMatchPattern = filepath.Join(backupLocation, fmt.Sprintf("%s-%s*.tar.gz", name, h.kubeSystemNS))
+	}
 	logrus.Infof("Finding files starting with %v", fileMatchPattern)
 	fileMatches, err := filepath.Glob(fileMatchPattern)
 	if err != nil {
@@ -71,14 +76,14 @@ func (h *handler) deleteBackupsFromMountPath(retentionCount int, backupLocation,
 	})
 	for _, file := range backupFiles[retentionCount:] {
 		logrus.Infof("File %v was created at %v, deleting it to follow backup's policy of retaining %v backups", file.filename, file.creationTimestamp, retentionCount)
-		if err := os.Remove(file.filename); err != nil {
+		if err := os.Remove(filepath.Join(backupLocation, file.filename)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *minio.Client, retentionCount int) error {
+func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *minio.Client, retentionCount int, encrypted bool) error {
 	// Create a done channel to control 'ListObjectsV2' go routine.
 	doneCh := make(chan struct{})
 
@@ -94,8 +99,14 @@ func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *
 	}
 	objectCh := svc.ListObjects(s3.BucketName, prefix, isRecursive, doneCh)
 	// default-backup-([a-z0-9-]).*([tar]).gz
-	// default-test-ecm-backup-24e1b8ce-1f00-4bbe-94bb-248ad7606dc8-([0-9-#]).*tar.gz$
-	re := regexp.MustCompile(fmt.Sprintf("%s-%s-([0-9-#]).*tar.gz$", backup.Name, h.kubeSystemNS))
+	// default-test-ecm-backup-24e1b8ce-1f00-4bbe-94bb-248ad7606dc8-([0-9-#]).*tar.gz$ OR
+	// default-test-ecm-backup-24e1b8ce-1f00-4bbe-94bb-248ad7606dc8-([0-9-#]).*tar.gz.enc$
+	var re *regexp.Regexp
+	if encrypted {
+		re = regexp.MustCompile(fmt.Sprintf("%s-%s-([0-9-#]).*tar.gz.enc$", backup.Name, h.kubeSystemNS))
+	} else {
+		re = regexp.MustCompile(fmt.Sprintf("%s-%s-([0-9-#]).*tar.gz$", backup.Name, h.kubeSystemNS))
+	}
 	var backupFiles []backupInfo
 	for object := range objectCh {
 		if object.Err != nil {

@@ -43,7 +43,7 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 	cr *ObjectsFromBackupCR) error {
 	r, err := os.Open(tarGzFilePath)
 	if err != nil {
-		return fmt.Errorf("error opening tar.gz backup fike %v", err)
+		return fmt.Errorf("error opening tarball backup file %v", err)
 	}
 
 	gz, err := gzip.NewReader(r)

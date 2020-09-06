@@ -135,7 +135,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		}
 	}
 
-	backupFileName, prefix, err := h.generateBackupFilename(backup)
+	backupFileName, err := h.generateBackupFilename(backup)
 	if err != nil {
 		return h.setReconcilingCondition(backup, err)
 	}
@@ -198,7 +198,9 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		backup.Status.ObservedGeneration = backup.Generation
 		backup.Status.StorageLocation = storageLocationType
 		backup.Status.Filename = backupFileName + ".tar.gz"
-		backup.Status.Prefix = prefix
+		if backup.Spec.EncryptionConfigSecretName != "" {
+			backup.Status.Filename += ".enc"
+		}
 		_, err = h.backups.UpdateStatus(backup)
 		return err
 	})
@@ -272,6 +274,9 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
 
 	gzipFile := backupFileName + ".tar.gz"
+	if backup.Spec.EncryptionConfigSecretName != "" {
+		gzipFile += ".enc"
+	}
 	storageLocation := backup.Spec.StorageLocation
 	if storageLocation == nil {
 		logrus.Infof("No storage location specified, checking for default PVC and S3")
@@ -312,13 +317,12 @@ func (h *handler) validateBackupSpec(backup *v1.Backup) error {
 	return nil
 }
 
-func (h *handler) generateBackupFilename(backup *v1.Backup) (string, string, error) {
+func (h *handler) generateBackupFilename(backup *v1.Backup) (string, error) {
 	currSnapshotTS := time.Now().Format(time.RFC3339)
 	// on OS X writing file with `:` converts colon to forward slash
 	currTSForFilename := strings.Replace(currSnapshotTS, ":", "#", -1)
 	backupFileName := fmt.Sprintf("%s-%s-%s", backup.Name, h.kubeSystemNS, currTSForFilename)
-	prefix := fmt.Sprintf("%s-%s", backup.Name, h.kubeSystemNS)
-	return backupFileName, prefix, nil
+	return backupFileName, nil
 }
 
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus

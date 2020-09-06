@@ -106,8 +106,6 @@ spec:
               type: string
             observedGeneration:
               type: integer
-            prefix:
-              type: string
             storageLocation:
               type: string
             summary:
