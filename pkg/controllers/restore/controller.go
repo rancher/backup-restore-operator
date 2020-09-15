@@ -192,14 +192,18 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	logrus.Infof("Starting to restore CRDs for restore CR %v", restore.Name)
 	if err := h.restoreCRDs(created, objFromBackupCR); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
-		return h.setReconcilingCondition(restore, err)
+		logrus.Errorf("Error restoring CRDs %v", err)
+		// Cannot set the exact error on reconcile condition, the order in which resources failed to restore are added in err msg could
+		// change with each restore, which means the condition will get updated on each try
+		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring CRDs, check logs for exact error"))
 	}
 
 	logrus.Infof("Starting to restore clusterscoped resources for restore CR %v", restore.Name)
 	// then restore clusterscoped resources, by first generating dependency graph for cluster scoped resources, and create from the graph
 	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
-		return h.setReconcilingCondition(restore, err)
+		logrus.Errorf("Error restoring cluster-scoped resources %v", err)
+		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped resources, check logs for exact error"))
 	}
 
 	logrus.Infof("Starting to restore namespaced resources for restore CR %v", restore.Name)
@@ -208,7 +212,8 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	toRestore = []restoreObj{}
 	if err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
-		return h.setReconcilingCondition(restore, err)
+		logrus.Errorf("Error restoring namespaced resources %v", err)
+		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced resources, check logs for exact error"))
 	}
 
 	// prune by default
@@ -246,7 +251,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 }
 
 func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
-	// Both CRD apiversions have different way of indicating presence of status subresource
 	for crdInfo, crdData := range objFromBackupCR.crdInfoToData {
 		err := h.restoreResource(crdInfo, crdData, false)
 		if err != nil {
@@ -260,7 +264,7 @@ func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFr
 func (h *handler) restoreClusterScopedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
 	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
 	// generate adjacency lists for dependents and ownerRefs first for clusterscoped resources
-	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, clusterScoped); err != nil {
+	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, created, clusterScoped); err != nil {
 		return err
 	}
 	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore)
@@ -268,8 +272,8 @@ func (h *handler) restoreClusterScopedResources(ownerToDependentsList map[string
 
 func (h *handler) restoreNamespacedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
 	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
-	// generate adjacency lists for dependents and ownerRefs first for clusterscoped resources
-	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, namespaceScoped); err != nil {
+	// generate adjacency lists for dependents and ownerRefs for namespaced resources
+	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, created, namespaceScoped); err != nil {
 		return err
 	}
 	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore)
@@ -284,7 +288,7 @@ func (h *handler) restoreNamespacedResources(ownerToDependentsList map[string][]
 2. creates an entry for each owner in ownerToDependentsList", with the current object in the value list
 3. gets total count of ownerRefs and adds current object to "numOwnerReferences" map to indicate the count*/
 func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int, objFromBackupCR ObjectsFromBackupCR, scope string) error {
+	numOwnerReferences map[string]int, objFromBackupCR ObjectsFromBackupCR, created map[string]bool, scope string) error {
 	var resourceInfoToData map[objInfo]unstructured.Unstructured
 	switch scope {
 	case clusterScoped:
@@ -309,16 +313,17 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 		metadata := resourceData.Object[metadataMapKey].(map[string]interface{})
 		ownerRefs, ownerRefsFound := metadata[ownerRefsMapKey].([]interface{})
 		if !ownerRefsFound {
-			// has no dependents, so no need to add to adjacency list, add to restoreResources list
+			// has no owners, so no need to add to adjacency list, add to restoreResources list
 			*toRestore = append(*toRestore, currRestoreObj)
 			continue
 		}
 		numOwners := 0
 		logrus.Infof("Checking ownerRefs for resource %v of type %v", name, gvr.String())
+		errCheckingOwnerRefs := false
 		for _, owner := range ownerRefs {
-			numOwners++
 			ownerRefData, ok := owner.(map[string]interface{})
 			if !ok {
+				errCheckingOwnerRefs = true
 				logrus.Errorf("Invalid ownerRef for resource %v of type %v", name, gvr.String())
 				continue
 			}
@@ -326,24 +331,26 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 			groupVersion := ownerRefData["apiVersion"].(string)
 			gv, err := schema.ParseGroupVersion(groupVersion)
 			if err != nil {
+				errCheckingOwnerRefs = true
 				logrus.Errorf("Error parsing ownerRef apiVersion %v for resource %v: %v", groupVersion, name, err)
 				continue
 			}
 			kind := ownerRefData["kind"].(string)
 			gvk := gv.WithKind(kind)
 			logrus.Infof("Getting GVR for ownerRef %v of resource %v", gvk.String(), name)
-			ownerGVR, isNamespaced, err := h.sharedClientFactory.ResourceForGVK(gvk)
+			ownerGVR, isOwnerNamespaced, err := h.sharedClientFactory.ResourceForGVK(gvk)
 			if err != nil {
 				// Prior to Rancher 2.4.5, following resources had roles&rolebindings with malformed ownerRefs:
 				// Secrets for cloud creds; NodeTemplates; ClusterTemplates & Revisions; Multiclusterapps & GlobalDNS
 				// Kind was replaced by the resource name in plural and APIVersion field only contained the group and not version
 				// Error is of the kind:  Kind=nodetemplates: no matches for kind "nodetemplates" in version "management.cattle.io"
 				// this is an invalid ownerRef, can't restore current resource with this ownerRef. But if we continue and this resource has no valid ownerRef it won't get restored
-				// so decrement numOwners. if the curr object has at least one valid ownerRef, it will get added to ownersToDependents list
-				// but for objects like the rancher 2.4.5, check at the end of this loop if even a single ownerRef is found, if not add it to toRestore
-				numOwners--
+				// so don't count this as owner. if the curr object has at least one valid ownerRef, it will get added to ownersToDependents list
+				// if not, for objects like the rancher 2.4.5 nodetemplate, check at the end of this loop if even a single ownerRef is found, if not add it to toRestore list
+				errCheckingOwnerRefs = true
 				logrus.Errorf("Invalid ownerRef %v, either of the fields is incorrect: APIVersion or Kind", gvk.String())
 				logrus.Errorf("Error getting ownerRef %v for object %v(of %v): %v", gvk.String(), name, gvr.String(), err)
+				continue
 			}
 
 			var apiGroup, version string
@@ -364,8 +371,15 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 				ResourceConfigPath: filepath.Join(ownerDirPath, ownerName+".json"),
 				GVR:                ownerGVR,
 			}
-			if isNamespaced {
-				// if owning object is namespaced, then it has to be the same ns as the current dependent object
+			// If we are generating graph for the namespaced resources, and the ownerRef is clusterscoped, it should have been created by now
+			// So we can check its presence in "created" map skip adding this ownerRef to ownerToDependentsList for the current resource
+			if !isOwnerNamespaced {
+				if created[ownerObj.ResourceConfigPath] {
+					continue
+				}
+			}
+			if isOwnerNamespaced {
+				// if owner object is namespaced, then it has to be the same ns as the current dependent object as per k8s design
 				ownerObj.Namespace = currRestoreObj.Namespace
 				// the owner object's resourceFile in backup would also have namespace in the filename, so update
 				// ownerObj.ResourceConfigPath to include namespace subdir before the filename for owner
@@ -378,10 +392,17 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 			} else {
 				ownerToDependentsList[ownerObj.ResourceConfigPath] = append(ownerObjDependents, currRestoreObj)
 			}
+			numOwners++
 		}
 		if numOwners > 0 {
 			numOwnerReferences[currRestoreObj.ResourceConfigPath] = numOwners
 		} else {
+			if !errCheckingOwnerRefs {
+				// owners already exist (this will happen when generating dependency graph for namespaced resources that have
+				// clusterscoped owners), so no need to add this namespaced resource to adjacency list, add to toRestore list
+				*toRestore = append(*toRestore, currRestoreObj)
+				continue
+			}
 			// Errors were encountered while processing ownerRefs for this object, so it should get restored without any ownerRefs,
 			// add it to toRestore
 			logrus.Warnf("Resource %v of type %v has invalid ownerRefs, adding it to restore queue by dropping the ownerRefs", name, gvr.String())
@@ -424,8 +445,8 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 			resourceData = objFromBackupCR.clusterscopedResourceInfoToData[currResourceInfo]
 		}
 		if err := h.restoreResource(currResourceInfo, resourceData, objFromBackupCR.resourcesWithStatusSubresource[curr.GVR.String()]); err != nil {
-			logrus.Errorf("Error restoring resource %v of type %v", currResourceInfo.Name, currResourceInfo.GVR)
-			errList = append(errList, fmt.Errorf("error restoring %v of type %v: %v", currResourceInfo.Name, currResourceInfo.GVR, err))
+			logrus.Errorf("Error restoring resource %v of type %v: %v", currResourceInfo.Name, currResourceInfo.GVR.String(), err)
+			errList = append(errList, fmt.Errorf("error restoring %v of type %v: %v", currResourceInfo.Name, currResourceInfo.GVR.String(), err))
 			continue
 		}
 		for _, dependent := range ownerToDependentsList[curr.ResourceConfigPath] {
@@ -441,6 +462,14 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		created[curr.ResourceConfigPath] = true
 		countRestored++
 	}
+
+	if len(toRestore) > 0 {
+		// These resources could not be restored because of some issues with ownerRefs that violate k8s design
+		for _, res := range toRestore {
+			logrus.Warnf("Could not restore %v of type %v", res.Name, res.GVR.String())
+		}
+	}
+
 	return util.ErrList(errList)
 }
 
@@ -488,7 +517,8 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 			return err
 		}
 		if hasStatusSubresource {
-			logrus.Infof("Updating status subresource for %#v", name)
+			logrus.Infof("Post-create: Updating status subresource for %#v of type %v", name, gvr)
+			createdObj.Object["status"] = obj.Object["status"]
 			_, err := dr.UpdateStatus(h.ctx, createdObj, k8sv1.UpdateOptions{})
 			if err != nil {
 				return fmt.Errorf("restoreResource: err updating status resource %v", err)
@@ -499,13 +529,14 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 	resMetadata := res.Object[metadataMapKey].(map[string]interface{})
 	resourceVersion := resMetadata["resourceVersion"].(string)
 	obj.Object[metadataMapKey].(map[string]interface{})["resourceVersion"] = resourceVersion
-	_, err = dr.Update(h.ctx, &obj, k8sv1.UpdateOptions{})
+	updatedObj, err := dr.Update(h.ctx, &obj, k8sv1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("restoreResource: err updating resource %v", err)
 	}
 	if hasStatusSubresource {
-		logrus.Infof("Updating status subresource for %#v", name)
-		_, err := dr.UpdateStatus(h.ctx, &obj, k8sv1.UpdateOptions{})
+		logrus.Infof("Updating status subresource for %#v of type %v", name, gvr)
+		updatedObj.Object["status"] = obj.Object["status"]
+		_, err := dr.UpdateStatus(h.ctx, updatedObj, k8sv1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("restoreResource: err updating status resource %v", err)
 		}
@@ -517,7 +548,11 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 
 func (h *handler) updateOwnerRefs(ownerReferences []interface{}, namespace string) error {
 	for ind, ownerRef := range ownerReferences {
-		reference := ownerRef.(map[string]interface{})
+		reference, ok := ownerRef.(map[string]interface{})
+		if !ok {
+			// can't be "!ok", but handling to avoid panic
+			continue
+		}
 		apiversion, _ := reference["apiVersion"].(string)
 		kind, _ := reference["kind"].(string)
 		if apiversion == "" || kind == "" {
@@ -598,7 +633,9 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error) (*v1.Restore, error) {
 	if !condition.Cond(v1.RestoreConditionReconciling).IsUnknown(restore) && condition.Cond(v1.RestoreConditionReconciling).GetReason(restore) == "Error" {
 		reconcileMsg := condition.Cond(v1.RestoreConditionReconciling).GetMessage(restore)
-		if strings.Contains(reconcileMsg, originalErr.Error()) {
+		fmt.Printf("\nreconcileMsg: %v\n", reconcileMsg)
+		fmt.Printf("\noriginalErr: %v\n", originalErr.Error())
+		if strings.Contains(reconcileMsg, originalErr.Error()) || strings.EqualFold(reconcileMsg, originalErr.Error()) {
 			// no need to update object status again, because if another UpdateStatus is called without needing it, controller will
 			// process the same object immediately without its default backoff
 			return restore, originalErr
