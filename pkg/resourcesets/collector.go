@@ -12,6 +12,7 @@ import (
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/sirupsen/logrus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -115,6 +116,10 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 	// first list all resources for given groupversion using discovery API
 	resources, err := h.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logrus.Warnf("No resources found for groupVersion %v, skipping it", groupVersion)
+			return resourceList, nil
+		}
 		return resourceList, err
 	}
 	if filter.KindsRegexp == "" && len(filter.Kinds) == 0 {
