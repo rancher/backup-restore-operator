@@ -633,8 +633,6 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error) (*v1.Restore, error) {
 	if !condition.Cond(v1.RestoreConditionReconciling).IsUnknown(restore) && condition.Cond(v1.RestoreConditionReconciling).GetReason(restore) == "Error" {
 		reconcileMsg := condition.Cond(v1.RestoreConditionReconciling).GetMessage(restore)
-		fmt.Printf("\nreconcileMsg: %v\n", reconcileMsg)
-		fmt.Printf("\noriginalErr: %v\n", originalErr.Error())
 		if strings.Contains(reconcileMsg, originalErr.Error()) || strings.EqualFold(reconcileMsg, originalErr.Error()) {
 			// no need to update object status again, because if another UpdateStatus is called without needing it, controller will
 			// process the same object immediately without its default backoff
