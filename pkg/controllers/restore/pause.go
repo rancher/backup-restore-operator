@@ -73,7 +73,7 @@ func (h *handler) getObjFromControllerRef(controllerRef v1.ControllerReference) 
 	}
 	controllerObj, err := dr.Get(h.ctx, controllerRef.Name, k8sv1.GetOptions{})
 	if err != nil {
-		logrus.Errorf("Error getting object for controllerRef %v, skipping it", controllerRef.Name)
+		logrus.Warnf("Error getting object for controllerRef %v, skipping it", controllerRef.Name)
 		return nil, dr
 	}
 	return controllerObj, dr
