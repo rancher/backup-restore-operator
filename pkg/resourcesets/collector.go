@@ -100,7 +100,12 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 			}
 			// currGVResource contains GV for resource type, its name and if its namespaced or not,
 			// example: gv=v1, name=secrets, namespaced=true; filteredObjects are all the objects matching the resourceSelector
-			h.GVResourceToObjects[currGVResource] = filteredObjects
+			previouslyGatheredForGVR, ok := h.GVResourceToObjects[currGVResource]
+			if ok {
+				h.GVResourceToObjects[currGVResource] = append(previouslyGatheredForGVR, filteredObjects...)
+			} else {
+				h.GVResourceToObjects[currGVResource] = filteredObjects
+			}
 		}
 	}
 	return resourcesWithStatusSubresource, nil
@@ -207,7 +212,7 @@ func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv
 
 func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector) ([]unstructured.Unstructured, error) {
 	var filteredByName, filteredByResourceNames []unstructured.Unstructured
-	var fieldSelector, labelSelector string
+	var labelSelector string
 
 	if filter.LabelSelectors != nil {
 		selector, err := k8sv1.LabelSelectorAsSelector(filter.LabelSelectors)
@@ -252,16 +257,22 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 
 	// filter by names as fieldSelector:
 	if len(filter.ResourceNames) > 0 {
-		for _, name := range filter.ResourceNames {
-			fieldSelector += fmt.Sprintf("metadata.name=%s,", name)
-		}
-		fieldSelector = strings.TrimSuffix(fieldSelector, ",")
 		// TODO: POST-preview-2: set resourceVersion later when it becomes clear how to use it
-		filteredObjectsList, err := paginateListResults(ctx, dr, k8sv1.ListOptions{FieldSelector: fieldSelector, LabelSelector: labelSelector})
+		filteredObjectsList, err := paginateListResults(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
 			return filteredByName, err
 		}
-		filteredByResourceNames = filteredObjectsList.Items
+		allowedNames := make(map[string]bool)
+		for _, name := range filter.ResourceNames {
+			allowedNames[name] = true
+		}
+		for _, resObj := range filteredObjectsList.Items {
+			metadata := resObj.Object["metadata"].(map[string]interface{})
+			name := metadata["name"].(string)
+			if allowedNames[name] {
+				filteredByResourceNames = append(filteredByResourceNames, resObj)
+			}
+		}
 
 		if len(filteredByResourceNames) == 0 {
 			// exact names were provided, but no resources found by that name
