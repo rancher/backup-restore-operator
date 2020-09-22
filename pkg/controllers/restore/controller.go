@@ -130,9 +130,9 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
 	var err error
-	if restore.Spec.EncryptionConfigName != "" {
-		logrus.Infof("Processing encryption config %v for restore CR %v", restore.Spec.EncryptionConfigName, restore.Name)
-		transformerMap, err = util.GetEncryptionTransformers(restore.Spec.EncryptionConfigName, h.secrets)
+	if restore.Spec.EncryptionConfigSecretName != "" {
+		logrus.Infof("Processing encryption config %v for restore CR %v", restore.Spec.EncryptionConfigSecretName, restore.Name)
+		transformerMap, err = util.GetEncryptionTransformers(restore.Spec.EncryptionConfigSecretName, h.secrets)
 		if err != nil {
 			logrus.Errorf("Error processing encryption config: %v", err)
 			return h.setReconcilingCondition(restore, err)

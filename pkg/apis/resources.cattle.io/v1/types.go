@@ -106,11 +106,11 @@ type Restore struct {
 }
 
 type RestoreSpec struct {
-	BackupFilename       string           `json:"backupFilename"`
-	StorageLocation      *StorageLocation `json:"storageLocation"`
-	Prune                *bool            `json:"prune"` //prune by default
-	DeleteTimeoutSeconds int              `json:"deleteTimeoutSeconds,omitempty"`
-	EncryptionConfigName string           `json:"encryptionConfigName,omitempty"`
+	BackupFilename             string           `json:"backupFilename"`
+	StorageLocation            *StorageLocation `json:"storageLocation"`
+	Prune                      *bool            `json:"prune"` //prune by default
+	DeleteTimeoutSeconds       int              `json:"deleteTimeoutSeconds,omitempty"`
+	EncryptionConfigSecretName string           `json:"encryptionConfigSecretName,omitempty"`
 }
 
 type RestoreStatus struct {
