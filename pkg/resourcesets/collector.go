@@ -15,7 +15,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
@@ -211,11 +210,11 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 	var fieldSelector, labelSelector string
 
 	if filter.LabelSelectors != nil {
-		labelMap, err := k8sv1.LabelSelectorAsMap(filter.LabelSelectors)
+		selector, err := k8sv1.LabelSelectorAsSelector(filter.LabelSelectors)
 		if err != nil {
 			return filteredByName, err
 		}
-		labelSelector = labels.SelectorFromSet(labelMap).String()
+		labelSelector = selector.String()
 		logrus.Infof("Listing objects using label selector %v", labelSelector)
 	}
 
