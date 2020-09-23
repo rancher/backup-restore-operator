@@ -18,12 +18,14 @@ import (
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	"github.com/sirupsen/logrus"
 
+	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -43,6 +45,7 @@ type handler struct {
 	backups                 restoreControllers.BackupController
 	secrets                 v1core.SecretController
 	discoveryClient         discovery.DiscoveryInterface
+	apiClient               clientset.Interface
 	dynamicClient           dynamic.Interface
 	sharedClientFactory     lasso.SharedClientFactory
 	restmapper              meta.RESTMapper
@@ -93,6 +96,7 @@ func Register(
 		secrets:                 secrets,
 		dynamicClient:           dynamicInterface,
 		discoveryClient:         clientSet.Discovery(),
+		apiClient:               clientSet,
 		sharedClientFactory:     sharedClientFactory,
 		restmapper:              restmapper,
 		defaultBackupMountPath:  defaultLocalBackupLocation,
@@ -258,7 +262,43 @@ func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFr
 		}
 		created[crdInfo.ConfigPath] = true
 	}
+	for crdInfo := range objFromBackupCR.crdInfoToData {
+		if err := h.waitCRD(crdInfo.Name); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (h *handler) waitCRD(crdName string) error {
+	logrus.Infof("Waiting for CRD %s to become available", crdName)
+	defer logrus.Infof("Done waiting for CRD %s to become available", crdName)
+
+	first := true
+	return wait.Poll(500*time.Millisecond, 60*time.Second, func() (bool, error) {
+		if !first {
+			logrus.Infof("Waiting for CRD %s to become available", crdName)
+		}
+		first = false
+
+		crd, err := h.apiClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(h.ctx, crdName, k8sv1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, cond := range crd.Status.Conditions {
+			switch cond.Type {
+			case apiext.Established:
+				if cond.Status == apiext.ConditionTrue {
+					return true, err
+				}
+			case apiext.NamesAccepted:
+				if cond.Status == apiext.ConditionFalse {
+					logrus.Infof("Name conflict on %s: %v\n", crdName, cond.Reason)
+				}
+			}
+		}
+		return false, h.ctx.Err()
+	})
 }
 
 func (h *handler) restoreClusterScopedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
