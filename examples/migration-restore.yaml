@@ -3,7 +3,7 @@ kind: Restore
 metadata:
   name: restore-migration
 spec:
-  backupFilename: b-eks-2-b0450532-cee1-4aa1-a881-f5f48a007b1c-2020-09-15T07#27#09Z.tar.gz
+  backupFilename: gitjob-included-d51f46e6-ba32-4cf1-8989-01a6bd8c03de-2020-09-23T23#01#54Z.tar.gz
   prune: false
   storageLocation:
     s3:

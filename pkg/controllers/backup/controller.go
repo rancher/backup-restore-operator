@@ -320,7 +320,7 @@ func (h *handler) validateBackupSpec(backup *v1.Backup) error {
 func (h *handler) generateBackupFilename(backup *v1.Backup) (string, error) {
 	currSnapshotTS := time.Now().Format(time.RFC3339)
 	// on OS X writing file with `:` converts colon to forward slash
-	currTSForFilename := strings.Replace(currSnapshotTS, ":", "#", -1)
+	currTSForFilename := strings.Replace(currSnapshotTS, ":", "-", -1)
 	backupFileName := fmt.Sprintf("%s-%s-%s", backup.Name, h.kubeSystemNS, currTSForFilename)
 	return backupFileName, nil
 }

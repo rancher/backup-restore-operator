@@ -4,4 +4,5 @@ metadata:
   name: test-default-location-recurring-backup
 spec:
   resourceSetName: rancher-resource-set
-  encryptionConfigSecretName: test-encryptionconfig
+  schedule: "@every 2m"
+  retentionCount: 3
