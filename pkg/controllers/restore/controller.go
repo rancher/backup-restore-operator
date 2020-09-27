@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
@@ -51,6 +52,7 @@ type handler struct {
 	restmapper              meta.RESTMapper
 	defaultBackupMountPath  string
 	defaultS3BackupLocation *v1.S3ObjectStore
+	restoreMutex            *sync.Mutex
 }
 
 type ObjectsFromBackupCR struct {
@@ -89,6 +91,7 @@ func Register(
 	defaultLocalBackupLocation string,
 	defaultS3 *v1.S3ObjectStore) {
 
+	restoreLock := sync.Mutex{}
 	controller := &handler{
 		ctx:                     ctx,
 		restores:                restores,
@@ -101,6 +104,7 @@ func Register(
 		restmapper:              restmapper,
 		defaultBackupMountPath:  defaultLocalBackupLocation,
 		defaultS3BackupLocation: defaultS3,
+		restoreMutex:            &restoreLock,
 	}
 
 	// Register handlers
@@ -111,10 +115,14 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	if restore == nil || restore.DeletionTimestamp != nil {
 		return restore, nil
 	}
+	h.restoreMutex.Lock()
+	defer h.restoreMutex.Unlock()
+
 	if restore.Status.RestoreCompletionTS != "" {
 		return restore, nil
 	}
 
+	logrus.Infof("Processing Restore CR %v", restore.Name)
 	var backupSource string
 	backupName := restore.Spec.BackupFilename
 	logrus.Infof("Restoring from backup %v", restore.Spec.BackupFilename)
