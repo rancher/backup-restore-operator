@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	"github.com/sirupsen/logrus"
 
+	coordinationv1 "k8s.io/api/coordination/v1"
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,7 +30,9 @@ import (
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	coordinationclientv1 "k8s.io/client-go/kubernetes/typed/coordination/v1"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/pointer"
 )
 
 const (
@@ -37,6 +40,7 @@ const (
 	ownerRefsMapKey = "ownerReferences"
 	clusterScoped   = "clusterscoped"
 	namespaceScoped = "namespaceScoped"
+	leaseName       = "restore-controller"
 )
 
 type handler struct {
@@ -51,6 +55,7 @@ type handler struct {
 	restmapper              meta.RESTMapper
 	defaultBackupMountPath  string
 	defaultS3BackupLocation *v1.S3ObjectStore
+	kubernetesLeaseClient   coordinationclientv1.LeaseInterface
 }
 
 type ObjectsFromBackupCR struct {
@@ -82,6 +87,7 @@ func Register(
 	restores restoreControllers.RestoreController,
 	backups restoreControllers.BackupController,
 	secrets v1core.SecretController,
+	leaseClient coordinationclientv1.LeaseInterface,
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface,
 	sharedClientFactory lasso.SharedClientFactory,
@@ -101,6 +107,12 @@ func Register(
 		restmapper:              restmapper,
 		defaultBackupMountPath:  defaultLocalBackupLocation,
 		defaultS3BackupLocation: defaultS3,
+		kubernetesLeaseClient:   leaseClient,
+	}
+
+	lease, err := leaseClient.Get(ctx, leaseName, k8sv1.GetOptions{})
+	if err == nil && lease != nil {
+		leaseClient.Delete(ctx, leaseName, k8sv1.DeleteOptions{})
 	}
 
 	// Register handlers
@@ -115,6 +127,12 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return restore, nil
 	}
 
+	if err := h.Lock(restore); err != nil {
+		return restore, err
+	}
+	defer h.Unlock(*leaseHolderName(restore))
+
+	logrus.Infof("Processing Restore CR %v", restore.Name)
 	var backupSource string
 	backupName := restore.Spec.BackupFilename
 	logrus.Infof("Restoring from backup %v", restore.Spec.BackupFilename)
@@ -699,4 +717,58 @@ func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error
 	}
 
 	return restore, err
+}
+
+func (h *handler) Lock(restore *v1.Restore) error {
+	lease, err := h.kubernetesLeaseClient.Get(h.ctx, leaseName, k8sv1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+		lease = &coordinationv1.Lease{
+			ObjectMeta: k8sv1.ObjectMeta{
+				Name:      leaseName,
+				Namespace: util.ChartNamespace,
+			},
+			Spec: coordinationv1.LeaseSpec{
+				HolderIdentity: leaseHolderName(restore),
+			},
+		}
+		_, err = h.kubernetesLeaseClient.Create(h.ctx, lease, k8sv1.CreateOptions{})
+		return err
+	}
+
+	if lease.Spec.HolderIdentity != nil {
+		return fmt.Errorf("restore %v is in progress", *lease.Spec.HolderIdentity)
+	}
+	return h.updateLeaseHolderIdentity(restore, lease)
+}
+
+func (h *handler) updateLeaseHolderIdentity(restore *v1.Restore, lease *coordinationv1.Lease) error {
+	lease.Spec.HolderIdentity = leaseHolderName(restore)
+	_, err := h.kubernetesLeaseClient.Update(h.ctx, lease, k8sv1.UpdateOptions{})
+	return err
+}
+
+func (h *handler) Unlock(id string) error {
+	lease, err := h.kubernetesLeaseClient.Get(h.ctx, leaseName, k8sv1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}
+	if lease.Spec.HolderIdentity == nil {
+		return nil
+	}
+	if *lease.Spec.HolderIdentity != id {
+		return fmt.Errorf("restore %v cannot unlock lease, current lease holder is %v", id, *lease.Spec.HolderIdentity)
+	}
+	lease.Spec.HolderIdentity = nil
+	_, err = h.kubernetesLeaseClient.Update(h.ctx, lease, k8sv1.UpdateOptions{})
+	return err
+}
+
+func leaseHolderName(restore *v1.Restore) *string {
+	return pointer.StringPtr(fmt.Sprintf("%s:%s", restore.Name, string(restore.UID)))
 }
