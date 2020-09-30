@@ -27,6 +27,7 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -83,6 +84,11 @@ func main() {
 	clientSet, err := clientset.NewForConfig(restKubeConfig)
 	if err != nil {
 		logrus.Fatalf("Error getting clientSet: %s", err.Error())
+	}
+
+	k8sclient, err := kubernetes.NewForConfig(restKubeConfig)
+	if err != nil {
+		logrus.Fatalf("Error getting kubernetes client: %s", err.Error())
 	}
 
 	dynamicInterace, err := dynamic.NewForConfig(restKubeConfig)
@@ -146,6 +152,7 @@ func main() {
 	restore.Register(ctx, backups.Resources().V1().Restore(),
 		backups.Resources().V1().Backup(),
 		core.Core().V1().Secret(),
+		k8sclient.CoordinationV1().Leases(ChartNamespace),
 		clientSet, dynamicInterace, sharedClientFactory, restmapper, defaultMountPath, defaultS3)
 
 	if err := start.All(ctx, 2, backups); err != nil {
