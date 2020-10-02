@@ -116,20 +116,23 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return backup, nil
 		}
 		if backup.Status.NextSnapshotAt != "" {
-			currTime := time.Now().Round(time.Minute).Format(time.RFC3339)
+			currTime := time.Now().Format(time.RFC3339)
 			logrus.Infof("Next snapshot is scheduled for: %v, current time: %v", backup.Status.NextSnapshotAt, currTime)
 
 			nextSnapshotTime, err := time.Parse(time.RFC3339, backup.Status.NextSnapshotAt)
 			if err != nil {
 				return h.setReconcilingCondition(backup, err)
 			}
-			if nextSnapshotTime.After(time.Now().Round(time.Minute)) {
+			if nextSnapshotTime.After(time.Now()) {
+				after := nextSnapshotTime.Sub(time.Now())
+				h.backups.EnqueueAfter(backup.Name, after)
 				if backup.Generation != backup.Status.ObservedGeneration {
 					backup.Status.ObservedGeneration = backup.Generation
 					return h.backups.UpdateStatus(backup)
 				}
 				return backup, nil
 			}
+
 			// proceed with backup only if current time is same as or after nextSnapshotTime
 			logrus.Infof("Processing recurring backup CR %v ", backup.Name)
 		}
@@ -187,9 +190,9 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 
 		backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
 		if cronSchedule != nil {
-			nextBackupAt := cronSchedule.Next(time.Now()).Round(time.Minute)
+			nextBackupAt := cronSchedule.Next(time.Now())
 			backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
-			after := nextBackupAt.Sub(time.Now().Round(time.Minute))
+			after := nextBackupAt.Sub(time.Now())
 			h.backups.EnqueueAfter(backup.Name, after)
 			backup.Status.BackupType = "Recurring"
 		} else {
