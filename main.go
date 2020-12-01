@@ -44,6 +44,17 @@ var (
 	ChartNamespace                  string
 )
 
+type objectStore struct {
+	Endpoint                  string `json:"endpoint"`
+	EndpointCA                string `json:"endpointCA"`
+	InsecureTLSSkipVerify     string `json:"insecureTLSSkipVerify"`
+	CredentialSecretName      string `json:"credentialSecretName"`
+	CredentialSecretNamespace string `json:"credentialSecretNamespace"`
+	BucketName                string `json:"bucketName"`
+	Region                    string `json:"region"`
+	Folder                    string `json:"folder"`
+}
+
 func init() {
 	flag.StringVar(&KubeConfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.Parse()
@@ -54,6 +65,7 @@ func init() {
 
 func main() {
 	var defaultS3 *v1.S3ObjectStore
+	var objStoreWithStrSkipVerify *objectStore
 	var defaultMountPath string
 
 	logrus.Info("Starting controller")
@@ -136,8 +148,21 @@ func main() {
 		if err != nil {
 			logrus.Fatalf("Error marshaling s3 details secret: %v", err)
 		}
-		if err := json.Unmarshal(secretData, &defaultS3); err != nil {
+		if err := json.Unmarshal(secretData, &objStoreWithStrSkipVerify); err != nil {
 			logrus.Fatalf("Error unmarshaling s3 details secret: %v", err)
+		}
+
+		defaultS3 := v1.S3ObjectStore{
+			Endpoint:                  objStoreWithStrSkipVerify.Endpoint,
+			EndpointCA:                objStoreWithStrSkipVerify.EndpointCA,
+			CredentialSecretName:      objStoreWithStrSkipVerify.CredentialSecretName,
+			CredentialSecretNamespace: objStoreWithStrSkipVerify.CredentialSecretNamespace,
+			BucketName:                objStoreWithStrSkipVerify.BucketName,
+			Region:                    objStoreWithStrSkipVerify.Region,
+			Folder:                    objStoreWithStrSkipVerify.Folder,
+		}
+		if objStoreWithStrSkipVerify.InsecureTLSSkipVerify == "true" {
+			defaultS3.InsecureTLSSkipVerify = true
 		}
 	}
 
