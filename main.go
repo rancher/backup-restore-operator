@@ -152,7 +152,7 @@ func main() {
 			logrus.Fatalf("Error unmarshaling s3 details secret: %v", err)
 		}
 
-		defaultS3 := v1.S3ObjectStore{
+		defaultS3 = &v1.S3ObjectStore{
 			Endpoint:                  objStoreWithStrSkipVerify.Endpoint,
 			EndpointCA:                objStoreWithStrSkipVerify.EndpointCA,
 			CredentialSecretName:      objStoreWithStrSkipVerify.CredentialSecretName,
