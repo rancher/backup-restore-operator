@@ -21,7 +21,7 @@ func (h *handler) uploadToS3(backup *v1.Backup, objectStore *v1.S3ObjectStore, t
 		return err
 	}
 	if objectStore.Folder != "" {
-		if err := os.Mkdir(filepath.Join(tmpBackupGzipFilepath, objectStore.Folder), os.ModePerm); err != nil {
+		if err := os.MkdirAll(filepath.Join(tmpBackupGzipFilepath, objectStore.Folder), os.ModePerm); err != nil {
 			return removeTempUploadDir(tmpBackupGzipFilepath, err)
 		}
 		gzipFile = fmt.Sprintf("%s/%s", objectStore.Folder, gzipFile)
