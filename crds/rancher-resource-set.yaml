@@ -2,13 +2,23 @@ apiVersion: resources.cattle.io/v1
 kind: ResourceSet
 metadata:
   name: rancher-resource-set
+controllerReferences:
+  - apiVersion: "apps/v1"
+    resource: "deployments"
+    name: "rancher"
+    namespace: "cattle-system"
 resourceSelectors:
+
+  # Rancher
   - apiVersion: "v1"
     kindsRegexp: "^namespaces$"
-    resourceNameRegexp: "^cattle-|^p-|^c-|^user-|^u-|^fleet-|^cluster-fleet-"
+    resourceNameRegexp: "^cattle-|^p-|^c-|^user-|^u-"
     resourceNames:
       - "local"
-      - "rancher-operator-system"
+  - apiVersion: "apps/v1"
+    kindsRegexp: "^deployments$"
+    namespaces:
+      - "cattle-system"
   - apiVersion: "v1"
     kindsRegexp: "^secrets$"
     namespaceRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"
@@ -18,7 +28,88 @@ resourceSelectors:
           operator: "NotIn"
           values: ["helm"]
   - apiVersion: "v1"
+    kindsRegexp: "^serviceaccounts$"
+    namespaceRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"
+  - apiVersion: "v1"
+    kindsRegexp: "^configmaps$"
+    namespaces:
+      - "cattle-system"
+  - apiVersion: "rbac.authorization.k8s.io/v1"
+    kindsRegexp: "^roles$|^rolebindings$"
+    namespaceRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"
+  - apiVersion: "rbac.authorization.k8s.io/v1"
+    kindsRegexp: "^clusterrolebindings$"
+    resourceNameRegexp: "^cattle-|^clusterrolebinding-|^globaladmin-user-|^grb-u-"
+  - apiVersion: "rbac.authorization.k8s.io/v1"
+    kindsRegexp: "^clusterroles$"
+    resourceNameRegexp: "^cattle-|^p-|^c-|^local-|^user-|^u-|^project-|^create-ns$"
+  - apiVersion: "apiextensions.k8s.io/v1beta1"
+    kindsRegexp: "."
+    resourceNameRegexp: "management.cattle.io$|project.cattle.io$|catalog.cattle.io$|resources.cattle.io$"
+  - apiVersion: "management.cattle.io/v3"
+    kindsRegexp: "."
+  - apiVersion: "project.cattle.io/v3"
+    kindsRegexp: "."
+  - apiVersion: "catalog.cattle.io/v1"
+    kindsRegexp: "^clusterrepos$"
+  - apiVersion: "resources.cattle.io/v1"
+    kindsRegexp: "^ResourceSet$"
+  
+  # Operator
+  - apiVersion: "rancher.cattle.io/v1"
+    kindsRegexp: "."
+  - apiVersion: "apps/v1"
+    kindsRegexp: "^deployments$"
+    resourceNames:
+      - "rancher-operator"
+    namespaces:
+      - "rancher-operator-system"
+  - apiVersion: "v1"
+    kindsRegexp: "^serviceaccounts$"
+    namespaces:
+      - "rancher-operator-system"
+  - apiVersion: "rbac.authorization.k8s.io/v1"
+    kindsRegexp: "^clusterrolebindings$"
+    resourceNames:
+      - "rancher-operator"
+  - apiVersion: "rbac.authorization.k8s.io/v1"
+    kindsRegexp: "^clusterroles$"
+    resourceNames:
+      - "rancher-operator"
+  - apiVersion: "apiextensions.k8s.io/v1beta1"
+    kindsRegexp: "."
+    resourceNameRegexp: "rancher.cattle.io$"
+  - apiVersion: "v1"
+    kindsRegexp: "^namespaces$"
+    resourceNames:
+      - "rancher-operator-system"
+
+  # EKS
+  - apiVersion: "eks.cattle.io/v1"
+    kindsRegexp: "."
+  - apiVersion: "apps/v1"
+    kindsRegexp: "^deployments$"
+    resourceNames:
+      - "eks-config-operator"
+  - apiVersion: "apiextensions.k8s.io/v1beta1"
+    kindsRegexp: "."
+    resourceNameRegexp: "eks.cattle.io$"
+  - apiVersion: "rbac.authorization.k8s.io/v1"
+    kindsRegexp: "^clusterroles$"
+    resourceNames:
+      - "eks-operator"
+  - apiVersion: "rbac.authorization.k8s.io/v1"
+    kindsRegexp: "^clusterrolebindings$"
+    resourceNames:
+      - "eks-operator"
+
+  # Fleet
+  - apiVersion: "v1"
+    kindsRegexp: "^namespaces$"
+    resourceNameRegexp: "^fleet-|^cluster-fleet-"
+  - apiVersion: "v1"
     kindsRegexp: "^secrets$"
+    namespaceRegexp: "^fleet-|^cluster-fleet-"
     labelSelectors:
       matchExpressions:
         - key: "owner"
@@ -29,82 +120,36 @@ resourceSelectors:
           values: ["true"]
   - apiVersion: "v1"
     kindsRegexp: "^serviceaccounts$"
-    namespaceRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-|^fleet-"
-    namespaces:
-      - "rancher-operator-system"
+    namespaceRegexp: "^fleet-|^cluster-fleet-"
   - apiVersion: "v1"
     kindsRegexp: "^configmaps$"
-    namespaces:
-      - "cattle-system"
-      - "fleet-system"
+    namespaceRegexp: "^fleet-|^cluster-fleet-"
   - apiVersion: "rbac.authorization.k8s.io/v1"
     kindsRegexp: "^roles$|^rolebindings$"
-    namespaceRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"
-  - apiVersion: "rbac.authorization.k8s.io/v1"
-    kindsRegexp: "^roles$|^rolebindings$"
-    resourceNames:
-      - "fleet-controller"
-    namespaceRegexp: "^fleet-"
+    namespaceRegexp: "^fleet-|^cluster-fleet-"
   - apiVersion: "rbac.authorization.k8s.io/v1"
     kindsRegexp: "^clusterrolebindings$"
-    resourceNameRegexp: "^cattle-|^clusterrolebinding-|^globaladmin-user-|^grb-u-|^fleet-"
-    resourceNames:
-      - "eks-operator"
-      - "rancher-operator"
-      - "gitjob-binding"
+    resourceNameRegexp: "^fleet-|^gitjob-"
   - apiVersion: "rbac.authorization.k8s.io/v1"
     kindsRegexp: "^clusterroles$"
-    resourceNameRegexp: "^cattle-|^p-|^c-|^local-|^user-|^u-|^project-|^create-ns$|^fleet-"
+    resourceNameRegexp: "^fleet-"
     resourceNames:
-      - "eks-operator"
-      - "rancher-operator"
       - "gitjob"
   - apiVersion: "apiextensions.k8s.io/v1beta1"
     kindsRegexp: "."
-    resourceNameRegexp: "management.cattle.io$|project.cattle.io$|catalog.cattle.io$|eks.cattle.io$|resources.cattle.io$|rancher.cattle.io$|fleet.cattle.io$|gitjob.cattle.io$"
-  - apiVersion: "management.cattle.io/v3"
-    kindsRegexp: "."
-  - apiVersion: "project.cattle.io/v3"
-    kindsRegexp: "."
-  - apiVersion: "catalog.cattle.io/v1"
-    kindsRegexp: "^clusterrepos$"
-  - apiVersion: "resources.cattle.io/v1"
-    kindsRegexp: "^ResourceSet$"
-  - apiVersion: "eks.cattle.io/v1"
-    kindsRegexp: "."
-  - apiVersion: "apps/v1"
-    kindsRegexp: "^deployments$"
-    resourceNames:
-      - "eks-config-operator"
-    namespaces:
-      - "cattle-system"
-  - apiVersion: "rancher.cattle.io/v1"
-    kindsRegexp: "."
-  - apiVersion: "apps/v1"
-    kindsRegexp: "^deployments$"
-    resourceNames:
-      - "rancher-operator"
-    namespaces:
-      - "rancher-operator-system"
+    resourceNameRegexp: "fleet.cattle.io$|gitjob.cattle.io$"
   - apiVersion: "fleet.cattle.io/v1alpha1"
     kindsRegexp: "."
   - apiVersion: "gitjob.cattle.io/v1"
     kindsRegexp: "."
   - apiVersion: "apps/v1"
     kindsRegexp: "^deployments$"
+    namespaceRegexp: "^fleet-|^cluster-fleet-"
+    resourceNameRegexp: "^fleet-"
     resourceNames:
-      - "fleet-controller"
       - "gitjob"
-    namespaces:
-      - "fleet-system"
   - apiVersion: "apps/v1"
     kindsRegexp: "^services$"
+    namespaceRegexp: "^fleet-|^cluster-fleet-"
     resourceNames:
       - "gitjob"
-    namespaces:
-      - "fleet-system"
-controllerReferences:
-  - apiVersion: "apps/v1"
-    resource: "deployments"
-    name: "rancher"
-    namespace: "cattle-system"
