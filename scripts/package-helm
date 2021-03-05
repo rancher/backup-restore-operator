@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+
+if ! hash helm 2>/dev/null; then
+    exit 0
+fi
+
+cd $(dirname $0)/..
+. ./scripts/version
+
+rm -rf build/charts
+mkdir -p build dist/artifacts
+cp -rf charts build/
+
+sed -i \
+    -e 's/version:.*/version: '${HELM_VERSION}'/' \
+    -e 's/appVersion:.*/appVersion: '${HELM_VERSION}'/' \
+    build/charts/rancher-backup/Chart.yaml
+
+sed -i \
+    -e 's/tag:.*/tag: '${HELM_TAG}'/' \
+    build/charts/rancher-backup/values.yaml
+
+sed -i \
+    -e 's/version:.*/version: '${HELM_VERSION}'/' \
+    -e 's/appVersion:.*/appVersion: '${HELM_VERSION}'/' \
+    build/charts/rancher-backup-crd/Chart.yaml
+
+helm package -d ./dist/artifacts ./build/charts/rancher-backup
+helm package -d ./dist/artifacts ./build/charts/rancher-backup-crd
