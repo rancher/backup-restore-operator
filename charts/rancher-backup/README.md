@@ -7,7 +7,7 @@ Refer [this](https://github.com/rancher/backup-restore-operator) repository for 
 -----
 
 ### Get Repo Info
-```
+```bash
 helm repo add rancher-chart https://charts.rancher.io
 helm repo update
 ```
@@ -15,7 +15,7 @@ helm repo update
 -----
 
 ### Install Chart
-```
+```bash
 helm install rancher-backup-crd rancher-chart/rancher-backup-crd -n cattle-resources-system --create-namespace
 helm install rancher-backup rancher-chart/rancher-backup -n cattle-resources-system
 ```
@@ -54,7 +54,7 @@ Refer [this](https://github.com/rancher/backup-restore-operator#crds) section fo
 
 -----
 ### Upgrading Chart
-```
+```bash
 helm upgrade rancher-backup-crd -n cattle-resources-system
 helm upgrade rancher-backup -n cattle-resources-system
 ```
@@ -62,7 +62,7 @@ helm upgrade rancher-backup -n cattle-resources-system
 -----
 ### Uninstall Chart
 
-```
+```bash
 helm uninstall rancher-backup -n cattle-resources-system
 helm uninstall rancher-backup-crd -n cattle-resources-system
 ```
