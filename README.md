@@ -60,7 +60,7 @@ It installs the following cluster-scoped CRDs:
 ----
 
 ### User flow
-1. Create a ResourceSet, that targets all the resources you want to backup. The ResourceSet required for backing up Rancher will be provided and installed by the chart. Refer to the default [rancher-resource-set](https://github.com/rancher/backup-restore-operator/blob/master/crds/rancher-resource-set.yaml) as an example for creating resourceSets
+1. Create a ResourceSet, that targets all the resources you want to backup. The ResourceSet required for backing up Rancher will be provided and installed by the chart. Refer to the default [rancher-resourceset](https://github.com/rancher/backup-restore-operator/blob/master/charts/rancher-backup/templates/rancher-resourceset.yaml) as an example for creating resourceSets
 2. Performing a backup: To take a backup, user has to create an instance of the Backup CRD (create a Backup CR). Each Backup CR must reference a ResourceSet. A Backup CR can be used to perform a one-time backup or recurring backups. Refer [examples](https://github.com/rancher/backup-restore-operator/tree/master/examples) folder for sample manifests
 3. Restoring from a backup: To restore from a backup, user has to create an instance of the Restore CRD (create a Restore CR). A Restore CR must contain the exact Backup filename.  Refer [examples](https://github.com/rancher/backup-restore-operator/tree/master/examples) folder for sample manifests
 
