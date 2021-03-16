@@ -34,7 +34,7 @@ func WriteCRD() error {
 			return err
 		}
 
-		filename := fmt.Sprintf("./crds/%s.yaml", strings.ToLower(bCrd.Spec.Names.Kind))
+		filename := fmt.Sprintf("./charts/rancher-backup-crd/templates/%s.yaml", strings.ToLower(bCrd.Spec.Names.Kind))
 		err = ioutil.WriteFile(filename, yamlBytes, 0644)
 		if err != nil {
 			return err
