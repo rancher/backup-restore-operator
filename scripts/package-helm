@@ -1,8 +1,30 @@
 #!/bin/bash
 set -e
 
+function edit-charts() {
+    sed -i \
+        -e 's/^version:.*/version: '${1}'/' \
+        -e 's/^appVersion:.*/appVersion: '${1}'/' \
+        build/charts/rancher-backup/Chart.yaml
+
+    sed -i \
+        -e 's/tag:.*/tag: '${2}'/' \
+        build/charts/rancher-backup/values.yaml
+
+    sed -i \
+        -e 's/^version:.*/version: '${1}'/' \
+        -e 's/^appVersion:.*/appVersion: '${1}'/' \
+        build/charts/rancher-backup-crd/Chart.yaml
+}
+
+function package-charts() {
+    helm package --debug -d ./dist/artifacts ./build/charts/rancher-backup
+    helm package --debug -d ./dist/artifacts ./build/charts/rancher-backup-crd
+}
+
 if ! hash helm 2>/dev/null; then
-    exit 0
+    echo "Helm is not installed"
+    exit 1
 fi
 
 cd $(dirname $0)/..
@@ -12,19 +34,10 @@ rm -rf build/charts
 mkdir -p build dist/artifacts
 cp -rf charts build/
 
-sed -i \
-    -e 's/version:.*/version: '${HELM_VERSION}'/' \
-    -e 's/appVersion:.*/appVersion: '${HELM_VERSION}'/' \
-    build/charts/rancher-backup/Chart.yaml
+edit-charts ${HELM_VERSION} ${HELM_TAG}
 
-sed -i \
-    -e 's/tag:.*/tag: '${HELM_TAG}'/' \
-    build/charts/rancher-backup/values.yaml
-
-sed -i \
-    -e 's/version:.*/version: '${HELM_VERSION}'/' \
-    -e 's/appVersion:.*/appVersion: '${HELM_VERSION}'/' \
-    build/charts/rancher-backup-crd/Chart.yaml
-
-helm package -d ./dist/artifacts ./build/charts/rancher-backup
-helm package -d ./dist/artifacts ./build/charts/rancher-backup-crd
+if ! package-charts; then
+    echo "package-chart or package-chart-crd failed: trying with dev variable..."
+    edit-charts ${HELM_VERSION_DEV} ${HELM_TAG_DEV}
+    package-charts
+fi
