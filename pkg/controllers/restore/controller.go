@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	"github.com/sirupsen/logrus"
 
+	arv1 "k8s.io/api/admissionregistration/v1"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -41,6 +42,9 @@ const (
 	clusterScoped   = "clusterscoped"
 	namespaceScoped = "namespaceScoped"
 	leaseName       = "restore-controller"
+
+	mutatingWebhookConfigurationResource   = "mutatingwebhookconfigurations"
+	validatingWebhookConfigurationResource = "validatingwebhookconfigurations"
 )
 
 type handler struct {
@@ -138,8 +142,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	logrus.Infof("Restoring from backup %v", restore.Spec.BackupFilename)
 
 	created := make(map[string]bool)
-	ownerToDependentsList := make(map[string][]restoreObj)
-	var toRestore []restoreObj
 	numOwnerReferences := make(map[string]int)
 	objFromBackupCR := ObjectsFromBackupCR{
 		crdInfoToData:                   make(map[objInfo]unstructured.Unstructured),
@@ -220,22 +222,51 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring CRDs, check logs for exact error"))
 	}
 
-	logrus.Infof("Starting to restore clusterscoped resources for restore CR %v", restore.Name)
-	// then restore clusterscoped resources, by first generating dependency graph for cluster scoped resources, and create from the graph
-	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR); err != nil {
+	var ownerToDependentsList map[string][]restoreObj
+	var toRestore []restoreObj
+
+	// then restore cluster-scoped resources, by first generating dependency graph for cluster scoped resources, and create from the graph
+	logrus.Infof("Starting to restore cluster-scoped resources for restore CR %v", restore.Name)
+	ownerToDependentsList = make(map[string][]restoreObj)
+	toRestore = []restoreObj{}
+	clusterScopedWebhookList, err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false)
+	if err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring cluster-scoped resources %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped resources, check logs for exact error"))
 	}
 
-	logrus.Infof("Starting to restore namespaced resources for restore CR %v", restore.Name)
 	// now restore namespaced resources: generate adjacency lists for dependents and ownerRefs for namespaced resources
+	logrus.Infof("Starting to restore namespaced resources for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
-	if err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR); err != nil {
+	namespacedWebhookList, err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false)
+	if err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring namespaced resources %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced resources, check logs for exact error"))
+	}
+
+	// now restore the cluster-scoped mutating and validating webhooks
+	logrus.Infof("Starting to restore cluster-scoped webhooks for restore CR %v", restore.Name)
+	ownerToDependentsList = make(map[string][]restoreObj)
+	toRestore = []restoreObj{}
+	_, err = h.restoreClusterScopedResources(ownerToDependentsList, &clusterScopedWebhookList, numOwnerReferences, created, objFromBackupCR, true)
+	if err != nil {
+		h.scaleUpControllersFromResourceSet(objFromBackupCR)
+		logrus.Errorf("Error restoring cluster-scoped webhooks %v", err)
+		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped webhooks, check logs for exact error"))
+	}
+
+	// finally, restore the namespace mutating and validating webhooks
+	logrus.Infof("Starting to restore namespaced webhooks for restore CR %v", restore.Name)
+	ownerToDependentsList = make(map[string][]restoreObj)
+	toRestore = []restoreObj{}
+	_, err = h.restoreNamespacedResources(ownerToDependentsList, &namespacedWebhookList, numOwnerReferences, created, objFromBackupCR, true)
+	if err != nil {
+		h.scaleUpControllersFromResourceSet(objFromBackupCR)
+		logrus.Errorf("Error restoring namespaced webhooks %v", err)
+		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced webhooks, check logs for exact error"))
 	}
 
 	// prune by default
@@ -320,21 +351,21 @@ func (h *handler) waitCRD(crdName string) error {
 }
 
 func (h *handler) restoreClusterScopedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
+	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR, restoreWebhooks bool) ([]restoreObj, error) {
 	// generate adjacency lists for dependents and ownerRefs first for clusterscoped resources
 	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, created, clusterScoped); err != nil {
-		return err
+		return nil, err
 	}
-	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore)
+	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore, restoreWebhooks)
 }
 
 func (h *handler) restoreNamespacedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
+	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR, restoreWebhooks bool) ([]restoreObj, error) {
 	// generate adjacency lists for dependents and ownerRefs for namespaced resources
 	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, created, namespaceScoped); err != nil {
-		return err
+		return nil, err
 	}
-	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore)
+	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore, restoreWebhooks)
 }
 
 // generateDependencyGraph creates a graph "ownerToDependentsList" to track objects with ownerReferences
@@ -472,13 +503,26 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 }
 
 func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]restoreObj, created map[string]bool,
-	numOwnerReferences map[string]int, objFromBackupCR ObjectsFromBackupCR, toRestore []restoreObj) error {
+	numOwnerReferences map[string]int, objFromBackupCR ObjectsFromBackupCR, toRestore []restoreObj, restoreWebhooks bool) ([]restoreObj, error) {
 	numTotalDependents := 0
 	for _, dependents := range ownerToDependentsList {
 		numTotalDependents += len(dependents)
 	}
+
+	mutatingWebhookGVR := schema.GroupVersionResource{
+		Group:    arv1.SchemeGroupVersion.Group,
+		Version:  arv1.SchemeGroupVersion.Version,
+		Resource: mutatingWebhookConfigurationResource,
+	}
+	validatingWebhookGVR := schema.GroupVersionResource{
+		Group:    arv1.SchemeGroupVersion.Group,
+		Version:  arv1.SchemeGroupVersion.Version,
+		Resource: validatingWebhookConfigurationResource,
+	}
+
 	countRestored := 0
 	var errList []error
+	var webhookList []restoreObj
 	for len(toRestore) > 0 {
 		curr := toRestore[0]
 		if len(toRestore) == 1 {
@@ -486,16 +530,24 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		} else {
 			toRestore = toRestore[1:]
 		}
-		if created[curr.ResourceConfigPath] {
-			logrus.Infof("Resource %v is already created/updated", curr.ResourceConfigPath)
-			continue
-		}
 		currResourceInfo := objInfo{
 			Name:       curr.Name,
 			Namespace:  curr.Namespace,
 			GVR:        curr.GVR,
 			ConfigPath: curr.ResourceConfigPath,
 		}
+
+		// Check if the resource is a webhook, and check if the resource has been created/updated already.
+		if !restoreWebhooks && (currResourceInfo.GVR == mutatingWebhookGVR || currResourceInfo.GVR == validatingWebhookGVR) {
+			logrus.Infof("Delaying webhook restore: %s in namespace %s", currResourceInfo.Name, currResourceInfo.Namespace)
+			webhookList = append(webhookList, curr)
+			continue
+		}
+		if created[currResourceInfo.ConfigPath] {
+			logrus.Infof("Resource %v is already created/updated", currResourceInfo.ConfigPath)
+			continue
+		}
+
 		var resourceData unstructured.Unstructured
 		if curr.Namespace != "" {
 			resourceData = objFromBackupCR.namespacedResourceInfoToData[currResourceInfo]
@@ -528,7 +580,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		}
 	}
 
-	return util.ErrList(errList)
+	return webhookList, util.ErrList(errList)
 }
 
 func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstructured.Unstructured, hasStatusSubresource bool) error {
