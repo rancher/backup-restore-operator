@@ -222,13 +222,11 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring CRDs, check logs for exact error"))
 	}
 
-	var ownerToDependentsList map[string][]restoreObj
-	var toRestore []restoreObj
-
 	// then restore cluster-scoped resources, by first generating dependency graph for cluster scoped resources, and create from the graph
-	logrus.Infof("Starting to restore cluster-scoped resources for restore CR %v", restore.Name)
-	ownerToDependentsList = make(map[string][]restoreObj)
+	ownerToDependentsList := make(map[string][]restoreObj)
+	var toRestore []restoreObj
 	toRestore = []restoreObj{}
+	logrus.Infof("Starting to restore cluster-scoped resources for restore CR %v", restore.Name)
 	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring cluster-scoped resources %v", err)
@@ -236,9 +234,9 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 
 	// now restore namespaced resources: generate adjacency lists for dependents and ownerRefs for namespaced resources
-	logrus.Infof("Starting to restore namespaced resources for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
+	logrus.Infof("Starting to restore namespaced resources for restore CR %v", restore.Name)
 	if err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring namespaced resources %v", err)
@@ -246,9 +244,9 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 
 	// finally, restore the mutating and validating webhooks (both are only cluster-scoped)
-	logrus.Infof("Starting to restore webhooks for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
+	logrus.Infof("Starting to restore webhooks for restore CR %v", restore.Name)
 	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, true); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring cluster-scoped webhooks %v", err)
