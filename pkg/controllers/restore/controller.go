@@ -124,7 +124,6 @@ func Register(
 }
 
 func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, error) {
-	var err error
 	if restore == nil || restore.DeletionTimestamp != nil {
 		return restore, nil
 	}
@@ -132,7 +131,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return restore, nil
 	}
 
-	if err = h.Lock(restore); err != nil {
+	if err := h.Lock(restore); err != nil {
 		return restore, err
 	}
 	defer h.Unlock(*leaseHolderName(restore))
@@ -154,6 +153,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
+	var err error
 	if restore.Spec.EncryptionConfigSecretName != "" {
 		logrus.Infof("Processing encryption config %v for restore CR %v", restore.Spec.EncryptionConfigSecretName, restore.Name)
 		transformerMap, err = util.GetEncryptionTransformers(restore.Spec.EncryptionConfigSecretName, h.secrets)
@@ -214,7 +214,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 	// first restore CRDs
 	logrus.Infof("Starting to restore CRDs for restore CR %v", restore.Name)
-	if err = h.restoreCRDs(created, objFromBackupCR); err != nil {
+	if err := h.restoreCRDs(created, objFromBackupCR); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring CRDs %v", err)
 		// Cannot set the exact error on reconcile condition, the order in which resources failed to restore are added in err msg could
@@ -229,7 +229,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	logrus.Infof("Starting to restore cluster-scoped resources for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
-	if err = h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false); err != nil {
+	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring cluster-scoped resources %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped resources, check logs for exact error"))
@@ -239,7 +239,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	logrus.Infof("Starting to restore namespaced resources for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
-	if err = h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false); err != nil {
+	if err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring namespaced resources %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced resources, check logs for exact error"))
@@ -249,7 +249,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	logrus.Infof("Starting to restore webhooks for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
-	if err = h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, true); err != nil {
+	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, true); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring cluster-scoped webhooks %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring webhooks, check logs for exact error"))
