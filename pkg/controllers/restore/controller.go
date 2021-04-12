@@ -124,6 +124,7 @@ func Register(
 }
 
 func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, error) {
+	var err error
 	if restore == nil || restore.DeletionTimestamp != nil {
 		return restore, nil
 	}
@@ -131,7 +132,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return restore, nil
 	}
 
-	if err := h.Lock(restore); err != nil {
+	if err = h.Lock(restore); err != nil {
 		return restore, err
 	}
 	defer h.Unlock(*leaseHolderName(restore))
@@ -153,7 +154,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
-	var err error
 	if restore.Spec.EncryptionConfigSecretName != "" {
 		logrus.Infof("Processing encryption config %v for restore CR %v", restore.Spec.EncryptionConfigSecretName, restore.Name)
 		transformerMap, err = util.GetEncryptionTransformers(restore.Spec.EncryptionConfigSecretName, h.secrets)
@@ -214,7 +214,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 	// first restore CRDs
 	logrus.Infof("Starting to restore CRDs for restore CR %v", restore.Name)
-	if err := h.restoreCRDs(created, objFromBackupCR); err != nil {
+	if err = h.restoreCRDs(created, objFromBackupCR); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring CRDs %v", err)
 		// Cannot set the exact error on reconcile condition, the order in which resources failed to restore are added in err msg could
@@ -229,8 +229,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	logrus.Infof("Starting to restore cluster-scoped resources for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
-	clusterScopedWebhookList, err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false)
-	if err != nil {
+	if err = h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring cluster-scoped resources %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped resources, check logs for exact error"))
@@ -240,8 +239,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	logrus.Infof("Starting to restore namespaced resources for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
-	namespacedWebhookList, err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false)
-	if err != nil {
+	if err = h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, false); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring namespaced resources %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced resources, check logs for exact error"))
@@ -251,19 +249,17 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	logrus.Infof("Starting to restore cluster-scoped webhooks for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
-	_, err = h.restoreClusterScopedResources(ownerToDependentsList, &clusterScopedWebhookList, numOwnerReferences, created, objFromBackupCR, true)
-	if err != nil {
+	if err = h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, true); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring cluster-scoped webhooks %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped webhooks, check logs for exact error"))
 	}
 
-	// finally, restore the namespace mutating and validating webhooks
+	// finally, restore the namespaced mutating and validating webhooks
 	logrus.Infof("Starting to restore namespaced webhooks for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
-	_, err = h.restoreNamespacedResources(ownerToDependentsList, &namespacedWebhookList, numOwnerReferences, created, objFromBackupCR, true)
-	if err != nil {
+	if err = h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, true); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring namespaced webhooks %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced webhooks, check logs for exact error"))
@@ -351,19 +347,19 @@ func (h *handler) waitCRD(crdName string) error {
 }
 
 func (h *handler) restoreClusterScopedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR, restoreWebhooks bool) ([]restoreObj, error) {
+	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR, restoreWebhooks bool) error {
 	// generate adjacency lists for dependents and ownerRefs first for clusterscoped resources
 	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, created, clusterScoped); err != nil {
-		return nil, err
+		return err
 	}
 	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore, restoreWebhooks)
 }
 
 func (h *handler) restoreNamespacedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR, restoreWebhooks bool) ([]restoreObj, error) {
+	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR, restoreWebhooks bool) error {
 	// generate adjacency lists for dependents and ownerRefs for namespaced resources
 	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, created, namespaceScoped); err != nil {
-		return nil, err
+		return err
 	}
 	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore, restoreWebhooks)
 }
@@ -503,7 +499,7 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 }
 
 func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]restoreObj, created map[string]bool,
-	numOwnerReferences map[string]int, objFromBackupCR ObjectsFromBackupCR, toRestore []restoreObj, restoreWebhooks bool) ([]restoreObj, error) {
+	numOwnerReferences map[string]int, objFromBackupCR ObjectsFromBackupCR, toRestore []restoreObj, restoreWebhooks bool) error {
 	numTotalDependents := 0
 	for _, dependents := range ownerToDependentsList {
 		numTotalDependents += len(dependents)
@@ -522,7 +518,6 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 
 	countRestored := 0
 	var errList []error
-	var webhookList []restoreObj
 	for len(toRestore) > 0 {
 		curr := toRestore[0]
 		if len(toRestore) == 1 {
@@ -540,7 +535,6 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		// Check if the resource is a webhook, and check if the resource has been created/updated already.
 		if !restoreWebhooks && (currResourceInfo.GVR == mutatingWebhookGVR || currResourceInfo.GVR == validatingWebhookGVR) {
 			logrus.Infof("Delaying webhook restore: %s in namespace %s", currResourceInfo.Name, currResourceInfo.Namespace)
-			webhookList = append(webhookList, curr)
 			continue
 		}
 		if created[currResourceInfo.ConfigPath] {
@@ -580,7 +574,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		}
 	}
 
-	return webhookList, util.ErrList(errList)
+	return util.ErrList(errList)
 }
 
 func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstructured.Unstructured, hasStatusSubresource bool) error {
