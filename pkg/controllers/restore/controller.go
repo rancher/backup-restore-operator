@@ -522,7 +522,9 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 			ConfigPath: curr.ResourceConfigPath,
 		}
 
-		// Check if the resource is a webhook, and check if the resource has been created/updated already.
+		// If we are not restoring webhooks, and the current resource is a webhook, then we skip the current resource.
+		// This allows us to delay webhook restoration until all dependent resources have been restored.
+		// The next time this function is called, `restoreWebhooks` should be set to `true`.
 		if !restoreWebhooks && (currResourceInfo.GVR == mutatingWebhookGVR || currResourceInfo.GVR == validatingWebhookGVR) {
 			logrus.Infof("Delaying webhook restore: %s in namespace %s", currResourceInfo.Name, currResourceInfo.Namespace)
 			continue
