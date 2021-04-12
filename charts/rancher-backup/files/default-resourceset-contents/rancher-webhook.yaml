@@ -1,0 +1,15 @@
+- apiVersion: "admissionregistration.k8s.io/v1"
+  kinds:
+    - "ValidatingWebhookConfiguration"
+  resourceNames:
+    - "rancher.cattle.io"
+- apiVersion: "rbac.authorization.k8s.io/v1"
+  kindsRegexp: "^clusterrolebindings$"
+  resourceNames:
+    - "rancher-webhook"
+- apiVersion: "v1"
+  kindsRegexp: "^services$"
+  resourceNames:
+    - "rancher-webhook"
+  namespaces:
+    - "cattle-system"
