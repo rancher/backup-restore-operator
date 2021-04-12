@@ -245,24 +245,14 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced resources, check logs for exact error"))
 	}
 
-	// now restore the cluster-scoped mutating and validating webhooks
-	logrus.Infof("Starting to restore cluster-scoped webhooks for restore CR %v", restore.Name)
+	// finally, restore the mutating and validating webhooks (both are only cluster-scoped)
+	logrus.Infof("Starting to restore webhooks for restore CR %v", restore.Name)
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
 	if err = h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, true); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring cluster-scoped webhooks %v", err)
-		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped webhooks, check logs for exact error"))
-	}
-
-	// finally, restore the namespaced mutating and validating webhooks
-	logrus.Infof("Starting to restore namespaced webhooks for restore CR %v", restore.Name)
-	ownerToDependentsList = make(map[string][]restoreObj)
-	toRestore = []restoreObj{}
-	if err = h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, true); err != nil {
-		h.scaleUpControllersFromResourceSet(objFromBackupCR)
-		logrus.Errorf("Error restoring namespaced webhooks %v", err)
-		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced webhooks, check logs for exact error"))
+		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring webhooks, check logs for exact error"))
 	}
 
 	// prune by default
