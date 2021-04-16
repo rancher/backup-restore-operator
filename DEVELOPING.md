@@ -15,6 +15,26 @@ helm install --wait \
     rancher-backup ./charts/rancher-backup
 ```
 
+#### Optional: Use a Personal Repository for Testing
+
+You can also build and push the operator to a personal repository for use with the chart.
+
+```bash
+NAME=<org>/<name>
+TAG=<version>
+IMAGE=$NAME:$TAG
+
+make build
+docker build -t $IMAGE .
+docker push $IMAGE
+```
+
+Now, you can use that image for the chart during installation.
+
+```bash
+--set image.repository=$NAME --set image.tag=$TAG
+```
+
 ### Developer Uninstallation
 
 Follow the uninstallation instructions in [README.md](./README.md).
