@@ -47,3 +47,6 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+serviceAccount:
+  annotations: {}
