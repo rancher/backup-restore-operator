@@ -124,68 +124,6 @@ volumes:
 
 ---
 kind: pipeline
-name: arm
-
-platform:
-  os: linux
-  arch: arm
-
-steps:
-- name: build
-  image: rancher/dapper:v0.4.1
-  commands:
-  - dapper ci
-  volumes:
-  - name: docker
-    path: /var/run/docker.sock
-
-- name: github_binary_release
-  image: plugins/github-release
-  settings:
-    api_key:
-      from_secret: github_token
-    prerelease: true
-    checksum:
-    - sha256
-    checksum_file: CHECKSUMsum-arm.txt
-    checksum_flatten: true
-    files:
-    - "dist/artifacts/*"
-  when:
-    instance:
-    - drone-publish.rancher.io
-    ref:
-    - refs/head/master
-    - refs/tags/*
-    event:
-    - tag
-
-- name: docker-publish
-  image: plugins/docker
-  settings:
-    dockerfile: package/Dockerfile
-    password:
-      from_secret: docker_password
-    repo: "rancher/backup-restore-operator"
-    tag: "${DRONE_TAG}-arm"
-    username:
-      from_secret: docker_username
-  when:
-    instance:
-    - drone-publish.rancher.io
-    ref:
-    - refs/head/master
-    - refs/tags/*
-    event:
-    - tag
-
-volumes:
-- name: docker
-  host:
-    path: /var/run/docker.sock
-
----
-kind: pipeline
 name: manifest
 
 platform:
@@ -203,7 +141,6 @@ steps:
     platforms:
       - linux/amd64
       - linux/arm64
-      - linux/arm
     target: "rancher/backup-restore-operator:${DRONE_TAG}"
     template: "rancher/backup-restore-operator:${DRONE_TAG}-ARCH"
   when:
@@ -218,4 +155,3 @@ steps:
 depends_on:
 - amd64
 - arm64
-- arm
