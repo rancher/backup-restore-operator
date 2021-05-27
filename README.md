@@ -73,7 +73,7 @@ For help configuring the storage location, see [this documentation].(https://ran
 
 ### S3 Credentials
 
-If you are using S3 to store your backups, the Backup custom resource can reference an S3 credential secret in any namespace. The `credentialSecretNamespace` directive tells the backup application where to look for the secret:
+If you are using S3 to store your backups, the `Backup` custom resource can reference an S3 credential secret in any namespace. The `credentialSecretNamespace` directive tells the backup application where to look for the secret:
 
 ```
 s3:
