@@ -67,7 +67,7 @@ It installs the following cluster-scoped CRDs:
 ---
 ### Storage Location
 
-For help configuring the storage location, see the [documentation.](https://rancher.com/docs/rancher/v2.5/en/backups/configuration/storage-config/)
+For help configuring the storage location, see [this documentation].(https://rancher.com/docs/rancher/v2.5/en/backups/configuration/storage-config/)
 
 ---
 
