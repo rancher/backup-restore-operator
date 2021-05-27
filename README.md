@@ -53,7 +53,7 @@ It installs the following cluster-scoped CRDs:
 #### Backup
   A backup can be performed by creating an instance of the Backup CRD. It can be configured to perform a one-time backup, or to schedule recurring backups. For help configuring backups, see [this documentation.](https://rancher.com/docs/rancher/v2.5/en/backups/configuration/backup-config/)
 #### Restore
-  Creating an instance of the Restore CRD lets you restore from a backup file. For help configuring backups, see [this documentation.](https://rancher.com/docs/rancher/v2.5/en/backups/configuration/restore-config/)
+  Creating an instance of the Restore CRD lets you restore from a backup file. For help configuring restores, see [this documentation].(https://rancher.com/docs/rancher/v2.5/en/backups/configuration/restore-config/)
 #### ResourceSet
   ResourceSet specifies the Kubernetes core resources and CRDs that need to be backed up. This chart comes with a predetermined ResourceSet to be used for backing up Rancher application
 
