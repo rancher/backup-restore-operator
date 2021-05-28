@@ -41,6 +41,9 @@ persistence:
 global:
   cattle:
     systemDefaultRegistry: ""
+  kubectl:
+    repository: rancher/kubectl
+    tag: v1.20.2
 
 nodeSelector: {}
 
