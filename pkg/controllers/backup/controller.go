@@ -254,7 +254,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		return err
 	}
 	filtersPath := filepath.Join(tmpBackupPath, "filters")
-	err = os.Mkdir(filtersPath, os.ModePerm)
+	err = os.MkdirAll(filtersPath, os.ModePerm)
 	if err != nil {
 		return err
 	}

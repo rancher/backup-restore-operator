@@ -472,7 +472,7 @@ func (h *ResourceHandler) WriteBackupObjects(backupPath string) error {
 func createResourceDir(path string) error {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		err = os.Mkdir(path, os.ModePerm)
+		err = os.MkdirAll(path, os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("error creating temp dir: %v", err)
 		}
