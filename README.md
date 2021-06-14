@@ -32,6 +32,8 @@ helm install --wait \
     rancher-backup rancher-charts/rancher-backup
 ```
 
+If you are using S3, you can configure the `s3.credentialSecretNamespace` to determine where the Backup and Restore Operator will look for the S3 backup secret. For more information on configuring backups, see the [backup documentation.](https://rancher.com/docs/rancher/v2.5/en/backups/back-up-rancher/#2-perform-a-backup)
+
 ----
 
 ### Uninstallation
