@@ -6,6 +6,11 @@
 * The operator preserves the ownerReferences on all resources, hence maintaining dependencies between objects.
 * It also provides encryption support, to encrypt user specified resources before saving them in the backup file. It uses the same encryption configuration that is used to enable [Kubernetes Encryption at Rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/). Follow the steps in [this section](https://rancher.com/docs/rancher/v2.5/en/backups/configuration/backup-config/#encryption) to configure this.
 
+
+### Branches and Releases
+
+*  the tag `2.x.x` is cut from the `master` branch for Rancher v2.6.x line
+*  the tag `1.x.x` is cut from the `release/v1.0` branch for Rancher v2.5.x line
 ----
 
 ### Quickstart
