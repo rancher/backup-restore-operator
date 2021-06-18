@@ -8,7 +8,7 @@ function edit-charts() {
         build/charts/rancher-backup/Chart.yaml
 
     sed -i \
-        -e 's/tag:.*/tag: '${2}'/' \
+        -e 's/%TAG%/'${2}'/' \
         build/charts/rancher-backup/values.yaml
 
     sed -i \
