@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/objectstore"
@@ -24,7 +25,9 @@ func (h *handler) uploadToS3(backup *v1.Backup, objectStore *v1.S3ObjectStore, t
 		if err := os.MkdirAll(filepath.Join(tmpBackupGzipFilepath, objectStore.Folder), os.ModePerm); err != nil {
 			return removeTempUploadDir(tmpBackupGzipFilepath, err)
 		}
-		gzipFile = fmt.Sprintf("%s/%s", objectStore.Folder, gzipFile)
+		// we need to avoid both "//" inside the path and all leading and trailing "/"
+		gzipFile = fmt.Sprintf("%s/%s", strings.TrimRight(objectStore.Folder, "/"), gzipFile)
+		gzipFile = strings.Trim(gzipFile, "/")
 	}
 	if err := CreateTarAndGzip(tmpBackupPath, tmpBackupGzipFilepath, gzipFile, backup.Name); err != nil {
 		return removeTempUploadDir(tmpBackupGzipFilepath, err)
