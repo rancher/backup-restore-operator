@@ -2,7 +2,7 @@ module github.com/rancher/backup-restore-operator
 
 go 1.16
 
-replace k8s.io/client-go => k8s.io/client-go v0.18.0
+replace k8s.io/client-go => k8s.io/client-go v0.21.2
 
 require (
 	github.com/minio/minio-go/v6 v6.0.57
@@ -11,11 +11,11 @@ require (
 	github.com/rancher/wrangler-api v0.6.1-0.20200515193802-dcf70881b087
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.5.0
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	k8s.io/api v0.18.0
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+	k8s.io/api v0.21.2
 	k8s.io/apiextensions-apiserver v0.18.0
-	k8s.io/apimachinery v0.18.0
+	k8s.io/apimachinery v0.21.2
 	k8s.io/apiserver v0.18.0
 	k8s.io/client-go v0.18.0
-	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
+	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 )
