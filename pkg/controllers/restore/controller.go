@@ -574,7 +574,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 		if err != nil {
 			return err
 		}
-		if hasStatusSubresource {
+		if hasStatusSubresource && obj.Object["status"] != nil {
 			logrus.Infof("Post-create: Updating status subresource for %#v of type %v", name, gvr)
 			createdObj.Object["status"] = obj.Object["status"]
 			_, err := dr.UpdateStatus(h.ctx, createdObj, k8sv1.UpdateOptions{})
@@ -591,7 +591,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 	if err != nil {
 		return fmt.Errorf("restoreResource: err updating resource %v", err)
 	}
-	if hasStatusSubresource {
+	if hasStatusSubresource && obj.Object["status"] != nil {
 		logrus.Infof("Updating status subresource for %#v of type %v", name, gvr)
 		updatedObj.Object["status"] = obj.Object["status"]
 		_, err := dr.UpdateStatus(h.ctx, updatedObj, k8sv1.UpdateOptions{})
