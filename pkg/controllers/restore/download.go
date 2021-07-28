@@ -29,7 +29,8 @@ func (h *handler) downloadFromS3(restore *v1.Restore, objStore *v1.S3ObjectStore
 	}
 	folder := objStore.Folder
 	if len(folder) != 0 {
-		prefix = fmt.Sprintf("%s/%s", folder, prefix)
+		// remove the trailing / from the folder name
+		prefix = fmt.Sprintf("%s/%s", strings.TrimSuffix(folder, "/"), prefix)
 	}
 	targetFileLocation, err := objectstore.DownloadFromS3WithPrefix(s3Client, prefix, objStore.BucketName)
 	if err != nil {
