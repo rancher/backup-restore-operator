@@ -41,6 +41,7 @@ const (
 	clusterScoped   = "clusterscoped"
 	namespaceScoped = "namespaceScoped"
 	leaseName       = "restore-controller"
+	secretsMapKey   = "secrets"
 )
 
 type handler struct {
@@ -369,6 +370,11 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 		}
 
 		metadata := resourceData.Object[metadataMapKey].(map[string]interface{})
+		// remove secrets section as referenced secrets will be removed by k8s Token Controller as they are considered orphaned
+		if kind, ok := resourceData.Object["kind"]; ok && kind == "ServiceAccount" {
+			delete(currRestoreObj.Data.Object, secretsMapKey)
+			logrus.Debugf("Secrets section is ignored in ServiceAccount %s", name)
+		}
 		ownerRefs, ownerRefsFound := metadata[ownerRefsMapKey].([]interface{})
 		if !ownerRefsFound {
 			// has no owners, so no need to add to adjacency list, add to restoreResources list
