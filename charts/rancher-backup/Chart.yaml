@@ -12,6 +12,7 @@ annotations:
   catalog.cattle.io/auto-install: rancher-backup-crd=match
   catalog.cattle.io/certified: rancher
   catalog.cattle.io/display-name: Rancher Backups
+  catalog.cattle.io/type: cluster-tool
   catalog.cattle.io/namespace: cattle-resources-system
   catalog.cattle.io/os: linux
   catalog.cattle.io/provides-gvr: resources.cattle.io.resourceset/v1
