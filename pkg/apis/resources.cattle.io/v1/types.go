@@ -37,13 +37,13 @@ type BackupSpec struct {
 
 type BackupStatus struct {
 	Conditions         []genericcondition.GenericCondition `json:"conditions"`
-	LastSnapshotTS     string                              `json:"lastSnapshotTs"`
-	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
-	ObservedGeneration int64                               `json:"observedGeneration"`
-	StorageLocation    string                              `json:"storageLocation"`
-	BackupType         string                              `json:"backupType"`
-	Filename           string                              `json:"filename"`
-	Summary            string                              `json:"summary"`
+	LastSnapshotTS     string                              `json:"lastSnapshotTs,omitempty"`
+	NextSnapshotAt     string                              `json:"nextSnapshotAt,omitempty"`
+	ObservedGeneration int64                               `json:"observedGeneration,omitempty"`
+	StorageLocation    string                              `json:"storageLocation,omitempty"`
+	BackupType         string                              `json:"backupType,omitempty"`
+	Filename           string                              `json:"filename,omitempty"`
+	Summary            string                              `json:"summary,omitempty"`
 }
 
 // +genclient
@@ -115,8 +115,8 @@ type RestoreSpec struct {
 
 type RestoreStatus struct {
 	Conditions          []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	RestoreCompletionTS string                              `json:"restoreCompletionTs"`
-	ObservedGeneration  int64                               `json:"observedGeneration"`
-	BackupSource        string                              `json:"backupSource"`
-	Summary             string                              `json:"summary"`
+	RestoreCompletionTS string                              `json:"restoreCompletionTs,omitempty"`
+	ObservedGeneration  int64                               `json:"observedGeneration,omitempty"`
+	BackupSource        string                              `json:"backupSource,omitempty"`
+	Summary             string                              `json:"summary,omitempty"`
 }
