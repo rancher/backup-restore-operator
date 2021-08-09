@@ -369,12 +369,9 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 			Data:               &resourceData,
 		}
 
+		customize(&resourceData)
+
 		metadata := resourceData.Object[metadataMapKey].(map[string]interface{})
-		// remove secrets section as referenced secrets will be removed by k8s Token Controller as they are considered orphaned
-		if kind, ok := resourceData.Object["kind"]; ok && kind == "ServiceAccount" {
-			delete(currRestoreObj.Data.Object, secretsMapKey)
-			logrus.Debugf("Secrets section is ignored in ServiceAccount %s", name)
-		}
 		ownerRefs, ownerRefsFound := metadata[ownerRefsMapKey].([]interface{})
 		if !ownerRefsFound {
 			// has no owners, so no need to add to adjacency list, add to restoreResources list
@@ -475,6 +472,29 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 		}
 	}
 	return nil
+}
+
+// customize provides customization of restored resource for edge cases
+func customize(obj *unstructured.Unstructured) {
+	switch obj.GetKind() {
+	case "ServiceAccount":
+		// remove secrets section as referenced secrets will be removed by k8s Token Controller as they are considered orphaned
+		delete(obj.Object, secretsMapKey)
+		logrus.Debugf("Secrets section is ignored in ServiceAccount %s/%s", obj.GetNamespace(), obj.GetName())
+	case "Cluster":
+		// for fleet cluster it needs to be reimported in order to reissue service account token that is no longer valid
+		if obj.GetAPIVersion() == "fleet.cattle.io/v1alpha1" {
+			// only warn error if field can't be found. In case there are breaking api changes error will be printed as Warn and user has workaround to patch it.
+			redeployAgentGeneration, _, err := unstructured.NestedInt64(obj.Object, "spec", "redeployAgentGeneration")
+			if err != nil {
+				logrus.Warnf("Fleet cluster %s/%s can't be reset to be re-imported, failed to fetch .spec.redeployAgentGeneration, error: %v", obj.GetNamespace(), obj.GetName(), err)
+				return
+			}
+			if err := unstructured.SetNestedField(obj.Object, redeployAgentGeneration+1, "spec", "redeployAgentGeneration"); err != nil {
+				logrus.Warnf("Fleet cluster %s/%s can't be reset to be re-imported, error: %v", obj.GetNamespace(), obj.GetName(), err)
+			}
+		}
+	}
 }
 
 func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]restoreObj, created map[string]bool,
