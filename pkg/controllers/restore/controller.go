@@ -483,15 +483,25 @@ func customize(obj *unstructured.Unstructured) {
 		logrus.Debugf("Secrets section is ignored in ServiceAccount %s/%s", obj.GetNamespace(), obj.GetName())
 	case "Cluster":
 		// for fleet cluster it needs to be reimported in order to reissue service account token that is no longer valid
-		if obj.GetAPIVersion() == "fleet.cattle.io/v1alpha1" {
+		switch obj.GetAPIVersion() {
+		case "fleet.cattle.io/v1alpha1":
 			// only warn error if field can't be found. In case there are breaking api changes error will be printed as Warn and user has workaround to patch it.
-			redeployAgentGeneration, _, err := unstructured.NestedInt64(obj.Object, "spec", "redeployAgentGeneration")
+			redeployAgentGeneration, _, err := unstructured.NestedFloat64(obj.Object, "spec", "redeployAgentGeneration")
 			if err != nil {
 				logrus.Warnf("Fleet cluster %s/%s can't be reset to be re-imported, failed to fetch .spec.redeployAgentGeneration, error: %v", obj.GetNamespace(), obj.GetName(), err)
 				return
 			}
-			if err := unstructured.SetNestedField(obj.Object, redeployAgentGeneration+1, "spec", "redeployAgentGeneration"); err != nil {
+			if err := unstructured.SetNestedField(obj.Object, int64(redeployAgentGeneration+1), "spec", "redeployAgentGeneration"); err != nil {
 				logrus.Warnf("Fleet cluster %s/%s can't be reset to be re-imported, error: %v", obj.GetNamespace(), obj.GetName(), err)
+			}
+		case "provisioning.cattle.io/v1":
+			redeploySystemAgentGeneration, _, err := unstructured.NestedFloat64(obj.Object, "spec", "redeploySystemAgentGeneration")
+			if err != nil {
+				logrus.Warnf("Provisioning cluster %s/%s can't be reset to be re-imported, failed to fetch .spec.redeploySystemAgentGeneration, error: %v", obj.GetNamespace(), obj.GetName(), err)
+				return
+			}
+			if err := unstructured.SetNestedField(obj.Object, int64(redeploySystemAgentGeneration+1), "spec", "redeploySystemAgentGeneration"); err != nil {
+				logrus.Warnf("Provisioning cluster %s/%s can't be reset to be re-imported, error: %v", obj.GetNamespace(), obj.GetName(), err)
 			}
 		}
 	}
