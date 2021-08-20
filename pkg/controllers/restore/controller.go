@@ -369,10 +369,15 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 		resourceInfoToData = objFromBackupCR.namespacedResourceInfoToData
 	}
 	for resourceInfo, resourceData := range resourceInfoToData {
-		// add to adjacency list
 		name := resourceInfo.Name
 		namespace := resourceInfo.Namespace
 		gvr := resourceInfo.GVR
+		if resourceData.GetKind() == "Deployment" && namespace == "cattle-system" {
+			if strings.HasSuffix(name, "rancher") || strings.HasSuffix(name, "rancher-webhook") {
+				logrus.Infof("Skip restoring the deployment %s/%s", namespace, name)
+				continue
+			}
+		}
 		// TODO: Maybe restoreObj won't be needed
 		currRestoreObj := restoreObj{
 			Name:               name,
