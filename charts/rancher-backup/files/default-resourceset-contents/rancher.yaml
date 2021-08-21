@@ -36,6 +36,15 @@
   resourceNameRegexp: "management.cattle.io$|project.cattle.io$|catalog.cattle.io$|resources.cattle.io$"
 - apiVersion: "management.cattle.io/v3"
   kindsRegexp: "."
+  excludeKinds:
+    - "tokens"
+- apiVersion: "management.cattle.io/v3"
+  kindsRegexp: "^tokens$"
+  labelSelectors:
+    matchExpressions:
+      - key: "authn.management.cattle.io/kind"
+        operator: "NotIn"
+        values: [ "provisioning" ]
 - apiVersion: "project.cattle.io/v3"
   kindsRegexp: "."
 - apiVersion: "catalog.cattle.io/v1"

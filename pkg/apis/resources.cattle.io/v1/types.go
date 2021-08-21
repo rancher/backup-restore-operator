@@ -68,6 +68,7 @@ type ResourceSelector struct {
 	Namespaces         []string              `json:"namespaces,omitempty"`
 	NamespaceRegexp    string                `json:"namespaceRegexp,omitempty"`
 	LabelSelectors     *metav1.LabelSelector `json:"labelSelectors,omitempty"`
+	ExcludeKinds       []string              `json:"excludeKinds,omitempty"`
 }
 
 type ControllerReference struct {

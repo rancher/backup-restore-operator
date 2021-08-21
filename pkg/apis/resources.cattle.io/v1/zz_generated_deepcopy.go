@@ -168,6 +168,11 @@ func (in *ResourceSelector) DeepCopyInto(out *ResourceSelector) {
 		*out = new(metav1.LabelSelector)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ExcludeKinds != nil {
+		in, out := &in.ExcludeKinds, &out.ExcludeKinds
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
