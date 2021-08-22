@@ -237,7 +237,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		DynamicClient:   h.dynamicClient,
 		TransformerMap:  transformerMap,
 	}
-	resourcesWithStatusSubresource, err := rh.GatherResources(h.ctx, resourceSetTemplate.ResourceSelectors)
+	err = rh.GatherResources(h.ctx, resourceSetTemplate.ResourceSelectors)
 	if err != nil {
 		return err
 	}
@@ -259,17 +259,6 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		return err
 	}
 	err = ioutil.WriteFile(filepath.Join(filtersPath, "filters.json"), filters, os.ModePerm)
-	if err != nil {
-		return err
-	}
-
-	logrus.Infof("Saving information about resources with status subresource that are part of backup CR %v", backup.Name)
-	subresources, err := json.Marshal(resourcesWithStatusSubresource)
-	if err != nil {
-		return err
-
-	}
-	err = ioutil.WriteFile(filepath.Join(filtersPath, "statussubresource.json"), subresources, os.ModePerm)
 	if err != nil {
 		return err
 	}
