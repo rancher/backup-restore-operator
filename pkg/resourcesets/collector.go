@@ -134,11 +134,20 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 	// "resources" list has all resources under given groupVersion, first filter based on KindsRegexp
 	if filter.KindsRegexp != "" {
 		if filter.KindsRegexp == "." {
-			// "." will match anything, so return entire resource list
-			return resources.APIResources, nil
+			// "." will match anything except the ones in the list of excludeKinds
+			for _, res := range resources.APIResources {
+				if isKindExcluded(filter.ExcludeKinds, res) {
+					continue
+				}
+				resourceListFromRegex = append(resourceListFromRegex, res)
+			}
+			return resourceListFromRegex, nil
 		}
 		// else filter out resource with regex match
 		for _, res := range resources.APIResources {
+			if isKindExcluded(filter.ExcludeKinds, res) {
+				continue
+			}
 			kindMatched, err := regexp.MatchString(filter.KindsRegexp, res.Kind)
 			if err != nil {
 				return resourceList, err
@@ -526,5 +535,15 @@ func canGetResource(verbs k8sv1.Verbs) bool {
 			return true
 		}
 	}
+	return false
+}
+
+func isKindExcluded(excludes []string, res k8sv1.APIResource) bool {
+	for _, exclude := range excludes {
+		if exclude == res.Name || exclude == res.Kind {
+			return true
+		}
+	}
+
 	return false
 }
