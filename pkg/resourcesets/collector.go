@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,33 +50,25 @@ type ResourceHandler struct {
 	resourceNames: "local"
 	All namespaces that match resourceNamesRegex, also local ns is backed up
 */
-func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors []v1.ResourceSelector) (map[string]bool, error) {
-	resourcesWithStatusSubresource := make(map[string]bool)
+func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors []v1.ResourceSelector) error {
 	h.GVResourceToObjects = make(map[GVResource][]unstructured.Unstructured)
 
 	for _, resourceSelector := range resourceSelectors {
 		resourceList, err := h.gatherResourcesForGroupVersion(resourceSelector)
 		if err != nil {
-			return resourcesWithStatusSubresource, fmt.Errorf("error gathering resource for %v: %v", resourceSelector.APIVersion, err)
+			return fmt.Errorf("error gathering resource for %v: %v", resourceSelector.APIVersion, err)
 		}
 		gv, err := schema.ParseGroupVersion(resourceSelector.APIVersion)
 		if err != nil {
-			return resourcesWithStatusSubresource, err
+			return err
 		}
 		currGVResource := GVResource{GroupVersion: gv}
 		for _, res := range resourceList {
 			currGVResource.Name = res.Name
 			currGVResource.Namespaced = res.Namespaced
 
-			split := strings.SplitN(res.Name, "/", 2)
-			if len(split) == 2 {
-				// if this is a subresource, check if its a status subsubresource
-				if split[1] == "status" && split[0] != "customresourcedefinitions" && slice.ContainsString(res.Verbs, "update") {
-					// this resource has status subresource and it accepts "update" verb, so we need to call UpdateStatus on it during restore
-					// we need to save names of such objects
-					resourcesWithStatusSubresource[gv.WithResource(split[0]).String()] = true
-				}
-				// no need to save contents of any subresource as they are a part of the resource
+			if strings.Contains(res.Name, "/") {
+				logrus.Debugf("Skipped backing up subresource: %s", res.Name)
 				continue
 			}
 
@@ -85,7 +76,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 				if canGetResource(res.Verbs) {
 					filteredObjects, err := h.gatherObjectsForNonListResource(ctx, res, gv, resourceSelector)
 					if err != nil {
-						return resourcesWithStatusSubresource, err
+						return err
 					}
 					h.GVResourceToObjects[currGVResource] = filteredObjects
 				} else {
@@ -96,7 +87,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 
 			filteredObjects, err := h.gatherObjectsForResource(ctx, res, gv, resourceSelector)
 			if err != nil {
-				return resourcesWithStatusSubresource, err
+				return err
 			}
 			// currGVResource contains GV for resource type, its name and if its namespaced or not,
 			// example: gv=v1, name=secrets, namespaced=true; filteredObjects are all the objects matching the resourceSelector
@@ -108,7 +99,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 			}
 		}
 	}
-	return resourcesWithStatusSubresource, nil
+	return nil
 }
 
 func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelector) ([]k8sv1.APIResource, error) {

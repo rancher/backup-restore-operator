@@ -74,11 +74,6 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 					return fmt.Errorf("error unmarshaling backup filters file: %v", err)
 				}
 			}
-			if strings.Contains(tarContent.Name, "statussubresource.json") {
-				if err := json.Unmarshal(readData, &cr.resourcesWithStatusSubresource); err != nil {
-					return fmt.Errorf("error unmarshaling status subresource info file: %v", err)
-				}
-			}
 			continue
 		}
 
