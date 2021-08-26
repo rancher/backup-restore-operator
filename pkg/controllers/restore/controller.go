@@ -45,6 +45,7 @@ const (
 	secretsMapKey      = "secrets"
 	specMapKey         = "spec"
 	subResourcesMapKey = "subresources"
+	versionMapKey      = "versions"
 )
 
 type handler struct {
@@ -275,32 +276,25 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	return restore, err
 }
 
-func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFromBackupCR) (crdsWithSubStatus []string, err error) {
+func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFromBackupCR) (crdsWithStatus []string, err error) {
 	for crdInfo, crdData := range objFromBackupCR.crdInfoToData {
 		err := h.restoreResource(crdInfo, crdData, false)
 		if err != nil {
-			return crdsWithSubStatus, fmt.Errorf("restoreCRDs: %v", err)
+			return crdsWithStatus, fmt.Errorf("restoreCRDs: %v", err)
 		}
 		created[crdInfo.ConfigPath] = true
-
-		specs := crdData.Object[specMapKey].(map[string]interface{})
-		subResources, ok := specs[subResourcesMapKey]
-		if ok {
-			for k := range subResources.(map[string]interface{}) {
-				if k == "status" {
-					// example: groupVersion = clusterrepos.catalog.cattle.io/v1
-					groupVersion := fmt.Sprintf("%s/%s", crdInfo.Name, specs["version"])
-					crdsWithSubStatus = append(crdsWithSubStatus, groupVersion)
-				}
-			}
+		crds := getCRDsWithSubresourceStatus(crdData)
+		if len(crds) > 0 {
+			logrus.Debugf("Adding the following to the list of CRDs with the subresource Status: %v", crds)
+			crdsWithStatus = append(crdsWithStatus, crds...)
 		}
 	}
 	for crdInfo := range objFromBackupCR.crdInfoToData {
 		if err := h.waitCRD(crdInfo.Name); err != nil {
-			return crdsWithSubStatus, err
+			return crdsWithStatus, err
 		}
 	}
-	return crdsWithSubStatus, nil
+	return crdsWithStatus, nil
 }
 
 func (h *handler) waitCRD(crdName string) error {
@@ -828,4 +822,30 @@ func (h *handler) Unlock(id string) error {
 
 func leaseHolderName(restore *v1.Restore) *string {
 	return pointer.StringPtr(fmt.Sprintf("%s:%s", restore.Name, string(restore.UID)))
+}
+
+func getCRDsWithSubresourceStatus(crdData unstructured.Unstructured) (crdsWithSubresourceStatus []string) {
+	specs := crdData.Object[specMapKey].(map[string]interface{})
+	metadata := crdData.Object[metadataMapKey].(map[string]interface{})
+	if subResources, ok := specs[subResourcesMapKey]; ok {
+		// the case of apiVersion apiextensions.k8s.io/v1beta1
+		if _, ok = subResources.(map[string]interface{})["status"]; ok {
+			// example: crdVersion = clusterrepos.catalog.cattle.io/v1
+			crdVersion := fmt.Sprintf("%s/%s", metadata["name"], specs["version"])
+			crdsWithSubresourceStatus = append(crdsWithSubresourceStatus, crdVersion)
+		}
+	} else {
+		// the case of apiVersion apiextensions.k8s.io/v1
+		if versions, ok := specs[versionMapKey]; ok {
+			for _, version := range versions.([]interface{}) {
+				if subResources, ok := version.(map[string]interface{})[subResourcesMapKey]; ok {
+					if _, ok = subResources.(map[string]interface{})["status"]; ok {
+						crdVersion := fmt.Sprintf("%s/%s", metadata["name"], version.(map[string]interface{})["name"])
+						crdsWithSubresourceStatus = append(crdsWithSubresourceStatus, crdVersion)
+					}
+				}
+			}
+		}
+	}
+	return crdsWithSubresourceStatus
 }
