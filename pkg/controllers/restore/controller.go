@@ -16,6 +16,7 @@ import (
 	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/rancher/wrangler/pkg/genericcondition"
+	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/sirupsen/logrus"
 
 	coordinationv1 "k8s.io/api/coordination/v1"
@@ -36,11 +37,14 @@ import (
 )
 
 const (
-	metadataMapKey  = "metadata"
-	ownerRefsMapKey = "ownerReferences"
-	clusterScoped   = "clusterscoped"
-	namespaceScoped = "namespaceScoped"
-	leaseName       = "restore-controller"
+	metadataMapKey     = "metadata"
+	ownerRefsMapKey    = "ownerReferences"
+	clusterScoped      = "clusterscoped"
+	namespaceScoped    = "namespaceScoped"
+	leaseName          = "restore-controller"
+	specMapKey         = "spec"
+	subResourcesMapKey = "subresources"
+	versionMapKey      = "versions"
 )
 
 type handler struct {
@@ -63,7 +67,6 @@ type ObjectsFromBackupCR struct {
 	clusterscopedResourceInfoToData map[objInfo]unstructured.Unstructured
 	namespacedResourceInfoToData    map[objInfo]unstructured.Unstructured
 	resourcesFromBackup             map[string]bool
-	resourcesWithStatusSubresource  map[string]bool
 	backupResourceSet               v1.ResourceSet
 }
 
@@ -139,6 +142,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 	created := make(map[string]bool)
 	ownerToDependentsList := make(map[string][]restoreObj)
+	var crdsWithSubStatus []string
 	var toRestore []restoreObj
 	numOwnerReferences := make(map[string]int)
 	objFromBackupCR := ObjectsFromBackupCR{
@@ -146,7 +150,6 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		clusterscopedResourceInfoToData: make(map[objInfo]unstructured.Unstructured),
 		namespacedResourceInfoToData:    make(map[objInfo]unstructured.Unstructured),
 		resourcesFromBackup:             make(map[string]bool),
-		resourcesWithStatusSubresource:  make(map[string]bool),
 		backupResourceSet:               v1.ResourceSet{},
 	}
 
@@ -212,7 +215,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 	// first restore CRDs
 	logrus.Infof("Starting to restore CRDs for restore CR %v", restore.Name)
-	if err := h.restoreCRDs(created, objFromBackupCR); err != nil {
+	if crdsWithSubStatus, err = h.restoreCRDs(created, objFromBackupCR); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring CRDs %v", err)
 		// Cannot set the exact error on reconcile condition, the order in which resources failed to restore are added in err msg could
@@ -222,7 +225,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 	logrus.Infof("Starting to restore clusterscoped resources for restore CR %v", restore.Name)
 	// then restore clusterscoped resources, by first generating dependency graph for cluster scoped resources, and create from the graph
-	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR); err != nil {
+	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, crdsWithSubStatus); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring cluster-scoped resources %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped resources, check logs for exact error"))
@@ -232,7 +235,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	// now restore namespaced resources: generate adjacency lists for dependents and ownerRefs for namespaced resources
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
-	if err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR); err != nil {
+	if err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, crdsWithSubStatus); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		logrus.Errorf("Error restoring namespaced resources %v", err)
 		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced resources, check logs for exact error"))
@@ -272,20 +275,25 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	return restore, err
 }
 
-func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
+func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFromBackupCR) (crdsWithStatus []string, err error) {
 	for crdInfo, crdData := range objFromBackupCR.crdInfoToData {
 		err := h.restoreResource(crdInfo, crdData, false)
 		if err != nil {
-			return fmt.Errorf("restoreCRDs: %v", err)
+			return crdsWithStatus, fmt.Errorf("restoreCRDs: %v", err)
 		}
 		created[crdInfo.ConfigPath] = true
+		crds := getCRDsWithSubresourceStatus(crdData)
+		if len(crds) > 0 {
+			logrus.Debugf("Adding the following to the list of CRDs with the subresource Status: %v", crds)
+			crdsWithStatus = append(crdsWithStatus, crds...)
+		}
 	}
 	for crdInfo := range objFromBackupCR.crdInfoToData {
 		if err := h.waitCRD(crdInfo.Name); err != nil {
-			return err
+			return crdsWithStatus, err
 		}
 	}
-	return nil
+	return crdsWithStatus, nil
 }
 
 func (h *handler) waitCRD(crdName string) error {
@@ -320,21 +328,21 @@ func (h *handler) waitCRD(crdName string) error {
 }
 
 func (h *handler) restoreClusterScopedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
+	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR, crdsWithSubStatus []string) error {
 	// generate adjacency lists for dependents and ownerRefs first for clusterscoped resources
 	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, created, clusterScoped); err != nil {
 		return err
 	}
-	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore)
+	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore, crdsWithSubStatus)
 }
 
 func (h *handler) restoreNamespacedResources(ownerToDependentsList map[string][]restoreObj, toRestore *[]restoreObj,
-	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR) error {
+	numOwnerReferences map[string]int, created map[string]bool, objFromBackupCR ObjectsFromBackupCR, crdsWithSubStatus []string) error {
 	// generate adjacency lists for dependents and ownerRefs for namespaced resources
 	if err := h.generateDependencyGraph(ownerToDependentsList, toRestore, numOwnerReferences, objFromBackupCR, created, namespaceScoped); err != nil {
 		return err
 	}
-	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore)
+	return h.createFromDependencyGraph(ownerToDependentsList, created, numOwnerReferences, objFromBackupCR, *toRestore, crdsWithSubStatus)
 }
 
 // generateDependencyGraph creates a graph "ownerToDependentsList" to track objects with ownerReferences
@@ -355,10 +363,15 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 		resourceInfoToData = objFromBackupCR.namespacedResourceInfoToData
 	}
 	for resourceInfo, resourceData := range resourceInfoToData {
-		// add to adjacency list
 		name := resourceInfo.Name
 		namespace := resourceInfo.Namespace
 		gvr := resourceInfo.GVR
+		if resourceData.GetKind() == "Deployment" && namespace == "cattle-system" {
+			if strings.HasSuffix(name, "rancher") || strings.HasSuffix(name, "rancher-webhook") {
+				logrus.Infof("Skip restoring the deployment %s/%s", namespace, name)
+				continue
+			}
+		}
 		// TODO: Maybe restoreObj won't be needed
 		currRestoreObj := restoreObj{
 			Name:               name,
@@ -472,7 +485,7 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 }
 
 func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]restoreObj, created map[string]bool,
-	numOwnerReferences map[string]int, objFromBackupCR ObjectsFromBackupCR, toRestore []restoreObj) error {
+	numOwnerReferences map[string]int, objFromBackupCR ObjectsFromBackupCR, toRestore []restoreObj, crdsWithSubStatus []string) error {
 	numTotalDependents := 0
 	for _, dependents := range ownerToDependentsList {
 		numTotalDependents += len(dependents)
@@ -502,7 +515,9 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		} else {
 			resourceData = objFromBackupCR.clusterscopedResourceInfoToData[currResourceInfo]
 		}
-		if err := h.restoreResource(currResourceInfo, resourceData, objFromBackupCR.resourcesWithStatusSubresource[curr.GVR.String()]); err != nil {
+		target := fmt.Sprintf("%s.%s", currResourceInfo.GVR.Resource, currResourceInfo.GVR.GroupVersion().String())
+		hasSubStatus := slice.ContainsString(crdsWithSubStatus, target)
+		if err := h.restoreResource(currResourceInfo, resourceData, hasSubStatus); err != nil {
 			logrus.Errorf("Error restoring resource %v of type %v: %v", currResourceInfo.Name, currResourceInfo.GVR.String(), err)
 			errList = append(errList, fmt.Errorf("error restoring %v of type %v: %v", currResourceInfo.Name, currResourceInfo.GVR.String(), err))
 			continue
@@ -771,4 +786,30 @@ func (h *handler) Unlock(id string) error {
 
 func leaseHolderName(restore *v1.Restore) *string {
 	return pointer.StringPtr(fmt.Sprintf("%s:%s", restore.Name, string(restore.UID)))
+}
+
+func getCRDsWithSubresourceStatus(crdData unstructured.Unstructured) (crdsWithSubresourceStatus []string) {
+	specs := crdData.Object[specMapKey].(map[string]interface{})
+	metadata := crdData.Object[metadataMapKey].(map[string]interface{})
+	if subResources, ok := specs[subResourcesMapKey]; ok {
+		// the case of apiVersion apiextensions.k8s.io/v1beta1
+		if _, ok = subResources.(map[string]interface{})["status"]; ok {
+			// example: crdVersion = clusterrepos.catalog.cattle.io/v1
+			crdVersion := fmt.Sprintf("%s/%s", metadata["name"], specs["version"])
+			crdsWithSubresourceStatus = append(crdsWithSubresourceStatus, crdVersion)
+		}
+	} else {
+		// the case of apiVersion apiextensions.k8s.io/v1
+		if versions, ok := specs[versionMapKey]; ok {
+			for _, version := range versions.([]interface{}) {
+				if subResources, ok := version.(map[string]interface{})[subResourcesMapKey]; ok {
+					if _, ok = subResources.(map[string]interface{})["status"]; ok {
+						crdVersion := fmt.Sprintf("%s/%s", metadata["name"], version.(map[string]interface{})["name"])
+						crdsWithSubresourceStatus = append(crdsWithSubresourceStatus, crdVersion)
+					}
+				}
+			}
+		}
+	}
+	return crdsWithSubresourceStatus
 }

@@ -33,7 +33,7 @@ func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap 
 		TransformerMap:  transformerMap,
 	}
 
-	if _, err := rh.GatherResources(h.ctx, resourceSelectors); err != nil {
+	if err := rh.GatherResources(h.ctx, resourceSelectors); err != nil {
 		return err
 	}
 
@@ -48,7 +48,7 @@ func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap 
 				resourcePath = filepath.Join(resourcePath, objNs)
 			}
 			resourceFilePath := filepath.Join(resourcePath, objName+".json")
-			logrus.Infof("resourceFilePath: %v", resourceFilePath)
+			logrus.Debugf("resourceFilePath: %v", resourceFilePath)
 			if !cr.resourcesFromBackup[resourceFilePath] {
 				logrus.Infof("Marking resource %v for deletion", strings.TrimSuffix(resourceFilePath, ".json"))
 				resourcesToDelete = append(resourcesToDelete, pruneResourceInfo{
