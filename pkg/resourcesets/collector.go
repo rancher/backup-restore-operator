@@ -425,9 +425,18 @@ func (h *ResourceHandler) WriteBackupObjects(backupPath string) error {
 			metadata := resObj.Object["metadata"].(map[string]interface{})
 			// if an object has deletiontimestamp and finalizers, back it up. If there are no finalizers, ignore
 			if _, deletionTs := metadata["deletionTimestamp"]; deletionTs {
-				if _, finSet := metadata["finalizers"]; !finSet {
-					// no finalizers set, don't backup object
-					continue
+				// for v1/namespace we need to check spec.finalizers, otherwise check metadata.finalizers
+				if resObj.GetKind() != "Namespace" {
+					if _, finSet := metadata["finalizers"]; !finSet {
+						// no finalizers set, don't backup object
+						continue
+					}
+				} else {
+					// ignore error because if there is no finalizers and deletionTimestamp is set, namespace should already be deleted
+					fins, ok, _ := unstructured.NestedStringSlice(resObj.Object, "spec", "finalizers")
+					if !ok || len(fins) == 0 {
+						continue
+					}
 				}
 			}
 
