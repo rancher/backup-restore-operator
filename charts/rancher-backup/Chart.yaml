@@ -18,3 +18,4 @@ annotations:
   catalog.cattle.io/release-name: rancher-backup
   catalog.cattle.io/scope: management
   catalog.cattle.io/ui-component: rancher-backup
+  catalog.cattle.io/rancher-version: "<2.5.99"
