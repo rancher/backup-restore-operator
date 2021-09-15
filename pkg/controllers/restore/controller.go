@@ -218,18 +218,26 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	logrus.Infof("Starting to restore CRDs for restore CR %v", restore.Name)
 	if crdsWithSubStatus, err = h.restoreCRDs(created, objFromBackupCR); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
-		logrus.Errorf("Error restoring CRDs %v", err)
-		// Cannot set the exact error on reconcile condition, the order in which resources failed to restore are added in err msg could
-		// change with each restore, which means the condition will get updated on each try
-		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring CRDs, check logs for exact error"))
+		if restore.Spec.IgnoreErrors {
+			logrus.Warnf("Skipping error when restoring CRDs %v", err)
+		} else {
+			logrus.Errorf("Error restoring CRDs %v", err)
+			// Cannot set the exact error on reconcile condition, the order in which resources failed to restore are added in err msg could
+			// change with each restore, which means the condition will get updated on each try
+			return h.setReconcilingCondition(restore, fmt.Errorf("error restoring CRDs, check logs for exact error"))
+		}
 	}
 
 	logrus.Infof("Starting to restore clusterscoped resources for restore CR %v", restore.Name)
 	// then restore clusterscoped resources, by first generating dependency graph for cluster scoped resources, and create from the graph
 	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, crdsWithSubStatus); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
-		logrus.Errorf("Error restoring cluster-scoped resources %v", err)
-		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped resources, check logs for exact error"))
+		if restore.Spec.IgnoreErrors {
+			logrus.Warnf("Skipping error when restoring cluster-scoped resources %v", err)
+		} else {
+			logrus.Errorf("Error restoring cluster-scoped resources %v", err)
+			return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped resources, check logs for exact error"))
+		}
 	}
 
 	logrus.Infof("Starting to restore namespaced resources for restore CR %v", restore.Name)
@@ -238,8 +246,12 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	toRestore = []restoreObj{}
 	if err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, crdsWithSubStatus); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
-		logrus.Errorf("Error restoring namespaced resources %v", err)
-		return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced resources, check logs for exact error"))
+		if restore.Spec.IgnoreErrors {
+			logrus.Warnf("Skipping error when restoring namespaced resources %v", err)
+		} else {
+			logrus.Errorf("Error restoring namespaced resources %v", err)
+			return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced resources, check logs for exact error"))
+		}
 	}
 
 	// prune by default
