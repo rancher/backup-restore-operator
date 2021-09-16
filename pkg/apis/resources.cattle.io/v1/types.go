@@ -111,6 +111,9 @@ type RestoreSpec struct {
 	Prune                      *bool            `json:"prune"` //prune by default
 	DeleteTimeoutSeconds       int              `json:"deleteTimeoutSeconds,omitempty"`
 	EncryptionConfigSecretName string           `json:"encryptionConfigSecretName,omitempty"`
+
+	// When set to true, the controller ignores any errors during the restore process
+	IgnoreErrors bool `json:"ignoreErrors,omitempty"`
 }
 
 type RestoreStatus struct {
