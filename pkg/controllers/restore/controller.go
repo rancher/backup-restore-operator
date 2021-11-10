@@ -519,6 +519,20 @@ func customize(obj *unstructured.Unstructured) {
 				logrus.Warnf("Fleet cluster %s/%s can't be reset to be re-imported, error: %v", obj.GetNamespace(), obj.GetName(), err)
 			}
 		}
+	case "Bundle":
+		// for fleet-agent bundle we have to manually trigger redeploy due to this issue https://github.com/rancher/fleet/issues/535
+		if obj.GetAPIVersion() == "fleet.cattle.io/v1alpha1" {
+			if strings.Contains(obj.GetName(), "fleet-agent") {
+				redeployGeneration, _, err := unstructured.NestedInt64(obj.Object, "spec", "forceSyncGeneration")
+				if err != nil {
+					logrus.Warnf("Fleet agent bundle %s/%s can't be reset, failed to fetch .spec.forceSyncGeneration, error: %v", obj.GetNamespace(), obj.GetName(), err)
+					return
+				}
+				if err := unstructured.SetNestedField(obj.Object, redeployGeneration+1, "spec", "forceSyncGeneration"); err != nil {
+					logrus.Warnf("Fleet agent bundle %s/%s can't be reset, error: %v", obj.GetNamespace(), obj.GetName(), err)
+				}
+			}
+		}
 	}
 }
 
