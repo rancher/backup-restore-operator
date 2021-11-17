@@ -318,11 +318,19 @@ func (a *restoreStatusHandler) sync(key string, obj *v1.Restore) (*v1.Restore, e
 		}
 	}
 	if !equality.Semantic.DeepEqual(origStatus, &newStatus) {
+		if a.condition != "" {
+			// Since status has changed, update the lastUpdatedTime
+			a.condition.LastUpdated(&newStatus, time.Now().UTC().Format(time.RFC3339))
+		}
+
 		var newErr error
 		obj.Status = newStatus
-		obj, newErr = a.client.UpdateStatus(obj)
+		newObj, newErr := a.client.UpdateStatus(obj)
 		if err == nil {
 			err = newErr
+		}
+		if newErr == nil {
+			obj = newObj
 		}
 	}
 	return obj, err
@@ -352,6 +360,10 @@ func (a *restoreGeneratingHandler) Remove(key string, obj *v1.Restore) (*v1.Rest
 }
 
 func (a *restoreGeneratingHandler) Handle(obj *v1.Restore, status v1.RestoreStatus) (v1.RestoreStatus, error) {
+	if !obj.DeletionTimestamp.IsZero() {
+		return status, nil
+	}
+
 	objs, newStatus, err := a.RestoreGeneratingHandler(obj, status)
 	if err != nil {
 		return newStatus, err
