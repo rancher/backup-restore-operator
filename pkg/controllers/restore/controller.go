@@ -13,14 +13,14 @@ import (
 	restoreControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	lasso "github.com/rancher/lasso/pkg/client"
-	v1core "github.com/rancher/wrangler-api/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/condition"
+	v1core "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	"github.com/rancher/wrangler/pkg/slice"
 	"github.com/sirupsen/logrus"
 
 	coordinationv1 "k8s.io/api/coordination/v1"
-	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -320,7 +320,7 @@ func (h *handler) waitCRD(crdName string) error {
 		}
 		first = false
 
-		crd, err := h.apiClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(h.ctx, crdName, k8sv1.GetOptions{})
+		crd, err := h.apiClient.ApiextensionsV1().CustomResourceDefinitions().Get(h.ctx, crdName, k8sv1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
