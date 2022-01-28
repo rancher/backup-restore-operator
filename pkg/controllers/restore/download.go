@@ -123,8 +123,8 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 	if err != nil {
 		if strings.Contains(err.Error(), "json: cannot unmarshal string into Go value") && decryptionTransformer == nil {
 			// This will be the case if we try to unmarshal an encrypted resource without decrypting it first
-			logrus.Errorf("Error unmarshaling encryped resource [%v], no encryption config provided ", gvr.GroupResource())
-			return fmt.Errorf("error unmarshaling encryped resource [%v], no encryption config provided", gvr.GroupResource())
+			logrus.Errorf("Error unmarshaling encrypted resource [%v], no encryption config provided ", gvr.GroupResource())
+			return fmt.Errorf("error unmarshaling encrypted resource [%v], no encryption config provided", gvr.GroupResource())
 		}
 		return err
 	}
