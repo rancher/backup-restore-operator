@@ -21,6 +21,7 @@ import (
 
 	"github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	log "github.com/sirupsen/logrus"
 )
@@ -167,7 +168,13 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	objectCh := client.ListObjectsV2(bucket, prefix, false, doneCh)
+	var objectCh <-chan minio.ObjectInfo
+	if s3utils.IsGoogleEndpoint(*client.EndpointURL()) {
+		log.Info("Endpoint is Google GCS")
+		objectCh = client.ListObjects(bucket, prefix, false, doneCh)
+	} else {
+		objectCh = client.ListObjectsV2(bucket, prefix, false, doneCh)
+	}
 	for object := range objectCh {
 		if object.Err != nil {
 			log.Errorf("failed to list objects in backup buckets [%s]: %v", bucket, object.Err)
