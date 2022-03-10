@@ -60,15 +60,16 @@ type ResourceSet struct {
 
 // regex+list = OR //separate fields :AND
 type ResourceSelector struct {
-	APIVersion         string                `json:"apiVersion"`
-	Kinds              []string              `json:"kinds,omitempty"`
-	KindsRegexp        string                `json:"kindsRegexp,omitempty"`
-	ResourceNames      []string              `json:"resourceNames,omitempty"`
-	ResourceNameRegexp string                `json:"resourceNameRegexp,omitempty"`
-	Namespaces         []string              `json:"namespaces,omitempty"`
-	NamespaceRegexp    string                `json:"namespaceRegexp,omitempty"`
-	LabelSelectors     *metav1.LabelSelector `json:"labelSelectors,omitempty"`
-	ExcludeKinds       []string              `json:"excludeKinds,omitempty"`
+	APIVersion                string                `json:"apiVersion"`
+	Kinds                     []string              `json:"kinds,omitempty"`
+	KindsRegexp               string                `json:"kindsRegexp,omitempty"`
+	ResourceNames             []string              `json:"resourceNames,omitempty"`
+	ResourceNameRegexp        string                `json:"resourceNameRegexp,omitempty"`
+	Namespaces                []string              `json:"namespaces,omitempty"`
+	NamespaceRegexp           string                `json:"namespaceRegexp,omitempty"`
+	LabelSelectors            *metav1.LabelSelector `json:"labelSelectors,omitempty"`
+	ExcludeKinds              []string              `json:"excludeKinds,omitempty"`
+	ExcludeResourceNameRegexp string                `json:"excludeResourceNameRegexp,omitempty"`
 }
 
 type ControllerReference struct {

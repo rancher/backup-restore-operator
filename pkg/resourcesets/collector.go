@@ -229,7 +229,7 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 	}
 	filteredByNameMap := make(map[*unstructured.Unstructured]bool)
 
-	if len(filter.ResourceNames) == 0 && filter.ResourceNameRegexp == "" {
+	if len(filter.ResourceNames) == 0 && filter.ResourceNameRegexp == "" && filter.ExcludeResourceNameRegexp == "" {
 		// no filters for names of the resource, return all objects obtained from the list call
 		return resourceObjectsList.Items, nil
 	}
@@ -248,6 +248,24 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 				return filteredByName, err
 			}
 			if !nameMatched {
+				continue
+			}
+			filteredByName = append(filteredByName, resObj)
+			filteredByNameMap[&resObj] = true
+		}
+	}
+
+	// filter out using ExcludeResourceNameRegexp
+	if filter.ExcludeResourceNameRegexp != "" {
+		for _, resObj := range resourceObjectsList.Items {
+			metadata := resObj.Object["metadata"].(map[string]interface{})
+			name := metadata["name"].(string)
+			nameMatched, err := regexp.MatchString(filter.ExcludeResourceNameRegexp, name)
+			if err != nil {
+				return filteredByName, err
+			}
+			if nameMatched {
+				logrus.Debugf("Skipping %s because it did not match ExcludeResourceNameRegexp %s", name, filter.ExcludeResourceNameRegexp)
 				continue
 			}
 			filteredByName = append(filteredByName, resObj)
