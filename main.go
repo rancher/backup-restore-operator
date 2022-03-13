@@ -67,7 +67,7 @@ func main() {
 	var objStoreWithStrSkipVerify *objectStore
 	var defaultMountPath string
 
-	logrus.Info("Starting controller")
+	logrus.Infof("Starting backup-restore controller version %s (%s)", Version, GitCommit)
 	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true, ForceColors: true, TimestampFormat: LogFormat})
 	ctx := signals.SetupSignalContext()
 	restKubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
@@ -84,12 +84,12 @@ func main() {
 
 	backups, err := resources.NewFactoryFromConfig(restKubeConfig)
 	if err != nil {
-		logrus.Fatalf("Error building sample controllers: %s", err.Error())
+		logrus.Fatalf("Error building backups sample controllers: %s", err.Error())
 	}
 
 	core, err := v1core.NewFactoryFromConfig(restKubeConfig)
 	if err != nil {
-		logrus.Fatalf("Error building sample controllers: %s", err.Error())
+		logrus.Fatalf("Error building core sample controllers: %s", err.Error())
 	}
 
 	clientSet, err := clientset.NewForConfig(restKubeConfig)
@@ -129,7 +129,7 @@ func main() {
 		} else {
 			// else, this log tells user that each backup needs to contain StorageLocation details
 			logrus.Infof("No PVC or S3 details provided for storing backups by default. User must specify storageLocation" +
-				"on each Backup CR")
+				" on each Backup CR")
 		}
 	} else if OperatorPVEnabled != "" {
 		defaultMountPath = LocalBackupStorageLocation
