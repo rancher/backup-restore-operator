@@ -43,10 +43,14 @@ global:
     systemDefaultRegistry: ""
   kubectl:
     repository: rancher/kubectl
-    tag: v1.20.2
+    tag: v1.21.9
 
+## Node labels for pod assignment
+## Ref: https://kubernetes.io/docs/user-guide/node-selection/
+##
 nodeSelector: {}
 
+## List of node taints to tolerate (requires Kubernetes >= 1.6)
 tolerations: []
 
 affinity: {}
