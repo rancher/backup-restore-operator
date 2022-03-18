@@ -650,6 +650,26 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 	resMetadata := res.Object[metadataMapKey].(map[string]interface{})
 	resourceVersion := resMetadata["resourceVersion"].(string)
 	obj.Object[metadataMapKey].(map[string]interface{})["resourceVersion"] = resourceVersion
+	// If the CRD already exists, it might have status.storedVersions that contain versions that are not in the to be restored resource/object
+	// We check if the existing CRD has status.storedVersions and if they differ from the to be restored resource/object
+	// If they differ, we need to update this first and it is a separate call because updating status is done via a different function/API call (UpdateStatus)
+	if obj.Object["status"] != nil {
+		if _, ok := obj.Object["status"].(map[string]interface{})["storedVersions"]; ok {
+			resStatus := res.Object["status"].(map[string]interface{})
+			logrus.Debugf("storedVersions of to restore object: %v", obj.Object["status"].(map[string]interface{})["storedVersions"].([]interface{}))
+			logrus.Debugf("storedVersions of existing object: %v", resStatus["storedVersions"].([]interface{}))
+			if !util.InterfaceSlicesEqual(obj.Object["status"].(map[string]interface{})["storedVersions"].([]interface{}), resStatus["storedVersions"].([]interface{})) {
+				logrus.Infof("Replacing storedVersions for %#v of type %v", name, gvr)
+				updatedStatusObj, err := dr.UpdateStatus(h.ctx, &obj, k8sv1.UpdateOptions{})
+				if err != nil {
+					return fmt.Errorf("restoreResource: err updating storedversions %v", err)
+				}
+				resourceVersion = updatedStatusObj.Object[metadataMapKey].(map[string]interface{})["resourceVersion"].(string)
+				// If updated, pass the new resourceVersion for the update below
+				obj.Object[metadataMapKey].(map[string]interface{})["resourceVersion"] = resourceVersion
+			}
+		}
+	}
 	updatedObj, err := dr.Update(h.ctx, &obj, k8sv1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("restoreResource: err updating resource %v", err)
