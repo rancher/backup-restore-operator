@@ -46,17 +46,15 @@ spec:
           persistentVolumeClaim:
             claimName: {{ include "backupRestore.pvcName" . }}
           {{- end }} 
-      nodeSelector:
-        kubernetes.io/os: linux
-      {{- with .Values.nodeSelector }}
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      nodeSelector: {{ include "linux-node-selector" . | nindent 8 }}
+{{- if .Values.nodeSelector }}
+{{ toYaml .Values.nodeSelector | indent 8 }}
+{{- end }}
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      tolerations:
-      {{- include "linux-node-tolerations" . | nindent 8}}
-      {{- with .Values.tolerations }}
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      tolerations: {{ include "linux-node-tolerations" . | nindent 8 }}
+{{- if .Values.tolerations }}
+{{ toYaml .Values.tolerations | indent 8 }}
+{{- end }}
