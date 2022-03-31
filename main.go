@@ -41,6 +41,8 @@ var (
 	OperatorPVEnabled               string
 	OperatorS3BackupStorageLocation string
 	ChartNamespace                  string
+	Debug                           bool
+	Trace                           bool
 )
 
 type objectStore struct {
@@ -56,6 +58,9 @@ type objectStore struct {
 
 func init() {
 	flag.StringVar(&KubeConfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
+	flag.BoolVar(&Debug, "debug", false, "Enable debug logging.")
+	flag.BoolVar(&Trace, "trace", false, "Enable trace logging.")
+
 	flag.Parse()
 	OperatorPVEnabled = os.Getenv("DEFAULT_PERSISTENCE_ENABLED")
 	OperatorS3BackupStorageLocation = os.Getenv("DEFAULT_S3_BACKUP_STORAGE_LOCATION")
@@ -66,6 +71,14 @@ func main() {
 	var defaultS3 *v1.S3ObjectStore
 	var objStoreWithStrSkipVerify *objectStore
 	var defaultMountPath string
+	if Debug {
+		logrus.SetLevel(logrus.DebugLevel)
+		logrus.Debugf("Loglevel set to [%v]", logrus.DebugLevel)
+	}
+	if Trace {
+		logrus.SetLevel(logrus.TraceLevel)
+		logrus.Tracef("Loglevel set to [%v]", logrus.TraceLevel)
+	}
 
 	logrus.Infof("Starting backup-restore controller version %s (%s)", Version, GitCommit)
 	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true, ForceColors: true, TimestampFormat: LogFormat})
