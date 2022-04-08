@@ -608,6 +608,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 	dr = h.dynamicClient.Resource(gvr)
 	if namespace != "" {
 		dr = h.dynamicClient.Resource(gvr).Namespace(namespace)
+		logrus.Infof("restoreResource: Namespace %v for name %v of type %v", namespace, restoreObjInfo.Name, restoreObjInfo.GVR)
 	}
 	ownerReferences, _ := fileMapMetadata[ownerRefsMapKey].([]interface{})
 	if ownerReferences != nil {

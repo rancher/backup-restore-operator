@@ -187,7 +187,7 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 		}
 	}
 	if len(filename) == 0 {
-		return "", fmt.Errorf("failed to download s3 backup: no backups found")
+		return "", fmt.Errorf("failed to download s3 backup: no backup files found with prefix [%s] in bucket [%s]", prefix, bucket)
 	}
 	// if folder is included, strip it so it doesnt end up in a folder on the host itself
 	targetFilename := path.Base(filename)
