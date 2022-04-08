@@ -102,7 +102,7 @@ func main() {
 		logrus.Fatalf("Error getting kubernetes client: %s", err.Error())
 	}
 
-	dynamicInterace, err := dynamic.NewForConfig(restKubeConfig)
+	dynamicInterface, err := dynamic.NewForConfig(restKubeConfig)
 	if err != nil {
 		logrus.Fatalf("Error generating dynamic client: %s", err.Error())
 	}
@@ -172,12 +172,12 @@ func main() {
 		backups.Resources().V1().ResourceSet(),
 		core.Core().V1().Secret(),
 		core.Core().V1().Namespace(),
-		clientSet, dynamicInterace, defaultMountPath, defaultS3)
+		clientSet, dynamicInterface, defaultMountPath, defaultS3)
 	restore.Register(ctx, backups.Resources().V1().Restore(),
 		backups.Resources().V1().Backup(),
 		core.Core().V1().Secret(),
 		k8sclient.CoordinationV1().Leases(ChartNamespace),
-		clientSet, dynamicInterace, sharedClientFactory, restmapper, defaultMountPath, defaultS3)
+		clientSet, dynamicInterface, sharedClientFactory, restmapper, defaultMountPath, defaultS3)
 
 	if err := start.All(ctx, 2, backups); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())

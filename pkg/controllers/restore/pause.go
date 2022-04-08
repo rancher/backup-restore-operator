@@ -63,7 +63,7 @@ func (h *handler) getObjFromControllerRef(controllerRef v1.ControllerReference) 
 	var dr dynamic.ResourceInterface
 	gv, err := schema.ParseGroupVersion(controllerRef.APIVersion)
 	if err != nil {
-		logrus.Errorf("Error parsing apiverion %v for controllerRef %v, skipping it", controllerRef.APIVersion, controllerRef.Name)
+		logrus.Errorf("Error parsing apiversion %v for controllerRef %v, skipping it", controllerRef.APIVersion, controllerRef.Name)
 		return nil, dr
 	}
 	gvr := gv.WithResource(controllerRef.Resource)
