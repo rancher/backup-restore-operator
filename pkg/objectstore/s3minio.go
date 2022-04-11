@@ -88,10 +88,10 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 
 	found, err := client.BucketExists(bc.BucketName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check s3 bucket:%s, err:%v", bc.BucketName, err)
+		return nil, fmt.Errorf("failed to check if s3 bucket [%s] exists, error: %v", bc.BucketName, err)
 	}
 	if !found {
-		return nil, fmt.Errorf("bucket %s is not found", bc.BucketName)
+		return nil, fmt.Errorf("s3 bucket [%s] not found", bc.BucketName)
 	}
 	return client, nil
 }
@@ -99,6 +99,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 // TODO: namespace should be backup.NS only if backup CR contains storage location, for using operator's s3, use chart's ns
 func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClient dynamic.Interface) (*minio.Client, error) {
 	var accessKey, secretKey string
+	var notFoundKeys []string
 	if objectStore.CredentialSecretName != "" {
 		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 		secrets := dynamicClient.Resource(gvr)
@@ -109,23 +110,31 @@ func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClie
 		}
 		s3SecretData, ok := s3secret.Object["data"].(map[string]interface{})
 		if !ok {
-			return &minio.Client{}, fmt.Errorf("malformed secret")
+			return &minio.Client{}, fmt.Errorf("malformed secret [%s] in namespace [%s], unable to read the data field", secretName, secretNs)
 		}
 		accessKeyEncoded, foundAccessKey := s3SecretData["accessKey"].(string)
+		if !foundAccessKey {
+			notFoundKeys = append(notFoundKeys, "accessKey")
+		}
 		secretKeyEncoded, foundSecretKey := s3SecretData["secretKey"].(string)
-		if !foundAccessKey || !foundSecretKey {
-			return &minio.Client{}, fmt.Errorf("malformed secret, incorrect access and secret key")
+		if !foundSecretKey {
+			notFoundKeys = append(notFoundKeys, "secretKey")
+		}
+		if len(notFoundKeys) > 0 {
+			return &minio.Client{}, fmt.Errorf("malformed secret [%s] in namespace [%s], the following keys were not found in the data field: [%s]", secretName, secretNs, strings.Join(notFoundKeys, ","))
 		}
 		accessKeyBytes, err := base64.StdEncoding.DecodeString(accessKeyEncoded)
 		if err != nil {
-			return &minio.Client{}, fmt.Errorf("malformed secret, access key must be base64 encoded")
+			return &minio.Client{}, fmt.Errorf("malformed secret [%s] in namespace [%s], accessKey could not be base64 decoded: %v", secretName, secretNs, err)
 		}
 		accessKey = string(accessKeyBytes)
+		log.Debugf("Found accessKey [%s] in secret [%s] in namespace [%s]", accessKey, secretName, secretNs)
 		secretKeyBytes, err := base64.StdEncoding.DecodeString(secretKeyEncoded)
 		if err != nil {
-			return &minio.Client{}, fmt.Errorf("malformed secret, secret key must be base64 encoded")
+			return &minio.Client{}, fmt.Errorf("malformed secret [%s] in namespace [%s], secretKey could not be base64 decoded: %v", secretName, secretNs, err)
 		}
 		secretKey = string(secretKeyBytes)
+		log.Tracef("Found secretKey [%s] in secret [%s] in namespace [%s]", secretKey, secretName, secretNs)
 	}
 	// if no s3 credentials are provided, use IAM profile, this means passing empty access and secret keys to the SetS3Service call
 	s3Client, err := SetS3Service(objectStore, accessKey, secretKey, true)
@@ -151,9 +160,9 @@ func UploadBackupFile(svc *minio.Client, bucketName, fileName, filePath string) 
 	for retries := 0; retries <= s3ServerRetries; retries++ {
 		n, err := svc.FPutObject(bucketName, fileName, filePath, minio.PutObjectOptions{ContentType: contentType})
 		if err != nil {
-			log.Infof("failed to upload backup file: %v, retried %d times", err, retries)
+			log.Infof("failed to upload backup file [%s], error: %v, retried %d times", fileName, err, retries)
 			if retries >= s3ServerRetries {
-				return fmt.Errorf("failed to upload backup file: %v", err)
+				return fmt.Errorf("failed to upload backup file [%s], error: %v", fileName, err)
 			}
 			continue
 		}
@@ -198,13 +207,13 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 	for retries := 0; retries <= s3ServerRetries; retries++ {
 		object, err = client.GetObject(bucket, filename, minio.GetObjectOptions{})
 		if err != nil {
-			log.Infof("Failed to download backup file [%s]: %v, retried %d times", filename, err, retries)
+			log.Infof("Failed to download backup file [%s] from bucket [%s]: %v, retried %d times", filename, bucket, err, retries)
 			if retries >= s3ServerRetries {
-				return "", fmt.Errorf("unable to download backup file for [%s]: %v", filename, err)
+				return "", fmt.Errorf("unable to download backup file [%s] from bucket [%s]: %v", filename, bucket, err)
 			}
 		}
 		if err == nil {
-			log.Infof("Successfully downloaded [%s]", filename)
+			log.Infof("Successfully downloaded backup file [%s] from bucket [%s]", filename, bucket)
 			break
 		}
 	}
