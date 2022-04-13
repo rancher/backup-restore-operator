@@ -35,6 +35,14 @@ spec:
         - name: DEFAULT_S3_BACKUP_STORAGE_LOCATION
           value: {{ include "backupRestore.s3SecretName" . }}
           {{- end }}
+          {{- if .Values.proxy }}
+        - name: HTTP_PROXY
+          value: {{ .Values.proxy }}
+        - name: HTTPS_PROXY
+          value: {{ .Values.proxy }}
+        - name: NO_PROXY
+          value: {{ .Values.noProxy }}
+          {{- end }}
           {{- if .Values.persistence.enabled }}
         - name: DEFAULT_PERSISTENCE_ENABLED
           value: "persistence-enabled"
