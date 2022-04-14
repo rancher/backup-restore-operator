@@ -23,3 +23,4 @@ jobs:
           exempt-pr-labels: 'internal,kind/bug,kind/bug-qa,kind/task,kind/feature,kind/design,kind/ci-improvements,kind/performance,kind/flaky-test'
           exempt-all-milestones: true
           exempt-all-assignees: true
+          operations-per-run: 250
