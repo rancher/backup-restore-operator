@@ -18,7 +18,7 @@ import (
 	"github.com/rancher/wrangler/pkg/condition"
 	v1core "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/genericcondition"
-	"github.com/robfig/cron"
+	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"

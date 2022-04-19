@@ -1,3 +1,3 @@
-FROM registry.suse.com/suse/sle15:15.3
+FROM registry.suse.com/bci/bci-micro:latest
 COPY bin/backup-restore-operator /usr/bin/
 ENTRYPOINT ["backup-restore-operator"]

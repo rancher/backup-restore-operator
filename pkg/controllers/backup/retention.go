@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,7 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/v6"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/objectstore"
 	"github.com/sirupsen/logrus"
@@ -84,20 +86,26 @@ func (h *handler) deleteBackupsFromMountPath(retentionCount int, backupLocation,
 }
 
 func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *minio.Client, retentionCount int, encrypted bool) error {
-	// Create a done channel to control 'ListObjectsV2' go routine.
-	doneCh := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Indicate to our routine to exit cleanly upon return.
-	defer close(doneCh)
-
-	isRecursive := false
 	prefix := ""
+	isRecursive := false
 	if len(s3.Folder) != 0 {
 		prefix = s3.Folder
 		// Recurse will show us the files in the folder
 		isRecursive = true
 	}
-	objectCh := svc.ListObjects(s3.BucketName, prefix, isRecursive, doneCh)
+	opts := minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: isRecursive,
+	}
+	if s3utils.IsGoogleEndpoint(*svc.EndpointURL()) {
+		logrus.Info("Endpoint is Google GCS")
+		opts.UseV1 = true
+	}
+
+	objectCh := svc.ListObjects(ctx, s3.BucketName, opts)
 	// default-backup-([a-z0-9-]).*([tar]).gz
 	// default-test-ecm-backup-24e1b8ce-1f00-4bbe-94bb-248ad7606dc8-([0-9-#]).*tar.gz$ OR
 	// default-test-ecm-backup-24e1b8ce-1f00-4bbe-94bb-248ad7606dc8-([0-9-#]).*tar.gz.enc$
@@ -138,7 +146,7 @@ func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *
 	})
 	for _, backupFile := range backupFiles[retentionCount:] {
 		logrus.Infof("Deleting s3 backup file [%s] to follow retention policy of max %v backups", backupFile.filename, retentionCount)
-		err := svc.RemoveObject(s3.BucketName, backupFile.filename)
+		err := svc.RemoveObject(context.Background(), s3.BucketName, backupFile.filename, minio.RemoveObjectOptions{})
 		if err != nil {
 			logrus.Errorf("Error detected during deletion: %v", err)
 			return err
