@@ -11,6 +11,7 @@
       - key: "owner"
         operator: "NotIn"
         values: ["helm"]
+  excludeResourceNameRegexp: "^bootstrap-secret$"
 - apiVersion: "v1"
   kindsRegexp: "^serviceaccounts$"
   namespaceRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"
