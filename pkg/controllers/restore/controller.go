@@ -37,15 +37,16 @@ import (
 )
 
 const (
-	metadataMapKey     = "metadata"
-	ownerRefsMapKey    = "ownerReferences"
-	clusterScoped      = "clusterscoped"
-	namespaceScoped    = "namespaceScoped"
-	leaseName          = "restore-controller"
-	secretsMapKey      = "secrets"
-	specMapKey         = "spec"
-	subResourcesMapKey = "subresources"
-	versionMapKey      = "versions"
+	metadataMapKey           = "metadata"
+	ownerRefsMapKey          = "ownerReferences"
+	clusterScoped            = "clusterscoped"
+	namespaceScoped          = "namespaceScoped"
+	leaseName                = "restore-controller"
+	preserveUnknownFieldsKey = "preserveUnknownFields"
+	secretsMapKey            = "secrets"
+	specMapKey               = "spec"
+	subResourcesMapKey       = "subresources"
+	versionMapKey            = "versions"
 )
 
 type handler struct {
@@ -627,6 +628,24 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 			}
 		}
 	}
+	// Check for invalid v1beta1 fields if the APIVersion is v1
+	if obj.GetAPIVersion() == "apiextensions.k8s.io/v1" {
+		// Invalid field is spec.preserveUnknownFields
+		if _, ok := obj.Object["spec"].(map[string]interface{})[preserveUnknownFieldsKey]; ok {
+			logrus.Infof("restoreResource: Marking %v of type %v as to be migrated to valid v1", restoreObjInfo.Name, restoreObjInfo.GVR)
+			// Set spec.preserveUnknownFields to false
+			unstructured.SetNestedField(obj.Object, false, "spec", preserveUnknownFieldsKey)
+			// New fields to be added to replace spec.preserveUnknownFields
+			// schema.openAPIV3Schema.type = object
+			// schema.openAPIV3Schema.x-kubernetes-preserve-unknown-fields = true
+			var preserveUnknownFields = map[string]interface{}{
+				"type":                                 "object",
+				"x-kubernetes-preserve-unknown-fields": true,
+			}
+			setValidationOverride(&obj, preserveUnknownFields)
+		}
+	}
+	logrus.Tracef("restoreResource: obj: [%+v]", obj)
 
 	res, err := dr.Get(h.ctx, name, k8sv1.GetOptions{})
 	if err != nil {
@@ -636,7 +655,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 		// create and return
 		createdObj, err := dr.Create(h.ctx, &obj, k8sv1.CreateOptions{})
 		if err != nil {
-			return err
+			return fmt.Errorf("restoreResource: err creating resource %v", err)
 		}
 		if hasStatusSubresource && obj.Object["status"] != nil {
 			logrus.Infof("Post-create: Updating status subresource for %#v of type %v", name, gvr)
@@ -861,4 +880,49 @@ func getCRDsWithSubresourceStatus(crdData unstructured.Unstructured) (crdsWithSu
 		}
 	}
 	return crdsWithSubresourceStatus
+}
+
+// Thanks to https://github.com/argoproj/argo-rollouts/blob/4ee03654642c90e8970a9524d5da1623d6777399/hack/gen-crd-spec/main.go#L45
+func setValidationOverride(un *unstructured.Unstructured, fieldOverride map[string]interface{}) {
+	// Prepare variables
+	preSchemaPath := []string{"spec", "versions"}
+	objVersions, _, _ := unstructured.NestedSlice(un.Object, preSchemaPath...)
+
+	schemaPath := []string{"schema", "openAPIV3Schema"}
+
+	// Loop over version's slice
+	var finalOverride []interface{}
+	for _, v := range objVersions {
+		unstructured.SetNestedMap(v.(map[string]interface{}), fieldOverride, schemaPath...)
+
+		_, ok, err := unstructured.NestedFieldNoCopy(v.(map[string]interface{}), schemaPath...)
+		if err != nil {
+			logrus.Errorf("Error while retrieving schemaPath [%s] nested field for kind [%s], error: %v", schemaPath, crdKind(un), err)
+			continue
+		}
+		if !ok {
+			logrus.Errorf("%s not found for kind %s", schemaPath, crdKind(un))
+			continue
+		} else {
+			finalOverride = append(finalOverride, v)
+		}
+	}
+
+	// Write back to top object
+	unstructured.SetNestedSlice(un.Object, finalOverride, preSchemaPath...)
+}
+
+// Thanks to https://github.com/argoproj/argo-rollouts/blob/4ee03654642c90e8970a9524d5da1623d6777399/hack/gen-crd-spec/main.go#L127
+func crdKind(crd *unstructured.Unstructured) string {
+	kind, found, err := unstructured.NestedFieldNoCopy(crd.Object, "spec", "names", "kind")
+	if err != nil {
+		logrus.Errorf("Error while retrieving spec.names.kind nested field for object [%v], error: %v", crd.Object, err)
+		return ""
+	}
+
+	if !found {
+		logrus.Errorf("kind not found for object [%v]", crd.Object)
+		return ""
+	}
+	return kind.(string)
 }
