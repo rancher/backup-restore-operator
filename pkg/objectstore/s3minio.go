@@ -19,9 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/minio/minio-go/v6"
-	"github.com/minio/minio-go/v6/pkg/credentials"
-	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	log "github.com/sirupsen/logrus"
 )
@@ -62,11 +62,18 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 		} else {
 			cred = *credentials.NewStatic(accessKey, secretKey, "", credentials.SignatureDefault)
 		}
-		client, err = minio.NewWithOptions(bc.Endpoint, &minio.Options{
+		if bc.EndpointCA != "" {
+			tr, err = setTransportCA(tr, bc.EndpointCA, bc.InsecureTLSSkipVerify)
+			if err != nil {
+				return nil, err
+			}
+		}
+		client, err = minio.New(bc.Endpoint, &minio.Options{
 			Creds:        &cred,
 			Secure:       useSSL,
 			Region:       bc.Region,
 			BucketLookup: bucketLookup,
+			Transport:    tr,
 		})
 		if err != nil {
 			log.Infof("failed to init s3 client server: %v, retried %d times", err, retries)
@@ -75,18 +82,11 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 			}
 			continue
 		}
-		if bc.EndpointCA != "" {
-			tr, err = setTransportCA(tr, bc.EndpointCA, bc.InsecureTLSSkipVerify)
-			if err != nil {
-				return nil, err
-			}
-		}
-		client.SetCustomTransport(tr)
 
 		break
 	}
 
-	found, err := client.BucketExists(bc.BucketName)
+	found, err := client.BucketExists(context.Background(), bc.BucketName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if s3 bucket [%s] exists, error: %v", bc.BucketName, err)
 	}
@@ -158,7 +158,7 @@ func UploadBackupFile(svc *minio.Client, bucketName, fileName, filePath string) 
 	// Upload the zip file with FPutObject
 	log.Infof("invoking uploading backup file [%s] to s3", fileName)
 	for retries := 0; retries <= s3ServerRetries; retries++ {
-		n, err := svc.FPutObject(bucketName, fileName, filePath, minio.PutObjectOptions{ContentType: contentType})
+		uploadInfo, err := svc.FPutObject(context.Background(), bucketName, fileName, filePath, minio.PutObjectOptions{ContentType: contentType})
 		if err != nil {
 			log.Infof("failed to upload backup file [%s], error: %v, retried %d times", fileName, err, retries)
 			if retries >= s3ServerRetries {
@@ -166,7 +166,8 @@ func UploadBackupFile(svc *minio.Client, bucketName, fileName, filePath string) 
 			}
 			continue
 		}
-		log.Infof("Successfully uploaded [%s] of size [%d]", fileName, n)
+		log.Debugf("uploadInfo for [%s] is: %v", fileName, uploadInfo)
+		log.Infof("Successfully uploaded [%s]", fileName)
 		break
 	}
 	return nil
@@ -174,16 +175,20 @@ func UploadBackupFile(svc *minio.Client, bucketName, fileName, filePath string) 
 
 func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (string, error) {
 	var filename string
-	doneCh := make(chan struct{})
-	defer close(doneCh)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	var objectCh <-chan minio.ObjectInfo
+	opts := minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: false,
+	}
 	if s3utils.IsGoogleEndpoint(*client.EndpointURL()) {
 		log.Info("Endpoint is Google GCS")
-		objectCh = client.ListObjects(bucket, prefix, false, doneCh)
-	} else {
-		objectCh = client.ListObjectsV2(bucket, prefix, false, doneCh)
+		opts.UseV1 = true
 	}
+	objectCh = client.ListObjects(ctx, bucket, opts)
+
 	for object := range objectCh {
 		if object.Err != nil {
 			log.Errorf("failed to list objects in backup buckets [%s]: %v", bucket, object.Err)
@@ -205,7 +210,7 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 	var object *minio.Object
 	var err error
 	for retries := 0; retries <= s3ServerRetries; retries++ {
-		object, err = client.GetObject(bucket, filename, minio.GetObjectOptions{})
+		object, err = client.GetObject(context.Background(), bucket, filename, minio.GetObjectOptions{})
 		if err != nil {
 			log.Infof("Failed to download backup file [%s] from bucket [%s]: %v, retried %d times", filename, bucket, err, retries)
 			if retries >= s3ServerRetries {
