@@ -64,3 +64,8 @@ serviceAccount:
   annotations: {}
 
 priorityClassName: ""
+
+# Override imagePullPolicy for image
+# options: Always, Never, IfNotPresent
+# Defaults to Always
+# imagePullPolicy: <pullPolicy>
