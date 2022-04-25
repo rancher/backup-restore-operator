@@ -71,6 +71,7 @@ func main() {
 	var defaultS3 *v1.S3ObjectStore
 	var objStoreWithStrSkipVerify *objectStore
 	var defaultMountPath string
+	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true, ForceColors: true, TimestampFormat: LogFormat})
 	if Debug {
 		logrus.SetLevel(logrus.DebugLevel)
 		logrus.Debugf("Loglevel set to [%v]", logrus.DebugLevel)
@@ -81,7 +82,6 @@ func main() {
 	}
 
 	logrus.Infof("Starting backup-restore controller version %s (%s)", Version, GitCommit)
-	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true, ForceColors: true, TimestampFormat: LogFormat})
 	ctx := signals.SetupSignalContext()
 	restKubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
 	if err != nil {
