@@ -37,6 +37,10 @@ persistence:
   ## Only certain StorageClasses allow resizing PVs; Refer https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/
   size: 2Gi
 
+# Add log level flags to backup-restore
+debug: false
+trace: false
+
 # http[s] proxy server passed to backup client
 # proxy: http://<username>@<password>:<url>:<port>
 
