@@ -13,8 +13,8 @@ jobs:
     steps:
       - uses: actions/stale@v4
         with:
-          stale-issue-message: 'This issue/PR has been automatically marked as stale because it has not had activity (commit/comment/label) for 60 days. It will be closed in 14 days if no further activity occurs. Thank you for your contributions.'
-          stale-pr-message: 'This issue/PR has been automatically marked as stale because it has not had activity (commit/comment/label) for 60 days. It will be closed in 14 days if no further activity occurs. Thank you for your contributions.'
+          stale-issue-message: 'This repository uses an automated workflow to automatically label issues which have not had any activity (commit/comment/label) for 60 days. This helps us manage the community issues better. If the issue is still relevant, please add a comment to the issue so the workflow can remove the label and we know it is still valid. If it is no longer relevant (or possibly fixed in the latest release), the workflow will automatically close the issue in 14 days. Thank you for your contributions.'
+          stale-pr-message: 'This repository uses an automated workflow to automatically label pull requests which have not had any activity (commit/comment/label) for 60 days. This helps us manage the community pull requests better. If the pull request is still relevant, please add a comment to the pull request so the workflow can remove the label and we know it is still valid. If it is no longer relevant (or possibly fixed in the latest release), the workflow will automatically close the pull request in 14 days. Thank you for your contributions.'
           stale-issue-label: 'status/stale'
           stale-pr-label: 'status/stale'
           days-before-stale: 60
