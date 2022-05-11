@@ -1,0 +1,101 @@
+#!/bin/bash
+set -ex
+function echo_with_time {
+    echo "$(date --utc +%Y-%m-%dT%H:%M:%SZ) "$@""
+}
+
+if [ "$ARCH" != "amd64" ]; then
+    echo_with_time "Integration test only run on amd64"
+    exit 0
+fi
+
+source $(dirname $0)/version
+
+echo_with_time "INFO - Running $0"
+
+cd $(dirname $0)/..
+
+k3s server --disable servicelb --disable traefik --disable local-storage --disable metrics-server > /tmp/k3s.log 2>&1 &
+k3s_pid=$!
+
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+echo_with_time 'Waiting for node to be ready ...'
+time timeout 300 bash -c 'while ! (k3s kubectl wait --for condition=ready node/$(hostname) 2>/dev/null); do sleep 5; done'
+time timeout 300 bash -c 'while ! (k3s kubectl --namespace kube-system rollout status --timeout 10s deploy/coredns 2>/dev/null); do sleep 5; done'
+
+k3s kubectl get nodes -o wide
+
+docker image save rancher/backup-restore-operator:$TAG -o /tmp/bro.img
+
+k3s ctr images import /tmp/bro.img
+
+ls -la ./dist/artifacts
+
+helm install rancher-backup-crd ./dist/artifacts/rancher-backup-crd-$HELM_VERSION_DEV.tgz -n cattle-resources-system --create-namespace --wait
+helm install rancher-backup ./dist/artifacts/rancher-backup-$HELM_VERSION_DEV.tgz -n cattle-resources-system --set image.tag=$TAG --set imagePullPolicy=IfNotPresent
+
+time timeout 300 bash -c 'while ! (k3s kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
+
+k3s kubectl get pods -n cattle-resources-system
+
+certgen -host "minio,minio.minio,minio.minio.svc,minio.minio.svc.cluster.local,localhost"
+
+helm repo add minio https://charts.min.io/
+k3s kubectl create ns minio
+k3s kubectl -n minio create secret generic tls-ssl-minio --from-file=private.key --from-file=public.crt
+
+helm install --namespace minio --set rootUser=inspectorgadget,rootPassword=gogadgetgo --set tls.enabled=true,tls.certSecret=tls-ssl-minio --set replicas=1 --set resources.requests.memory=2Gi --set persistence.enabled=false --set drivesPerNode=0 --set pools=0 --set mode=standalone --set buckets[0].name=rancherbackups --set buckets[0].policy=none --set buckets[0].purge=true minio minio/minio
+
+time timeout 300 bash -c 'while ! (k3s kubectl --namespace minio rollout status --timeout 10s deploy/minio 2>/dev/null); do sleep 5; done'
+
+k3s kubectl create secret generic miniocreds --from-literal=accessKey=inspectorgadget --from-literal=secretKey=gogadgetgo
+
+BASE64CA=$(cat public.crt |base64 -w0)
+
+cat <<EOF > backup.yaml
+apiVersion: resources.cattle.io/v1
+kind: Backup
+metadata:
+  name: s3-recurring-backup
+spec:
+  storageLocation:
+    s3:
+      credentialSecretName: miniocreds
+      credentialSecretNamespace: default
+      bucketName: rancherbackups
+      endpoint: minio.minio.svc.cluster.local:9000
+      endpointCA: ${BASE64CA}
+  resourceSetName: rancher-resource-set
+  schedule: "@every 30s"
+  retentionCount: 2
+EOF
+
+k3s kubectl create -f backup.yaml
+
+export POD_NAME=$(k3s kubectl get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
+k3s kubectl port-forward $POD_NAME 9000 --namespace minio &
+sleep 10
+
+mkdir -p $HOME/.mc/certs/CAs
+cp public.crt $HOME/.mc/certs/CAs
+export MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@localhost:9000
+mc ls --quiet --no-color miniolocal/rancherbackups
+FIRSTBACKUP=$(mc ls --quiet --no-color miniolocal/rancherbackups | awk '{ print $NF }')
+if [[ $FIRSTBACKUP != s3-recurring-backup* ]]; then
+    echo_with_time "$FIRSTBACKUP does not start with 's3-recurring-backup'"
+    exit 1
+fi
+sleep 90
+for BACKUP in $(mc ls --quiet --no-color miniolocal/rancherbackups | awk '{ print $NF }'); do
+    echo_with_time $BACKUP
+    if [[ $BACKUP != s3-recurring-backup* ]]; then
+        echo_with_time "$BACKUP does not start with 's3-recurring-backup'"
+        exit 1
+    fi
+
+    if [ "${BACKUP}" = "${FIRSTBACKUP}" ]; then
+        echo_with_time "First was not removed!"
+	exit 1
+    fi
+done

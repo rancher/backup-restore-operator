@@ -10,11 +10,25 @@ RUN if [ "${ARCH}" == "amd64" ]; then \
     fi
 RUN curl -sL https://get.helm.sh/helm-v3.8.2-linux-${ARCH}.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
 
+#integration tests only support amd64
+RUN if [ "${ARCH}" == "amd64" ]; then \
+        curl -sL https://github.com/rancher/k3s/releases/download/$(curl -Ls -o /dev/null -w %{url_effective} https://update.k3s.io/v1-release/channels/stable | awk -F/ '{ print $NF }')/k3s > /usr/local/bin/k3s \
+        && chmod +x /usr/local/bin/k3s \
+        && curl -sL https://github.com/minio/certgen/releases/latest/download/certgen-linux-amd64 > /usr/local/bin/certgen \
+        && chmod +x /usr/local/bin/certgen \
+        && curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc > /usr/local/bin/mc \
+        && chmod +x /usr/local/bin/mc; \
+    fi
+
 ENV GO111MODULE on
 ENV DAPPER_ENV REPO TAG DRONE_TAG CROSS
 ENV DAPPER_SOURCE /go/src/github.com/rancher/backup-restore-operator/
 ENV DAPPER_OUTPUT ./bin ./dist
 ENV DAPPER_DOCKER_SOCKET true
+ENV DAPPER_RUN_ARGS --privileged
+VOLUME /var/lib/rancher/k3s
+VOLUME /var/lib/cni
+VOLUME /var/log
 ENV HOME ${DAPPER_SOURCE}
 WORKDIR ${DAPPER_SOURCE}
 
