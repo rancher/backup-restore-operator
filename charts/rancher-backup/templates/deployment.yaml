@@ -28,6 +28,13 @@ spec:
       - name: {{ .Chart.Name }}
         image: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag }}
         imagePullPolicy: {{ default "Always" .Values.imagePullPolicy }}
+        args:
+{{- if .Values.debug }}
+        - "--debug"
+{{- end }}
+{{- if .Values.trace }}
+        - "--trace"
+{{- end }}
         env:
         - name: CHART_NAMESPACE
           value: {{ .Release.Namespace }}
