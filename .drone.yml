@@ -36,12 +36,13 @@ steps:
       - push
       - tag
 
-- name: github_binary_release
+- name: github_binary_prerelease
   image: plugins/github-release
   settings:
     api_key:
       from_secret: github_token
     prerelease: true
+    title: "Pre-release ${DRONE_TAG}"
     checksum:
     - sha256
     checksum_file: CHECKSUMsum-amd64.txt
@@ -52,8 +53,31 @@ steps:
     instance:
     - drone-publish.rancher.io
     ref:
-    - refs/head/master
-    - refs/tags/*
+      include:
+      - "refs/tags/*rc*"
+      - "refs/tags/*alpha*"
+    event:
+    - tag
+
+- name: github_binary_release
+  image: plugins/github-release
+  settings:
+    api_key:
+      from_secret: github_token
+    title: "Release ${DRONE_TAG}"
+    checksum:
+    - sha256
+    checksum_file: CHECKSUMsum-amd64.txt
+    checksum_flatten: true
+    files:
+    - "dist/artifacts/*"
+  when:
+    instance:
+    - drone-publish.rancher.io
+    ref:
+      exclude:
+      - "refs/tags/*rc*"
+      - "refs/tags/*alpha*"
     event:
     - tag
 
@@ -98,12 +122,13 @@ steps:
   - name: docker
     path: /var/run/docker.sock
 
-- name: github_binary_release
+- name: github_binary_prerelease
   image: plugins/github-release
   settings:
     api_key:
       from_secret: github_token
     prerelease: true
+    title: "Pre-release ${DRONE_TAG}"
     checksum:
     - sha256
     checksum_file: CHECKSUMsum-arm64.txt
@@ -114,8 +139,31 @@ steps:
     instance:
     - drone-publish.rancher.io
     ref:
-    - refs/head/master
-    - refs/tags/*
+      include:
+      - "refs/tags/*rc*"
+      - "refs/tags/*alpha*"
+    event:
+    - tag
+
+- name: github_binary_release
+  image: plugins/github-release
+  settings:
+    api_key:
+      from_secret: github_token
+    title: "Release ${DRONE_TAG}"
+    checksum:
+    - sha256
+    checksum_file: CHECKSUMsum-arm64.txt
+    checksum_flatten: true
+    files:
+    - "dist/artifacts/*"
+  when:
+    instance:
+    - drone-publish.rancher.io
+    ref:
+      exclude:
+      - "refs/tags/*rc*"
+      - "refs/tags/*alpha*"
     event:
     - tag
 
@@ -163,12 +211,13 @@ steps:
       - name: docker
         path: /var/run/docker.sock
 
-  - name: github_binary_release
+  - name: github_binary_prerelease
     image: rancher/drone-images:github-release-s390x
     settings:
       api_key:
         from_secret: github_token
       prerelease: true
+      title: "Pre-release ${DRONE_TAG}"
       checksum:
         - sha256
       checksum_file: CHECKSUMsum-s390x.txt
@@ -179,8 +228,31 @@ steps:
       instance:
         - drone-publish.rancher.io
       ref:
-        - refs/head/master
-        - refs/tags/*
+        include:
+        - "refs/tags/*rc*"
+        - "refs/tags/*alpha*"
+      event:
+        - tag
+
+  - name: github_binary_release
+    image: rancher/drone-images:github-release-s390x
+    settings:
+      title: "Release ${DRONE_TAG}"
+      api_key:
+        from_secret: github_token
+      checksum:
+        - sha256
+      checksum_file: CHECKSUMsum-s390x.txt
+      checksum_flatten: true
+      files:
+        - "dist/artifacts/*"
+    when:
+      instance:
+        - drone-publish.rancher.io
+      ref:
+        exclude:
+        - "refs/tags/*rc*"
+        - "refs/tags/*alpha*"
       event:
         - tag
 
