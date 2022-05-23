@@ -112,7 +112,7 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 	resources, err := h.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logrus.Warnf("No resources found for groupVersion %v, skipping it", groupVersion)
+			logrus.Infof("No resources found for groupVersion %v, skipping it", groupVersion)
 			return resourceList, nil
 		}
 		return resourceList, err
@@ -151,7 +151,7 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 				continue
 			}
 
-			logrus.Infof("resource kind %v, matched regex %v", res.Name, filter.KindsRegexp)
+			logrus.Debugf("resource kind %v, matched regex %v", res.Name, filter.KindsRegexp)
 			resourceListFromRegex = append(resourceListFromRegex, res)
 		}
 	}
@@ -220,7 +220,7 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 			return filteredByName, err
 		}
 		labelSelector = selector.String()
-		logrus.Infof("Listing objects using label selector %v", labelSelector)
+		logrus.Debugf("Listing objects using label selector %v", labelSelector)
 	}
 
 	resourceObjectsList, err := paginateListResults(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector})
@@ -235,7 +235,7 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 	}
 	// filter out using ResourceNameRegexp
 	if filter.ResourceNameRegexp != "" {
-		logrus.Infof("Using ResourceNameRegexp [%s] to filter resource names", filter.ResourceNameRegexp)
+		logrus.Debugf("Using ResourceNameRegexp [%s] to filter resource names", filter.ResourceNameRegexp)
 		if filter.ResourceNameRegexp == "." {
 			// "." will match everything, so return all resources obtained from the list call
 			return resourceObjectsList.Items, nil
@@ -277,7 +277,7 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 
 	// filter by names as fieldSelector:
 	if len(filter.ResourceNames) > 0 {
-		logrus.Infof("Using ResourceNames [%s] to filter resource names", strings.Join(filter.ResourceNames, ","))
+		logrus.Debugf("Using ResourceNames [%s] to filter resource names", strings.Join(filter.ResourceNames, ","))
 		// TODO: POST-preview-2: set resourceVersion later when it becomes clear how to use it
 		filteredObjectsList, err := paginateListResults(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
@@ -321,7 +321,7 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 	filteredByNsMap := make(map[*unstructured.Unstructured]bool)
 
 	if len(filter.Namespaces) > 0 {
-		logrus.Infof("Using Namespaces %s to filter namespaces", strings.Join(filter.Namespaces, ","))
+		logrus.Debugf("Using Namespaces %s to filter namespaces", strings.Join(filter.Namespaces, ","))
 		allowedNamespaces := make(map[string]bool)
 		for _, ns := range filter.Namespaces {
 			allowedNamespaces[ns] = true
@@ -336,7 +336,7 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 		}
 	}
 	if filter.NamespaceRegexp != "" {
-		logrus.Infof("Using NamespaceRegexp %s to filter resource names", filter.NamespaceRegexp)
+		logrus.Debugf("Using NamespaceRegexp %s to filter resource names", filter.NamespaceRegexp)
 		if filter.NamespaceRegexp == "." {
 			// "." will match all namespaces, so return all objects obtained after filtering by name
 			return filteredByName, nil
