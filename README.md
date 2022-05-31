@@ -1,5 +1,9 @@
 # Backup and Restore Operator
 
+### Latest release
+
+[![Latest](https://img.shields.io/badge/dynamic/yaml?label=backup-restore-operator&query=%24.entries%5B%27rancher-backup%27%5D%5B0%5D.appVersion&url=https%3A%2F%2Fcharts.rancher.io%2Findex.yaml)](https://github.com/rancher/backup-restore-operator/releases/latest)
+
 ### Description
 
 * This operator provides ability to backup and restore Kubernetes applications (metadata) running on any cluster. It accepts a list of resources that need to be backed up for a particular application. It then gathers these resources by querying the Kubernetes API server, packages all the resources to create a tarball file and pushes it to the configured backup storage location. Since it gathers resources by querying the API server, it can back up applications from any type of Kubernetes cluster.
@@ -100,3 +104,7 @@ s3:
 ### Developer Documentation
 
 Refer to [DEVELOPING.md](./DEVELOPING.md) for developer tips, tricks, and workflows when working with the `backup-restore-operator`.
+
+### Troubleshooting
+
+Refer to [troubleshooting.md](./docs/troubleshooting.md) for troubleshooting commands.
