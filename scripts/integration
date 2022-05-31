@@ -32,8 +32,15 @@ k3s ctr images import /tmp/bro.img
 
 ls -la ./dist/artifacts
 
-helm install rancher-backup-crd ./dist/artifacts/rancher-backup-crd-$HELM_VERSION_DEV.tgz -n cattle-resources-system --create-namespace --wait
-helm install rancher-backup ./dist/artifacts/rancher-backup-$HELM_VERSION_DEV.tgz -n cattle-resources-system --set image.tag=$TAG --set imagePullPolicy=IfNotPresent
+# In case short commit only conists of numbers, it is regarded valid by Helm when packaging
+if [[ $HELM_VERSION =~ ^[0-9]+$ ]]; then
+  HELM_CHART_VERSION=$HELM_VERSION
+else
+  HELM_CHART_VERSION=$HELM_VERSION_DEV
+fi
+
+helm install rancher-backup-crd ./dist/artifacts/rancher-backup-crd-$HELM_CHART_VERSION.tgz -n cattle-resources-system --create-namespace --wait
+helm install rancher-backup ./dist/artifacts/rancher-backup-$HELM_CHART_VERSION.tgz -n cattle-resources-system --set image.tag=$TAG --set imagePullPolicy=IfNotPresent
 
 time timeout 300 bash -c 'while ! (k3s kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
 
