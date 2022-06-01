@@ -46,39 +46,15 @@ time timeout 300 bash -c 'while ! (k3s kubectl --namespace cattle-resources-syst
 
 k3s kubectl get pods -n cattle-resources-system
 
-certgen -host "minio,minio.minio,minio.minio.svc,minio.minio.svc.cluster.local,localhost"
+time timeout 300 bash -c 'while ! (k3s kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
 
-helm repo add minio https://charts.min.io/
-k3s kubectl create ns minio
-k3s kubectl -n minio create secret generic tls-ssl-minio --from-file=private.key --from-file=public.crt
+k3s kubectl get pods -n cattle-resources-system
 
-helm install --namespace minio --set rootUser=inspectorgadget,rootPassword=gogadgetgo --set tls.enabled=true,tls.certSecret=tls-ssl-minio --set replicas=1 --set resources.requests.memory=2Gi --set persistence.enabled=false --set drivesPerNode=0 --set pools=0 --set mode=standalone --set buckets[0].name=rancherbackups --set buckets[0].policy=none --set buckets[0].purge=true minio minio/minio
+#Deploy Minio
+./scripts/deploy minio
 
-time timeout 300 bash -c 'while ! (k3s kubectl --namespace minio rollout status --timeout 10s deploy/minio 2>/dev/null); do sleep 5; done'
-
-k3s kubectl create secret generic miniocreds --from-literal=accessKey=inspectorgadget --from-literal=secretKey=gogadgetgo
-
-BASE64CA=$(cat public.crt |base64 -w0)
-
-cat <<EOF > backup.yaml
-apiVersion: resources.cattle.io/v1
-kind: Backup
-metadata:
-  name: s3-recurring-backup
-spec:
-  storageLocation:
-    s3:
-      credentialSecretName: miniocreds
-      credentialSecretNamespace: default
-      bucketName: rancherbackups
-      endpoint: minio.minio.svc.cluster.local:9000
-      endpointCA: ${BASE64CA}
-  resourceSetName: rancher-resource-set
-  schedule: "@every 30s"
-  retentionCount: 2
-EOF
-
-k3s kubectl create -f backup.yaml
+#Create Backup
+./scripts/deploy create-backup
 
 export POD_NAME=$(k3s kubectl get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
 k3s kubectl port-forward $POD_NAME 9000 --namespace minio &

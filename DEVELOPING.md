@@ -15,6 +15,63 @@ helm install --wait \
     rancher-backup ./charts/rancher-backup
 ```
 
+### Developer Help Script
+For help with setting up the environment, check out `/scripts/deploy`. It has some helpful functions for deploying the various components used in the development environment.
+
+The function options include:
+./deploy [template/publish/minio/backup-restore/backup/remove-charts/clean/help]
+
+The following variables can be exported to access more functionality:
+
+    KUBECONFIG          Path to your cluster's kube config file.
+
+    DOCKERHUB_USER      Your docker hub username to be used for the image repo.
+                        With this exported you can publish the local image to  
+                        allow it to be to be deployed on a remote host."
+
+    USE_DOCKER_BUILDX   This flag will force the package script to use docker 
+                        buildx, setting the target platform to build for amd64 
+                        This is useful when developing on different architectures.
+
+#### Example Usage
+
+Once your development environment has been set up (i.e. have a cluster up and running), start with exporting the kubeconfig file. From there you can deploy Minio onto the cluster and then backup-restore. Once both charts have been installed you can create a backup. 
+
+```bash
+export KUBECONFIG=`pwd`/kubeconfig.yaml
+
+./scripts/deploy minio
+
+./scripts/deploy backup-restore
+
+./scripts/deploy create-backup
+```
+
+Some changes done to the chart must be packaged into a new docker image. The difficulty with deploying the updated image is that it must be imported to each node and pulled from the local container registry. A workaround is to publish the image to a public docker repo and point the chart to the new image repo. This is handled in the deploy script and can be done using a simple command flow. To publish through our script you must have your docker hub username exported to be used for the repo.
+
+```bash
+export DOCKERHUB_USER=[your username here]
+
+make build
+
+make package
+
+./scripts/deploy publish
+
+./scripts/deploy minio
+
+./scripts/deploy backup-restore
+
+./scripts/deploy create-backup
+```
+
+Note: if `DOCKERHUB_USER` is exported then the script will set the image repo to pull from your dockerhub, if not it will use the Public Rancher image instead.
+
+### Building on Different Architectures
+
+Currently we only support building this chart for amd64 nodes. The binary built by `make build` is set to build for amd64 and we have also included a flag for users running different architectures when trying to package the code into a docker image. Setting `USE_DOCKER_BUILDX=1` will force the package script to use docker buildx, setting the target platform to build for amd64. If you do not have `docker-buildx` installed please reference [this page](https://docs.docker.com/buildx/working-with-buildx/).
+
+
 ### Developer Uninstallation
 
 Follow the uninstallation instructions in [README.md](./README.md).

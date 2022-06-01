@@ -1,0 +1,220 @@
+#!/bin/bash
+
+check_kubeconfig() {
+  if [ -z "${KUBECONFIG}" ]; then
+  echo "Please set your Kubeconfig environment variable before running."
+  exit 0
+  fi
+
+  if ! kubectl get nodes >/dev/null 2>&1; then
+    echo "Please make sure your exported Kubeconfig is correct and pointing to the right cluster."
+    exit 1
+  fi
+}
+
+create_cert() {
+  cat <<EOF > public.crt
+-----BEGIN CERTIFICATE-----
+MIICSTCCAe+gAwIBAgIQWgUVWCiZdyOGruNe6m4iWjAKBggqhkjOPQQDAjBMMRww
+GgYDVQQKExNDZXJ0Z2VuIERldmVsb3BtZW50MSwwKgYDVQQLDCNlbGl5YW1sZXZ5
+QEVsaXlhbXMtTUJQLmF0dGxvY2FsLm5ldDAeFw0yMjA1MTExNDAxMjBaFw0zMjA1
+MTEwMjAxMjBaMEwxHDAaBgNVBAoTE0NlcnRnZW4gRGV2ZWxvcG1lbnQxLDAqBgNV
+BAsMI2VsaXlhbWxldnlARWxpeWFtcy1NQlAuYXR0bG9jYWwubmV0MFkwEwYHKoZI
+zj0CAQYIKoZIzj0DAQcDQgAEFH8UPCl/vAHkMbTF3E8yhSdLNH2XueKUHns+O4FR
+hn096OJKnGZFb/HiW9iJWhj4CJ4LubSvsiZJZ7YuDlM9faOBsjCBrzAOBgNVHQ8B
+Af8EBAMCAqQwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH/BAUwAwEB/zAd
+BgNVHQ4EFgQUImjresql78fBpwSV7lp4fT4+NnwwWAYDVR0RBFEwT4IFbWluaW+C
+C21pbmlvLm1pbmlvgg9taW5pby5taW5pby5zdmOCHW1pbmlvLm1pbmlvLnN2Yy5j
+bHVzdGVyLmxvY2Fsgglsb2NhbGhvc3QwCgYIKoZIzj0EAwIDSAAwRQIgWT4CU5ib
+LNeXJmh2lnqEvaeKgqLHPFgMOQg+4TyO+uQCIQCI5WX1E84B+z6yX7WKIBYJIjto
+RjQi75QniF10pi2jKA==
+-----END CERTIFICATE-----
+EOF
+
+  cat <<EOF > private.key
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgRiROiBUTvzxfDbiu
+60w9WdlRKAI7Jy0c26uC2FoAZdahRANCAAQUfxQ8KX+8AeQxtMXcTzKFJ0s0fZe5
+4pQeez47gVGGfT3o4kqcZkVv8eJb2IlaGPgIngu5tK+yJklnti4OUz19
+-----END PRIVATE KEY-----
+EOF
+}
+
+deploy_minio() {
+  KUBECTL_CMD="kubectl"
+  if command -v k3s &> /dev/null ; then
+      KUBECTL_CMD="k3s kubectl"
+  else
+    check_kubeconfig
+  fi
+
+  helm repo add minio https://charts.min.io/
+  helm repo update
+
+  echo "Creating Minio Namespace"
+  ${KUBECTL_CMD} create ns minio
+
+  echo "Creating Minio tls-ssl secret"
+  ${KUBECTL_CMD} -n minio create secret generic tls-ssl-minio --from-file=private.key --from-file=public.crt
+
+  echo "Installing Minio"
+  helm install --namespace minio --set rootUser=inspectorgadget,rootPassword=gogadgetgo --set tls.enabled=true,tls.certSecret=tls-ssl-minio --set replicas=1 --set resources.requests.memory=2Gi --set persistence.enabled=false --set drivesPerNode=0 --set pools=0 --set mode=standalone --set buckets[0].name=rancherbackups --set buckets[0].policy=none --set buckets[0].purge=true minio minio/minio
+
+  while ! (${KUBECTL_CMD} --namespace minio rollout status --timeout 15s deploy/minio 2>/dev/null); do sleep 5; done
+
+  ${KUBECTL_CMD} create secret generic miniocreds --from-literal=accessKey=inspectorgadget --from-literal=secretKey=gogadgetgo
+}
+
+deploy_backup_restore() {
+  . ./scripts/version &> /dev/null
+
+  helm repo add rancher-charts https://charts.rancher.io
+  helm repo update
+
+  if [ -z "${DOCKERHUB_USER}" ]; then
+    helm install --wait \
+        --create-namespace -n cattle-resources-system \
+        rancher-backup-crd rancher-charts/rancher-backup-crd
+    helm install --wait \
+        -n cattle-resources-system \
+        rancher-backup rancher-charts/rancher-backup
+  else
+    helm install --wait --create-namespace -n cattle-resources-system rancher-backup-crd dist/artifacts/rancher-backup-crd-"${HELM_VERSION_DEV}".tgz
+    helm install --wait -n cattle-resources-system rancher-backup dist/artifacts/rancher-backup-"${HELM_VERSION_DEV}".tgz \
+        --set image.tag="${TAG}" \
+        --set image.repository=${DOCKERHUB_USER}/backup-restore-operator \
+        --set imagePullPolicy=IfNotPresent
+  fi
+}
+
+create_backup() {
+  KUBECTL_CMD="kubectl"
+  if [[ $(uname -s) = "Darwin" ]]; then
+    BASE64CA=$(cat public.crt |base64)
+  elif [[ $(uname -s) = "Linux" ]]; then
+    BASE64CA=$(cat public.crt |base64 -w0)
+  fi
+
+  if command -v k3s &> /dev/null ; then
+    KUBECTL_CMD="k3s kubectl"
+  else
+    check_kubeconfig
+  fi
+
+  cat <<EOF > backup.yaml
+apiVersion: resources.cattle.io/v1
+kind: Backup
+metadata:
+  name: s3-recurring-backup
+spec:
+  storageLocation:
+    s3:
+      credentialSecretName: miniocreds
+      credentialSecretNamespace: default
+      bucketName: rancherbackups
+      endpoint: minio.minio.svc.cluster.local:9000
+      endpointCA: ${BASE64CA}
+  resourceSetName: rancher-resource-set
+  schedule: "@every 30s"
+  retentionCount: 2
+EOF
+
+  ${KUBECTL_CMD} create -f backup.yaml
+}
+
+uninstall_charts() {
+  if [ -z "${KUBECONFIG}" ]; then
+   echo "Please set your Kubeconfig environment variable before running."
+   exit 0
+  fi
+  
+  if ! kubectl get nodes >/dev/null 2>&1; then
+    echo "Please make sure your exported Kubeconfig is correct and pointing to the right cluster."
+    exit 1
+  fi
+
+  helm uninstall -n minio minio
+  helm uninstall -n cattle-resources-system rancher-backup
+  helm uninstall -n cattle-resources-system rancher-backup-crd
+  kubectl delete deploy rancher-backup -n cattle-resources-system
+}
+
+retag_and_push() {
+  . ./scripts/version &> /dev/null
+  if [ -z "${DOCKERHUB_USER}" ]; then
+    echo "Please set DOCKERHUB_USER to your preferred docker image repository"
+    exit 0
+  fi
+  docker tag rancher/backup-restore-operator:"${TAG}" "${DOCKERHUB_USER}"/backup-restore-operator:"${TAG}"
+  docker image push "${DOCKERHUB_USER}"/backup-restore-operator:"${TAG}"
+}
+
+script-info() {
+  echo "./deploy [template/publish/minio/backup-restore/create-backup/remove-charts/clean]"
+  if [ -z "${KUBECONFIG}" ] || [ -z "${DOCKERHUB_USER}" ] || [ -z "${USE_DOCKER_BUILDX}" ] ; then
+    echo ""
+    echo "The following variables can be exported to access more functionality (See Descriptions)."
+    echo ""
+    echo "    [VARIABLE]                            [Description]"
+    if [ -z "${KUBECONFIG}" ]; then
+      echo ""
+      echo "    KUBECONFIG        Path to your cluster's kube config file."
+    fi
+    if [ -z "${DOCKERHUB_USER}" ]; then
+      echo ""
+      echo "    DOCKERHUB_USER    Your docker hub username to be used for the image repo."
+      echo "                      With this exported you can publish the local image to  "
+      echo "                      allow it to be to be deployed on a remote host."
+    fi
+    if [ -z "${USE_DOCKER_BUILDX}" ]; then
+      echo ""
+      echo "   USE_DOCKER_BUILDX  This flag will force the package script to use docker "
+      echo "                      buildx, setting the target platform to build for amd64 "
+      echo "                      This is useful when developing on different architectures."
+    fi
+  fi
+}
+
+case $1 in
+    template)
+      . ./scripts/version &> /dev/null
+      helm template rancher-backup-0.0.0-dev.tgz --output-dir=./bla/ --set image.tag="${TAG}" --set imagePullPolicy=IfNotPresent
+    ;;
+
+    publish)
+      retag_and_push
+    ;;
+
+    minio)
+      create_cert
+      deploy_minio
+    ;;
+
+    backup-restore)
+      if [ ! -f "public.crt" ] || [ ! -f "private.key" ]; then
+          create_cert
+      fi
+      deploy_backup_restore
+    ;;
+
+    create-backup)
+      create_backup
+    ;;
+
+    remove-charts)
+      uninstall_charts
+    ;;
+
+    clean)
+      rm private.key public.crt backup.yaml
+    ;;
+
+    help)
+      script-info
+    ;;
+
+    *)
+      echo "Please use ./deploy help for more information on how to run the script"
+    ;;
+
+esac
