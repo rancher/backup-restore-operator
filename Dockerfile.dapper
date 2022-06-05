@@ -11,6 +11,9 @@ RUN if [ "${ARCH}" == "amd64" ]; then \
         curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.45.2; \
     fi
 RUN curl -sL https://get.helm.sh/helm-v3.8.2-linux-${ARCH}.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
+RUN if [ "${ARCH}" != "s390x" ]; then \
+        helm plugin install https://github.com/quintush/helm-unittest; \
+    fi
 
 #integration tests only support amd64
 RUN if [ "${ARCH}" == "amd64" ]; then \
