@@ -14,7 +14,11 @@ if [ -e ${DOCKERFILE}.${ARCH} ]; then
     DOCKERFILE=${DOCKERFILE}.${ARCH}
 fi
 
-docker build -f ${DOCKERFILE} -t ${IMAGE} .
+if [[ ${USE_DOCKER_BUILDX} -eq 1 ]]; then
+    docker buildx build --platform linux/amd64 -f ${DOCKERFILE} . -t ${IMAGE} 
+else
+    docker build -f ${DOCKERFILE} -t ${IMAGE} .
+fi
 echo Built ${IMAGE}
 
 ./scripts/package-helm
