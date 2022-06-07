@@ -21,21 +21,6 @@ tests:
   - equal:
       path: metadata.namespace
       value: "NAMESPACE"
-- it: should set labels
-  template: pvc.yaml
-  set:
-    persistence:
-      enabled: true
-  asserts:
-  - equal:
-      path: metadata.labels
-      value:
-        app.kubernetes.io/instance: RELEASE-NAME
-        app.kubernetes.io/managed-by: Helm
-        app.kubernetes.io/name: rancher-backup
-        app.kubernetes.io/version: 0.0.0-dev
-        helm.sh/chart: rancher-backup-0.0.0-dev
-        resources.cattle.io/operator: backup-restore
 - it: should set accessModes
   template: pvc.yaml
   set:
