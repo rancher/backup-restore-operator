@@ -61,7 +61,26 @@ k3s kubectl port-forward $POD_NAME 9000 --namespace minio &
 sleep 10
 
 mkdir -p $HOME/.mc/certs/CAs
-cp public.crt $HOME/.mc/certs/CAs
+PUBLIC_CRT=$(cat <<EOF
+-----BEGIN CERTIFICATE-----
+MIICSTCCAe+gAwIBAgIQWgUVWCiZdyOGruNe6m4iWjAKBggqhkjOPQQDAjBMMRww
+GgYDVQQKExNDZXJ0Z2VuIERldmVsb3BtZW50MSwwKgYDVQQLDCNlbGl5YW1sZXZ5
+QEVsaXlhbXMtTUJQLmF0dGxvY2FsLm5ldDAeFw0yMjA1MTExNDAxMjBaFw0zMjA1
+MTEwMjAxMjBaMEwxHDAaBgNVBAoTE0NlcnRnZW4gRGV2ZWxvcG1lbnQxLDAqBgNV
+BAsMI2VsaXlhbWxldnlARWxpeWFtcy1NQlAuYXR0bG9jYWwubmV0MFkwEwYHKoZI
+zj0CAQYIKoZIzj0DAQcDQgAEFH8UPCl/vAHkMbTF3E8yhSdLNH2XueKUHns+O4FR
+hn096OJKnGZFb/HiW9iJWhj4CJ4LubSvsiZJZ7YuDlM9faOBsjCBrzAOBgNVHQ8B
+Af8EBAMCAqQwEwYDVR0lBAwwCgYIKwYBBQUHAwEwDwYDVR0TAQH/BAUwAwEB/zAd
+BgNVHQ4EFgQUImjresql78fBpwSV7lp4fT4+NnwwWAYDVR0RBFEwT4IFbWluaW+C
+C21pbmlvLm1pbmlvgg9taW5pby5taW5pby5zdmOCHW1pbmlvLm1pbmlvLnN2Yy5j
+bHVzdGVyLmxvY2Fsgglsb2NhbGhvc3QwCgYIKoZIzj0EAwIDSAAwRQIgWT4CU5ib
+LNeXJmh2lnqEvaeKgqLHPFgMOQg+4TyO+uQCIQCI5WX1E84B+z6yX7WKIBYJIjto
+RjQi75QniF10pi2jKA==
+-----END CERTIFICATE-----
+EOF
+)
+
+echo "$PUBLIC_CRT" > $HOME/.mc/certs/CAs/public.crt
 export MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@localhost:9000
 mc ls --quiet --no-color miniolocal/rancherbackups
 FIRSTBACKUP=$(mc ls --quiet --no-color miniolocal/rancherbackups | awk '{ print $NF }')
