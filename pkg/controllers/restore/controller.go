@@ -37,16 +37,17 @@ import (
 )
 
 const (
-	metadataMapKey           = "metadata"
-	ownerRefsMapKey          = "ownerReferences"
-	clusterScoped            = "clusterscoped"
-	namespaceScoped          = "namespaceScoped"
-	leaseName                = "restore-controller"
-	preserveUnknownFieldsKey = "preserveUnknownFields"
-	secretsMapKey            = "secrets"
-	specMapKey               = "spec"
-	subResourcesMapKey       = "subresources"
-	versionMapKey            = "versions"
+	metadataMapKey                = "metadata"
+	ownerRefsMapKey               = "ownerReferences"
+	clusterScoped                 = "clusterscoped"
+	deletionGracePeriodSecondsKey = "deletionGracePeriodSeconds"
+	namespaceScoped               = "namespaceScoped"
+	leaseName                     = "restore-controller"
+	preserveUnknownFieldsKey      = "preserveUnknownFields"
+	secretsMapKey                 = "secrets"
+	specMapKey                    = "spec"
+	subResourcesMapKey            = "subresources"
+	versionMapKey                 = "versions"
 )
 
 type handler struct {
@@ -644,6 +645,13 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 			}
 			setValidationOverride(&obj, preserveUnknownFields)
 		}
+	}
+	// Drop immutable metadata.deletionGracePeriodSeconds
+	deletionGracePeriodSeconds, _ := fileMapMetadata[deletionGracePeriodSecondsKey]
+	logrus.Tracef("deletionGracePeriodSeconds for %v of type %v: %v", restoreObjInfo.Name, restoreObjInfo.GVR, deletionGracePeriodSeconds)
+	if deletionGracePeriodSeconds != nil {
+		logrus.Infof("Removing metadata.deletionGracePeriodSeconds for %v of type %v because it is immutable", restoreObjInfo.Name, restoreObjInfo.GVR)
+		delete(obj.Object[metadataMapKey].(map[string]interface{}), deletionGracePeriodSecondsKey)
 	}
 	logrus.Tracef("restoreResource: obj: [%+v]", obj)
 

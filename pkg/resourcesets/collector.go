@@ -467,7 +467,7 @@ func (h *ResourceHandler) WriteBackupObjects(backupPath string) error {
 			objFilename := objName
 
 			// TODO: confirm-test deletionTimestamp needs to be dropped
-			for _, field := range []string{"uid", "creationTimestamp", "deletionTimestamp", "selfLink", "resourceVersion"} {
+			for _, field := range []string{"uid", "creationTimestamp", "deletionTimestamp", "selfLink", "resourceVersion", "deletionGracePeriodSeconds"} {
 				delete(metadata, field)
 			}
 			gv := gvResource.GroupVersion
