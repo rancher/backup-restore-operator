@@ -56,6 +56,8 @@ k3s kubectl get pods -n cattle-resources-system
 #Create Backup
 ./scripts/deploy create-backup
 
+time timeout 60 bash -c 'while ! (k3s kubectl wait --for condition=ready backup.resources.cattle.io/s3-recurring-backup 2>/dev/null); do k3s kubectl get backup.resources.cattle.io -A; sleep 2; done'
+
 export POD_NAME=$(k3s kubectl get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
 k3s kubectl port-forward $POD_NAME 9000 --namespace minio &
 sleep 10
@@ -100,4 +102,71 @@ for BACKUP in $(mc ls --quiet --no-color miniolocal/rancherbackups | awk '{ prin
         echo_with_time "First was not removed!"
 	exit 1
     fi
+done
+
+# Disable the recurring back-ups by deleting the backup CRD
+k3s kubectl delete backup.resources.cattle.io/s3-recurring-backup
+
+# Restore resource with spec.preserveUnknownFields
+# https://github.com/rancher/backup-restore-operator/issues/186
+
+cd tests/files/preserve-unknown-fields
+tar cvzf /tmp/preserve-unknown-fields.tar.gz -- *
+cd -
+mc cp --quiet --no-color /tmp/preserve-unknown-fields.tar.gz miniolocal/rancherbackups
+
+mc ls --quiet --no-color miniolocal/rancherbackups
+
+k3s kubectl create -f - <<EOF
+apiVersion: resources.cattle.io/v1
+kind: Restore
+metadata:
+  name: restore-preserve-unknown-fields
+spec:
+  backupFilename: preserve-unknown-fields.tar.gz
+  prune: false
+  storageLocation:
+    s3:
+      credentialSecretName: miniocreds
+      credentialSecretNamespace: default
+      bucketName: rancherbackups
+      endpoint: minio.minio.svc.cluster.local:9000
+      endpointCA: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUNTVENDQWUrZ0F3SUJBZ0lRV2dVVldDaVpkeU9HcnVOZTZtNGlXakFLQmdncWhrak9QUVFEQWpCTU1Sd3cKR2dZRFZRUUtFeE5EWlhKMFoyVnVJRVJsZG1Wc2IzQnRaVzUwTVN3d0tnWURWUVFMRENObGJHbDVZVzFzWlhaNQpRRVZzYVhsaGJYTXRUVUpRTG1GMGRHeHZZMkZzTG01bGREQWVGdzB5TWpBMU1URXhOREF4TWpCYUZ3MHpNakExCk1URXdNakF4TWpCYU1Fd3hIREFhQmdOVkJBb1RFME5sY25SblpXNGdSR1YyWld4dmNHMWxiblF4TERBcUJnTlYKQkFzTUkyVnNhWGxoYld4bGRubEFSV3hwZVdGdGN5MU5RbEF1WVhSMGJHOWpZV3d1Ym1WME1Ga3dFd1lIS29aSQp6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVGSDhVUENsL3ZBSGtNYlRGM0U4eWhTZExOSDJYdWVLVUhucytPNEZSCmhuMDk2T0pLbkdaRmIvSGlXOWlKV2hqNENKNEx1YlN2c2laSlo3WXVEbE05ZmFPQnNqQ0JyekFPQmdOVkhROEIKQWY4RUJBTUNBcVF3RXdZRFZSMGxCQXd3Q2dZSUt3WUJCUVVIQXdFd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVJbWpyZXNxbDc4ZkJwd1NWN2xwNGZUNCtObnd3V0FZRFZSMFJCRkV3VDRJRmJXbHVhVytDCkMyMXBibWx2TG0xcGJtbHZnZzl0YVc1cGJ5NXRhVzVwYnk1emRtT0NIVzFwYm1sdkxtMXBibWx2TG5OMll5NWoKYkhWemRHVnlMbXh2WTJGc2dnbHNiMk5oYkdodmMzUXdDZ1lJS29aSXpqMEVBd0lEU0FBd1JRSWdXVDRDVTVpYgpMTmVYSm1oMmxucUV2YWVLZ3FMSFBGZ01PUWcrNFR5Tyt1UUNJUUNJNVdYMUU4NEIrejZ5WDdXS0lCWUpJanRvClJqUWk3NVFuaUYxMHBpMmpLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+EOF
+
+time timeout 60 bash -c 'while ! (k3s kubectl wait --for condition=ready restore.resources.cattle.io/restore-preserve-unknown-fields 2>/dev/null); do k3s kubectl get restore.resources.cattle.io -A; k3s kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=15; sleep 5; done'
+
+# Restore resource with metadata.deletionGracePeriodSeconds
+# https://github.com/rancher/backup-restore-operator/issues/188
+
+cd tests/files/deletion-grace-period-seconds
+tar cvzf /tmp/deletion-grace-period-seconds.tar.gz -- *
+cd -
+mc cp --quiet --no-color /tmp/deletion-grace-period-seconds.tar.gz miniolocal/rancherbackups
+
+mc ls --quiet --no-color miniolocal/rancherbackups
+
+# Run this twice as the error happens when the to be restored resource already exists
+for i in $(seq 1 2); do
+    echo "Running restore #${i} with resource having metadata.deletionGracePeriodSeconds"
+
+    k3s kubectl create -f - <<EOF
+apiVersion: resources.cattle.io/v1
+kind: Restore
+metadata:
+  name: restore-deletion-grace-period-seconds
+spec:
+  backupFilename: deletion-grace-period-seconds.tar.gz
+  prune: false
+  storageLocation:
+    s3:
+      credentialSecretName: miniocreds
+      credentialSecretNamespace: default
+      bucketName: rancherbackups
+      endpoint: minio.minio.svc.cluster.local:9000
+      endpointCA: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUNTVENDQWUrZ0F3SUJBZ0lRV2dVVldDaVpkeU9HcnVOZTZtNGlXakFLQmdncWhrak9QUVFEQWpCTU1Sd3cKR2dZRFZRUUtFeE5EWlhKMFoyVnVJRVJsZG1Wc2IzQnRaVzUwTVN3d0tnWURWUVFMRENObGJHbDVZVzFzWlhaNQpRRVZzYVhsaGJYTXRUVUpRTG1GMGRHeHZZMkZzTG01bGREQWVGdzB5TWpBMU1URXhOREF4TWpCYUZ3MHpNakExCk1URXdNakF4TWpCYU1Fd3hIREFhQmdOVkJBb1RFME5sY25SblpXNGdSR1YyWld4dmNHMWxiblF4TERBcUJnTlYKQkFzTUkyVnNhWGxoYld4bGRubEFSV3hwZVdGdGN5MU5RbEF1WVhSMGJHOWpZV3d1Ym1WME1Ga3dFd1lIS29aSQp6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVGSDhVUENsL3ZBSGtNYlRGM0U4eWhTZExOSDJYdWVLVUhucytPNEZSCmhuMDk2T0pLbkdaRmIvSGlXOWlKV2hqNENKNEx1YlN2c2laSlo3WXVEbE05ZmFPQnNqQ0JyekFPQmdOVkhROEIKQWY4RUJBTUNBcVF3RXdZRFZSMGxCQXd3Q2dZSUt3WUJCUVVIQXdFd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVJbWpyZXNxbDc4ZkJwd1NWN2xwNGZUNCtObnd3V0FZRFZSMFJCRkV3VDRJRmJXbHVhVytDCkMyMXBibWx2TG0xcGJtbHZnZzl0YVc1cGJ5NXRhVzVwYnk1emRtT0NIVzFwYm1sdkxtMXBibWx2TG5OMll5NWoKYkhWemRHVnlMbXh2WTJGc2dnbHNiMk5oYkdodmMzUXdDZ1lJS29aSXpqMEVBd0lEU0FBd1JRSWdXVDRDVTVpYgpMTmVYSm1oMmxucUV2YWVLZ3FMSFBGZ01PUWcrNFR5Tyt1UUNJUUNJNVdYMUU4NEIrejZ5WDdXS0lCWUpJanRvClJqUWk3NVFuaUYxMHBpMmpLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+EOF
+
+    time timeout 60 bash -c 'while ! (k3s kubectl wait --for condition=ready restore.resources.cattle.io/restore-deletion-grace-period-seconds 2>/dev/null); do k3s kubectl get restore.resources.cattle.io -A; k3s kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=15; sleep 5; done'
+    k3s kubectl delete restore.resources.cattle.io/restore-deletion-grace-period-seconds
 done
