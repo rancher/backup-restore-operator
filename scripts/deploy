@@ -12,8 +12,9 @@ check_kubeconfig() {
   fi
 }
 
-create_cert() {
-  cat <<EOF > public.crt
+deploy_minio() {
+  local PUBLIC_CRT
+  PUBLIC_CRT=$(cat <<EOF
 -----BEGIN CERTIFICATE-----
 MIICSTCCAe+gAwIBAgIQWgUVWCiZdyOGruNe6m4iWjAKBggqhkjOPQQDAjBMMRww
 GgYDVQQKExNDZXJ0Z2VuIERldmVsb3BtZW50MSwwKgYDVQQLDCNlbGl5YW1sZXZ5
@@ -30,17 +31,17 @@ LNeXJmh2lnqEvaeKgqLHPFgMOQg+4TyO+uQCIQCI5WX1E84B+z6yX7WKIBYJIjto
 RjQi75QniF10pi2jKA==
 -----END CERTIFICATE-----
 EOF
-
-  cat <<EOF > private.key
+  )
+  local PRIVATE_KEY
+  PRIVATE_KEY=$(cat <<EOF
 -----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgRiROiBUTvzxfDbiu
 60w9WdlRKAI7Jy0c26uC2FoAZdahRANCAAQUfxQ8KX+8AeQxtMXcTzKFJ0s0fZe5
 4pQeez47gVGGfT3o4kqcZkVv8eJb2IlaGPgIngu5tK+yJklnti4OUz19
 -----END PRIVATE KEY-----
 EOF
-}
+  )
 
-deploy_minio() {
   KUBECTL_CMD="kubectl"
   if command -v k3s &> /dev/null ; then
       KUBECTL_CMD="k3s kubectl"
@@ -55,7 +56,7 @@ deploy_minio() {
   ${KUBECTL_CMD} create ns minio
 
   echo "Creating Minio tls-ssl secret"
-  ${KUBECTL_CMD} -n minio create secret generic tls-ssl-minio --from-file=private.key --from-file=public.crt
+  ${KUBECTL_CMD} -n minio create secret generic tls-ssl-minio --from-literal=private.key="$PRIVATE_KEY" --from-literal=public.crt="$PUBLIC_CRT"
 
   echo "Installing Minio"
   helm install --namespace minio --set rootUser=inspectorgadget,rootPassword=gogadgetgo --set tls.enabled=true,tls.certSecret=tls-ssl-minio --set replicas=1 --set resources.requests.memory=2Gi --set persistence.enabled=false --set drivesPerNode=0 --set pools=0 --set mode=standalone --set buckets[0].name=rancherbackups --set buckets[0].policy=none --set buckets[0].purge=true minio minio/minio
@@ -63,6 +64,55 @@ deploy_minio() {
   while ! (${KUBECTL_CMD} --namespace minio rollout status --timeout 15s deploy/minio 2>/dev/null); do sleep 5; done
 
   ${KUBECTL_CMD} create secret generic miniocreds --from-literal=accessKey=inspectorgadget --from-literal=secretKey=gogadgetgo
+}
+
+list_minio_files() {
+  KUBECTL_CMD="kubectl"
+  if command -v k3s &> /dev/null ; then
+      KUBECTL_CMD="k3s kubectl"
+  else
+    check_kubeconfig
+  fi
+
+  local POD_NAME
+  POD_NAME=$("${KUBECTL_CMD}" get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
+  ${KUBECTL_CMD} port-forward $POD_NAME 9000 --namespace minio &
+  sleep 5
+
+  DOCKER_HOSTNAME="127.0.0.1"
+  if [[ "$(docker info -f'{{.Name}}')" == "lima-rancher-desktop" ]] || [[ "$(docker info -f'{{.Name}}')" == "docker-desktop" ]]; then
+      DOCKER_HOSTNAME="host.docker.internal"
+  fi
+
+  docker run --rm --net=host -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc ls --insecure miniolocal/rancherbackups
+  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+}
+
+copy_minio_files() {
+  KUBECTL_CMD="kubectl"
+  if command -v k3s &> /dev/null ; then
+      KUBECTL_CMD="k3s kubectl"
+  else
+    check_kubeconfig
+  fi
+
+  local POD_NAME
+  POD_NAME=$("${KUBECTL_CMD}" get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
+  ${KUBECTL_CMD} port-forward $POD_NAME 9000 --namespace minio &
+  sleep 5
+
+  DOCKER_HOSTNAME="127.0.0.1"
+  if [[ "$(docker info -f'{{.Name}}')" == "lima-rancher-desktop" ]] || [[ "$(docker info -f'{{.Name}}')" == "docker-desktop" ]]; then
+      DOCKER_HOSTNAME="host.docker.internal"
+  fi
+
+  MINIO_FILES_DIR="minio-files-$(date +%s)"
+  mkdir $MINIO_FILES_DIR
+
+  docker run --rm --net=host -v "${PWD}/${MINIO_FILES_DIR}":/data -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc cp --insecure --recursive miniolocal/rancherbackups/ /data/
+  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+
+  echo "Copied all files from Minio to ./${MINIO_FILES_DIR}"
 }
 
 deploy_backup_restore() {
@@ -89,11 +139,6 @@ deploy_backup_restore() {
 
 create_backup() {
   KUBECTL_CMD="kubectl"
-  if [[ $(uname -s) = "Darwin" ]]; then
-    BASE64CA=$(cat public.crt |base64)
-  elif [[ $(uname -s) = "Linux" ]]; then
-    BASE64CA=$(cat public.crt |base64 -w0)
-  fi
 
   if command -v k3s &> /dev/null ; then
     KUBECTL_CMD="k3s kubectl"
@@ -101,7 +146,7 @@ create_backup() {
     check_kubeconfig
   fi
 
-  cat <<EOF > backup.yaml
+${KUBECTL_CMD} create -f - <<EOF
 apiVersion: resources.cattle.io/v1
 kind: Backup
 metadata:
@@ -113,13 +158,11 @@ spec:
       credentialSecretNamespace: default
       bucketName: rancherbackups
       endpoint: minio.minio.svc.cluster.local:9000
-      endpointCA: ${BASE64CA}
+      endpointCA: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUNTVENDQWUrZ0F3SUJBZ0lRV2dVVldDaVpkeU9HcnVOZTZtNGlXakFLQmdncWhrak9QUVFEQWpCTU1Sd3cKR2dZRFZRUUtFeE5EWlhKMFoyVnVJRVJsZG1Wc2IzQnRaVzUwTVN3d0tnWURWUVFMRENObGJHbDVZVzFzWlhaNQpRRVZzYVhsaGJYTXRUVUpRTG1GMGRHeHZZMkZzTG01bGREQWVGdzB5TWpBMU1URXhOREF4TWpCYUZ3MHpNakExCk1URXdNakF4TWpCYU1Fd3hIREFhQmdOVkJBb1RFME5sY25SblpXNGdSR1YyWld4dmNHMWxiblF4TERBcUJnTlYKQkFzTUkyVnNhWGxoYld4bGRubEFSV3hwZVdGdGN5MU5RbEF1WVhSMGJHOWpZV3d1Ym1WME1Ga3dFd1lIS29aSQp6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVGSDhVUENsL3ZBSGtNYlRGM0U4eWhTZExOSDJYdWVLVUhucytPNEZSCmhuMDk2T0pLbkdaRmIvSGlXOWlKV2hqNENKNEx1YlN2c2laSlo3WXVEbE05ZmFPQnNqQ0JyekFPQmdOVkhROEIKQWY4RUJBTUNBcVF3RXdZRFZSMGxCQXd3Q2dZSUt3WUJCUVVIQXdFd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVJbWpyZXNxbDc4ZkJwd1NWN2xwNGZUNCtObnd3V0FZRFZSMFJCRkV3VDRJRmJXbHVhVytDCkMyMXBibWx2TG0xcGJtbHZnZzl0YVc1cGJ5NXRhVzVwYnk1emRtT0NIVzFwYm1sdkxtMXBibWx2TG5OMll5NWoKYkhWemRHVnlMbXh2WTJGc2dnbHNiMk5oYkdodmMzUXdDZ1lJS29aSXpqMEVBd0lEU0FBd1JRSWdXVDRDVTVpYgpMTmVYSm1oMmxucUV2YWVLZ3FMSFBGZ01PUWcrNFR5Tyt1UUNJUUNJNVdYMUU4NEIrejZ5WDdXS0lCWUpJanRvClJqUWk3NVFuaUYxMHBpMmpLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
   resourceSetName: rancher-resource-set
   schedule: "@every 30s"
   retentionCount: 2
 EOF
-
-  ${KUBECTL_CMD} create -f backup.yaml
 }
 
 uninstall_charts() {
@@ -150,7 +193,7 @@ retag_and_push() {
 }
 
 script-info() {
-  echo "./deploy [template/publish/minio/backup-restore/create-backup/remove-charts/clean]"
+  echo "./deploy [template/publish/minio/list-minio-files/copy-minio-files/backup-restore/create-backup/remove-charts]"
   if [ -z "${KUBECONFIG}" ] || [ -z "${DOCKERHUB_USER}" ] || [ -z "${USE_DOCKER_BUILDX}" ] ; then
     echo ""
     echo "The following variables can be exported to access more functionality (See Descriptions)."
@@ -186,14 +229,18 @@ case $1 in
     ;;
 
     minio)
-      create_cert
       deploy_minio
     ;;
 
+    list-minio-files)
+      list_minio_files
+    ;;
+
+    copy-minio-files)
+      copy_minio_files
+    ;;
+
     backup-restore)
-      if [ ! -f "public.crt" ] || [ ! -f "private.key" ]; then
-          create_cert
-      fi
       deploy_backup_restore
     ;;
 
@@ -203,10 +250,6 @@ case $1 in
 
     remove-charts)
       uninstall_charts
-    ;;
-
-    clean)
-      rm private.key public.crt backup.yaml
     ;;
 
     help)

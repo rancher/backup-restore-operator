@@ -21,8 +21,6 @@ RUN if [ "${ARCH}" != "s390x" ]; then \
 RUN if [ "${ARCH}" == "amd64" ]; then \
         curl -sL https://github.com/rancher/k3s/releases/download/$(curl -Ls -o /dev/null -w %{url_effective} https://update.k3s.io/v1-release/channels/stable | awk -F/ '{ print $NF }')/k3s > /usr/local/bin/k3s \
         && chmod +x /usr/local/bin/k3s \
-        && curl -sL https://github.com/minio/certgen/releases/latest/download/certgen-linux-amd64 > /usr/local/bin/certgen \
-        && chmod +x /usr/local/bin/certgen \
         && curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc > /usr/local/bin/mc \
         && chmod +x /usr/local/bin/mc; \
     fi

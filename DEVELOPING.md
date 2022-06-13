@@ -18,20 +18,7 @@ helm install --wait \
 ### Developer Help Script
 For help with setting up the environment, check out `/scripts/deploy`. It has some helpful functions for deploying the various components used in the development environment.
 
-The function options include:
-./deploy [template/publish/minio/backup-restore/backup/remove-charts/clean/help]
-
-The following variables can be exported to access more functionality:
-
-    KUBECONFIG          Path to your cluster's kube config file.
-
-    DOCKERHUB_USER      Your docker hub username to be used for the image repo.
-                        With this exported you can publish the local image to  
-                        allow it to be to be deployed on a remote host."
-
-    USE_DOCKER_BUILDX   This flag will force the package script to use docker 
-                        buildx, setting the target platform to build for amd64 
-                        This is useful when developing on different architectures.
+To see all available options, run `./scripts/deploy help`.
 
 #### Example Usage
 
@@ -66,6 +53,11 @@ make package
 ```
 
 Note: if `DOCKERHUB_USER` is exported then the script will set the image repo to pull from your dockerhub, if not it will use the Public Rancher image instead.
+
+If you want to interact with the Minio deployed in the cluster, you can use the following arguments:
+
+* `list-minio-files`: List all the files currently stored in the bucket `rancherbackups` in Minio
+* `copy-minio-files`: Copy all the files currently stored in the bucket `rancherbackups` in Minio to the local directory `minio-files-$EPOCH`
 
 ### Building on Different Architectures
 
