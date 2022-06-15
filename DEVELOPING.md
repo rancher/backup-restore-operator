@@ -18,7 +18,7 @@ helm install --wait \
 ### Developer Help Script
 For help with setting up the environment, check out `/scripts/deploy`. It has some helpful functions for deploying the various components used in the development environment.
 
-To see all available options, run `./scripts/deploy help`.
+To see all available options, run `./scripts/deploy`.
 
 #### Example Usage
 
@@ -57,7 +57,9 @@ Note: if `DOCKERHUB_USER` is exported then the script will set the image repo to
 If you want to interact with the Minio deployed in the cluster, you can use the following arguments:
 
 * `list-minio-files`: List all the files currently stored in the bucket `rancherbackups` in Minio
-* `copy-minio-files`: Copy all the files currently stored in the bucket `rancherbackups` in Minio to the local directory `minio-files-$EPOCH`
+* `retrieve-minio-files`: Copy all the files currently stored in the bucket `rancherbackups` in Minio to the local directory `minio-files-$EPOCH`
+* `copy-minio-files`: Copy all the files currently stored in a local directory (passed as first argument) to the bucket `rancherbackups` in Minio
+* `reset-minio-bucket`: Delete and create the `rancherbackups` bucket
 
 ### Building on Different Architectures
 
