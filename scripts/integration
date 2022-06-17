@@ -33,7 +33,8 @@ k3s ctr images import /tmp/bro.img
 ls -la ./dist/artifacts
 
 # In case short commit only conists of numbers, it is regarded valid by Helm when packaging
-if [[ $HELM_VERSION =~ ^[0-9]+$ ]]; then
+# Or if a tag is set (if its a (pre) release)
+if [[ $HELM_VERSION =~ ^[0-9]+$ ]] || [[ -n $GIT_TAG ]]; then
   HELM_CHART_VERSION=$HELM_VERSION
 else
   HELM_CHART_VERSION=$HELM_VERSION_DEV
