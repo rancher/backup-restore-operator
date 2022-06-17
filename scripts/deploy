@@ -1,15 +1,13 @@
 #!/bin/bash
 
 check_kubeconfig() {
-  if [ -z "${KUBECONFIG}" ]; then
-  echo "Please set your Kubeconfig environment variable before running."
-  exit 0
-  fi
-
   if ! kubectl get nodes >/dev/null 2>&1; then
-    echo "Please make sure your exported Kubeconfig is correct and pointing to the right cluster."
-    exit 1
+      echo "The command 'kubectl get nodes' returned an error"
+      echo "Either make sure ~/.kube/config is correctly configured or set the KUBECONFIG environment variable to the correct configuration file"
+      exit 1
   fi
+  echo "Communicating with cluster:"
+  kubectl get nodes -o wide
 }
 
 deploy_minio() {
@@ -88,7 +86,7 @@ list_minio_files() {
   kill -9 "$(pgrep -f "kubectl port-forward minio")"
 }
 
-copy_minio_files() {
+retrieve_minio_files() {
   KUBECTL_CMD="kubectl"
   if command -v k3s &> /dev/null ; then
       KUBECTL_CMD="k3s kubectl"
@@ -113,6 +111,58 @@ copy_minio_files() {
   kill -9 "$(pgrep -f "kubectl port-forward minio")"
 
   echo "Copied all files from Minio to ./${MINIO_FILES_DIR}"
+}
+
+copy_minio_files() {
+  KUBECTL_CMD="kubectl"
+  if command -v k3s &> /dev/null ; then
+      KUBECTL_CMD="k3s kubectl"
+  else
+    check_kubeconfig
+  fi
+
+  local POD_NAME
+  POD_NAME=$("${KUBECTL_CMD}" get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
+  ${KUBECTL_CMD} port-forward $POD_NAME 9000 --namespace minio &
+  sleep 5
+
+  DOCKER_HOSTNAME="127.0.0.1"
+  if [[ "$(docker info -f'{{.Name}}')" == "lima-rancher-desktop" ]] || [[ "$(docker info -f'{{.Name}}')" == "docker-desktop" ]]; then
+      DOCKER_HOSTNAME="host.docker.internal"
+  fi
+
+  SOURCE_FILES_DIR=$1
+  echo "Copying from directory ${SOURCE_FILES_DIR}"
+
+  docker run --rm --net=host -v "${PWD}/${SOURCE_FILES_DIR}":/data -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc cp --insecure --recursive /data/ miniolocal/rancherbackups/
+  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+
+  echo "Copied all files from directory ${SOURCE_FILES_DIR} to Minio"
+}
+
+reset_minio_bucket() {
+  KUBECTL_CMD="kubectl"
+  if command -v k3s &> /dev/null ; then
+      KUBECTL_CMD="k3s kubectl"
+  else
+    check_kubeconfig
+  fi
+
+  local POD_NAME
+  POD_NAME=$("${KUBECTL_CMD}" get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
+  ${KUBECTL_CMD} port-forward $POD_NAME 9000 --namespace minio &
+  sleep 5
+
+  DOCKER_HOSTNAME="127.0.0.1"
+  if [[ "$(docker info -f'{{.Name}}')" == "lima-rancher-desktop" ]] || [[ "$(docker info -f'{{.Name}}')" == "docker-desktop" ]]; then
+      DOCKER_HOSTNAME="host.docker.internal"
+  fi
+
+  docker run --rm --net=host -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc rb --insecure --force miniolocal/rancherbackups
+  docker run --rm --net=host -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc mb --insecure miniolocal/rancherbackups
+  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+
+  echo "Deleted and created the 'rancherbackups' bucket"
 }
 
 deploy_backup_restore() {
@@ -166,15 +216,7 @@ EOF
 }
 
 uninstall_charts() {
-  if [ -z "${KUBECONFIG}" ]; then
-   echo "Please set your Kubeconfig environment variable before running."
-   exit 0
-  fi
-  
-  if ! kubectl get nodes >/dev/null 2>&1; then
-    echo "Please make sure your exported Kubeconfig is correct and pointing to the right cluster."
-    exit 1
-  fi
+  check_kubeconfig
 
   helm uninstall -n minio minio
   helm uninstall -n cattle-resources-system rancher-backup
@@ -193,7 +235,7 @@ retag_and_push() {
 }
 
 script-info() {
-  echo "./deploy [template/publish/minio/list-minio-files/copy-minio-files/backup-restore/create-backup/remove-charts]"
+  echo "./deploy [template/publish/minio/list-minio-files/retrieve-minio-files/copy-minio-files/reset-minio-bucket/backup-restore/create-backup/remove-charts]"
   if [ -z "${KUBECONFIG}" ] || [ -z "${DOCKERHUB_USER}" ] || [ -z "${USE_DOCKER_BUILDX}" ] ; then
     echo ""
     echo "The following variables can be exported to access more functionality (See Descriptions)."
@@ -236,8 +278,25 @@ case $1 in
       list_minio_files
     ;;
 
+    retrieve-minio-files)
+      retrieve_minio_files
+    ;;
+
     copy-minio-files)
-      copy_minio_files
+      if [ -z "$2" ]; then
+        echo "Usage $0 <local_directory>"
+        exit 1
+      fi
+      if [ ! -d "$2" ]; then
+        echo "Given directory ${2} is not a directory"
+        exit 1
+      fi
+
+      copy_minio_files $2
+    ;;
+
+    reset-minio-bucket)
+      reset_minio_bucket
     ;;
 
     backup-restore)
@@ -252,12 +311,8 @@ case $1 in
       uninstall_charts
     ;;
 
-    help)
-      script-info
-    ;;
-
     *)
-      echo "Please use ./deploy help for more information on how to run the script"
+      script-info
     ;;
 
 esac
