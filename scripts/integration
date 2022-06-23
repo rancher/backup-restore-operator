@@ -45,11 +45,7 @@ helm install rancher-backup ./dist/artifacts/rancher-backup-$HELM_CHART_VERSION.
 
 time timeout 300 bash -c 'while ! (k3s kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
 
-k3s kubectl get pods -n cattle-resources-system
-
-time timeout 300 bash -c 'while ! (k3s kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
-
-k3s kubectl get pods -n cattle-resources-system
+k3s kubectl -n cattle-resources-system get deploy rancher-backup -o yaml
 
 #Deploy Minio
 ./scripts/deploy minio
@@ -58,6 +54,8 @@ k3s kubectl get pods -n cattle-resources-system
 ./scripts/deploy create-backup
 
 time timeout 60 bash -c 'while ! (k3s kubectl wait --for condition=ready backup.resources.cattle.io/s3-recurring-backup 2>/dev/null); do k3s kubectl get backup.resources.cattle.io -A; sleep 2; done'
+
+k3s kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=-1
 
 export POD_NAME=$(k3s kubectl get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
 k3s kubectl port-forward $POD_NAME 9000 --namespace minio &

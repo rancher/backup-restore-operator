@@ -45,6 +45,8 @@ type handler struct {
 
 const DefaultRetentionCount = 10
 
+var Version string
+
 func Register(
 	ctx context.Context,
 	backups backupControllers.BackupController,
@@ -68,17 +70,17 @@ func Register(
 		defaultS3BackupLocation: defaultS3,
 	}
 	if controller.defaultBackupMountPath != "" {
-		logrus.Infof("Default location for storing backups is %v", controller.defaultBackupMountPath)
+		logrus.Infof("Default location for storing backups is [%v]", controller.defaultBackupMountPath)
 	} else if controller.defaultS3BackupLocation != nil {
-		logrus.Infof("Default s3 location for storing backups is %v", controller.defaultS3BackupLocation)
-		logrus.Infof("If credentials are used for default s3, the secret containing creds must exist in chart's namespace %v", util.ChartNamespace)
+		logrus.Infof("Default s3 location for storing backups is [%v]", controller.defaultS3BackupLocation)
+		logrus.Infof("If credentials are used for default s3, the secret containing creds must exist in chart's namespace [%v]", util.ChartNamespace)
 	}
 
 	// Use the kube-system NS.UID as the unique ID for a cluster
 	kubeSystemNS, err := controller.namespaces.Get("kube-system", k8sv1.GetOptions{})
 	if err != nil {
 		// fatal log here, because we need the kube-system ns UID while creating any backup file
-		logrus.Fatalf("Error getting namespace kube-system %v", err)
+		logrus.Fatalf("Error getting namespace kube-system [%v]", err)
 	}
 	controller.kubeSystemNS = string(kubeSystemNS.UID)
 	// Register handlers
@@ -89,7 +91,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if backup == nil || backup.DeletionTimestamp != nil {
 		return backup, nil
 	}
-	logrus.Infof("Processing backup %v", backup.Name)
+	logrus.Infof("Processing backup [%v]", backup.Name)
 
 	if err := h.validateBackupSpec(backup); err != nil {
 		return h.setReconcilingCondition(backup, err)
@@ -98,7 +100,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if backup.Status.LastSnapshotTS != "" {
 		if backup.Spec.Schedule == "" {
 			// Backup CR was meant for one-time backup, and the backup has been completed. Probably here from UpdateStatus call
-			logrus.Infof("Backup CR %v has been processed for one-time backup, returning", backup.Name)
+			logrus.Infof("Backup CR [%v] has been processed for one-time backup, returning", backup.Name)
 			// This could also mean backup CR was updated from recurring to one-time, in which case observedGeneration needs to be updated
 			updBackupStatus := false
 			if backup.Generation != backup.Status.ObservedGeneration {
@@ -117,7 +119,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		}
 		if backup.Status.NextSnapshotAt != "" {
 			currTime := time.Now().Format(time.RFC3339)
-			logrus.Infof("Next snapshot is scheduled for: %v, current time: %v", backup.Status.NextSnapshotAt, currTime)
+			logrus.Infof("Next snapshot is scheduled for: [%v], current time: [%v]", backup.Status.NextSnapshotAt, currTime)
 
 			nextSnapshotTime, err := time.Parse(time.RFC3339, backup.Status.NextSnapshotAt)
 			if err != nil {
@@ -134,7 +136,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			}
 
 			// proceed with backup only if current time is same as or after nextSnapshotTime
-			logrus.Infof("Processing recurring backup CR %v ", backup.Name)
+			logrus.Infof("Processing recurring backup CR [%v] ", backup.Name)
 		}
 	}
 
@@ -142,15 +144,15 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if err != nil {
 		return h.setReconcilingCondition(backup, err)
 	}
-	logrus.Infof("For backup CR %v, filename: %v", backup.Name, backupFileName)
+	logrus.Infof("For backup CR [%v], filename: [%v]", backup.Name, backupFileName)
 
 	// create a temp dir to write all backup files to, delete this before returning.
 	// empty dir param in ioutil.TempDir defaults to os.TempDir
 	tmpBackupPath, err := ioutil.TempDir("", backupFileName)
 	if err != nil {
-		return h.setReconcilingCondition(backup, fmt.Errorf("error creating temp dir: %v", err))
+		return h.setReconcilingCondition(backup, fmt.Errorf("error creating temp dir: [%v]", err))
 	}
-	logrus.Infof("Temporary backup path for storing all contents for backup CR %v is %v", backup.Name, tmpBackupPath)
+	logrus.Infof("Temporary backup path for storing all contents for backup CR [%v] is [%v]", backup.Name, tmpBackupPath)
 
 	if err := h.performBackup(backup, tmpBackupPath, backupFileName); err != nil {
 		removeDirErr := os.RemoveAll(tmpBackupPath)
@@ -218,20 +220,29 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	var err error
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
 	if backup.Spec.EncryptionConfigSecretName != "" {
-		logrus.Infof("Processing encryption config %v for backup CR %v", backup.Spec.EncryptionConfigSecretName, backup.Name)
+		logrus.Infof("Processing encryption config [%v] for backup CR [%v]", backup.Spec.EncryptionConfigSecretName, backup.Name)
 		transformerMap, err = util.GetEncryptionTransformers(backup.Spec.EncryptionConfigSecretName, h.secrets)
 		if err != nil {
 			return err
 		}
 	}
 
-	logrus.Infof("Using resourceSet %v for gathering resources for backup CR %v", backup.Spec.ResourceSetName, backup.Name)
+	logrus.Infof("Using resourceSet [%v] for gathering resources for backup CR [%v]", backup.Spec.ResourceSetName, backup.Name)
 	resourceSetTemplate, err := h.resourceSets.Get(backup.Spec.ResourceSetName, k8sv1.GetOptions{})
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Gathering resources for backup CR %v", backup.Name)
+	// Check if resourceSet resource is correct by checking version label, this was added later so won't always be present
+	if _, ok := resourceSetTemplate.ObjectMeta.Labels["version"]; ok {
+		resourceSetVersion := resourceSetTemplate.ObjectMeta.Labels["version"]
+		logrus.Infof("Found version label [%s] for resourceSet [%v]", resourceSetVersion, backup.Spec.ResourceSetName)
+		if resourceSetVersion != Version {
+			return fmt.Errorf("The resourceSet [%v] version [%s] does not equal the controller version [%s], please force upgrade or re-install the rancher-backup-crd chart", backup.Spec.ResourceSetName, resourceSetVersion, Version)
+		}
+	}
+
+	logrus.Infof("Gathering resources for backup CR [%v]", backup.Name)
 	rh := resourcesets.ResourceHandler{
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
@@ -242,17 +253,18 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		return err
 	}
 
-	logrus.Infof("Finished gathering resources for backup CR %v, writing to temp location", backup.Name)
+	logrus.Infof("Finished gathering resources for backup CR [%v], writing to temp location", backup.Name)
 	err = rh.WriteBackupObjects(tmpBackupPath)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Saving resourceSet used for backup CR %v", backup.Name)
+	logrus.Infof("Saving resourceSet used for backup CR [%v]", backup.Name)
 	filters, err := json.Marshal(resourceSetTemplate)
 	if err != nil {
 		return err
 	}
+
 	filtersPath := filepath.Join(tmpBackupPath, "filters")
 	err = os.MkdirAll(filtersPath, os.ModePerm)
 	if err != nil {
@@ -285,7 +297,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 			}
 			backup.Status.StorageLocation = util.S3Backup
 		} else {
-			return fmt.Errorf("backup %v needs to specify S3 details, or configure storage location at the operator level", backup.Name)
+			return fmt.Errorf("backup [%v] needs to specify S3 details, or configure storage location at the operator level", backup.Name)
 		}
 	} else if storageLocation.S3 != nil {
 		backup.Status.StorageLocation = util.S3Backup
@@ -300,7 +312,7 @@ func (h *handler) validateBackupSpec(backup *v1.Backup) error {
 	if backup.Spec.Schedule != "" {
 		_, err := cron.ParseStandard(backup.Spec.Schedule)
 		if err != nil {
-			return fmt.Errorf("error parsing invalid cron string for schedule: %v", err)
+			return fmt.Errorf("error parsing invalid cron string for schedule: [%v]", err)
 		}
 		if backup.Spec.RetentionCount == 0 {
 			backup.Spec.RetentionCount = DefaultRetentionCount

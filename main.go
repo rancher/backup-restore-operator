@@ -82,6 +82,7 @@ func main() {
 	}
 
 	logrus.Infof("Starting backup-restore controller version %s (%s)", Version, GitCommit)
+	backup.Version = Version
 	ctx := signals.SetupSignalContext()
 	restKubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
 	if err != nil {

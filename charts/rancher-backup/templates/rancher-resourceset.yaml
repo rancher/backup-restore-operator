@@ -2,6 +2,8 @@ apiVersion: resources.cattle.io/v1
 kind: ResourceSet
 metadata:
   name: rancher-resource-set
+  labels:
+    version: {{ .Values.rsVersion | quote }}
 controllerReferences:
   - apiVersion: "apps/v1"
     resource: "deployments"

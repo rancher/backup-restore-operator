@@ -73,3 +73,7 @@ priorityClassName: ""
 # options: Always, Never, IfNotPresent
 # Defaults to Always
 imagePullPolicy: "Always"
+
+# ResourceSet version
+# We add the version to the resourceset resource to check if the correct resourceset is present in the cluster
+rsVersion: "%VERSION%"
