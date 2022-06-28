@@ -57,7 +57,7 @@ EOF
   ${KUBECTL_CMD} -n minio create secret generic tls-ssl-minio --from-literal=private.key="$PRIVATE_KEY" --from-literal=public.crt="$PUBLIC_CRT"
 
   echo "Installing Minio"
-  helm install --namespace minio --set rootUser=inspectorgadget,rootPassword=gogadgetgo --set tls.enabled=true,tls.certSecret=tls-ssl-minio --set replicas=1 --set resources.requests.memory=2Gi --set persistence.enabled=false --set drivesPerNode=0 --set pools=0 --set mode=standalone --set buckets[0].name=rancherbackups --set buckets[0].policy=none --set buckets[0].purge=true minio minio/minio
+  helm install --namespace minio --set rootUser=inspectorgadget,rootPassword=gogadgetgo --set tls.enabled=true,tls.certSecret=tls-ssl-minio --set replicas=1 --set resources.requests.memory=2Gi --set persistence.enabled=false --set drivesPerNode=0 --set pools=0 --set mode=standalone --set buckets[0].name=rancherbackups --set buckets[1].name=rancherbackups-insecure --set buckets[0].policy=none --set buckets[1].policy=none --set buckets[0].purge=true --set buckets[1].purge=true minio minio/minio
 
   while ! (${KUBECTL_CMD} --namespace minio rollout status --timeout 15s deploy/minio 2>/dev/null); do sleep 5; done
 
@@ -196,7 +196,26 @@ create_backup() {
     check_kubeconfig
   fi
 
-${KUBECTL_CMD} create -f - <<EOF
+  if [[ "$1" = "insecure" ]]; then
+    ${KUBECTL_CMD} create -f - <<EOF
+apiVersion: resources.cattle.io/v1
+kind: Backup
+metadata:
+  name: s3-recurring-backup-insecure
+spec:
+  storageLocation:
+    s3:
+      credentialSecretName: miniocreds
+      credentialSecretNamespace: default
+      bucketName: rancherbackups-insecure
+      endpoint: minio.minio.svc.cluster.local:9000
+      insecureTLSSkipVerify: true
+  resourceSetName: rancher-resource-set
+  schedule: "@every 30s"
+  retentionCount: 2
+EOF
+  else
+    ${KUBECTL_CMD} create -f - <<EOF
 apiVersion: resources.cattle.io/v1
 kind: Backup
 metadata:
@@ -213,6 +232,7 @@ spec:
   schedule: "@every 30s"
   retentionCount: 2
 EOF
+  fi
 }
 
 uninstall_charts() {
@@ -305,6 +325,10 @@ case $1 in
 
     create-backup)
       create_backup
+    ;;
+
+    create-backup-insecure)
+      create_backup insecure
     ;;
 
     remove-charts)

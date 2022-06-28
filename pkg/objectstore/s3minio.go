@@ -37,12 +37,13 @@ const (
 func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool) (*minio.Client, error) {
 	// Initialize minio client object.
 	log.WithFields(log.Fields{
-		"s3-endpoint":    bc.Endpoint,
-		"s3-bucketName":  bc.BucketName,
-		"s3-accessKey":   accessKey,
-		"s3-region":      bc.Region,
-		"s3-endpoint-ca": bc.EndpointCA,
-		"s3-folder":      bc.Folder,
+		"s3-endpoint":              bc.Endpoint,
+		"s3-bucketName":            bc.BucketName,
+		"s3-accessKey":             accessKey,
+		"s3-region":                bc.Region,
+		"s3-endpoint-ca":           bc.EndpointCA,
+		"s3-folder":                bc.Folder,
+		"insecure-tls-skip-verify": bc.InsecureTLSSkipVerify,
 	}).Info("invoking set s3 service client")
 
 	var err error
@@ -62,11 +63,9 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 		} else {
 			cred = *credentials.NewStatic(accessKey, secretKey, "", credentials.SignatureDefault)
 		}
-		if bc.EndpointCA != "" {
-			tr, err = setTransportCA(tr, bc.EndpointCA, bc.InsecureTLSSkipVerify)
-			if err != nil {
-				return nil, err
-			}
+		tr, err = setTransport(tr, bc.EndpointCA, bc.InsecureTLSSkipVerify)
+		if err != nil {
+			return nil, err
 		}
 		client, err = minio.New(bc.Endpoint, &minio.Options{
 			Creds:        &cred,
@@ -239,22 +238,22 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 	return targetFileLocation, nil
 }
 
-func setTransportCA(tr http.RoundTripper, endpointCA string, insecureSkipVerify bool) (http.RoundTripper, error) {
-	ca, err := readS3EndpointCA(endpointCA)
-	if err != nil {
-		return tr, err
-	}
-	if !isValidCertificate(ca) {
-		return tr, fmt.Errorf("s3-endpoint-ca is not a valid x509 certificate")
-	}
-
+func setTransport(tr http.RoundTripper, endpointCA string, insecureSkipVerify bool) (http.RoundTripper, error) {
 	certPool := x509.NewCertPool()
-	certPool.AppendCertsFromPEM(ca)
-
-	tr.(*http.Transport).TLSClientConfig = &tls.Config{
-		RootCAs:            certPool,
-		InsecureSkipVerify: insecureSkipVerify,
+	tlsConfig := &tls.Config{}
+	if endpointCA != "" {
+		ca, err := readS3EndpointCA(endpointCA)
+		if err != nil {
+			return tr, err
+		}
+		if !isValidCertificate(ca) {
+			return tr, fmt.Errorf("s3-endpoint-ca is not a valid x509 certificate")
+		}
+		certPool.AppendCertsFromPEM(ca)
+		tlsConfig.RootCAs = certPool
 	}
+	tlsConfig.InsecureSkipVerify = insecureSkipVerify
+	tr.(*http.Transport).TLSClientConfig = tlsConfig
 
 	return tr, nil
 }
