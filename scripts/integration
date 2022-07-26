@@ -4,11 +4,6 @@ function echo_with_time {
     echo "$(date --utc +%Y-%m-%dT%H:%M:%SZ) "$@""
 }
 
-if [ "$ARCH" != "amd64" ]; then
-    echo_with_time "Integration test only run on amd64"
-    exit 0
-fi
-
 source $(dirname $0)/version
 
 echo_with_time "INFO - Running $0"
@@ -24,7 +19,7 @@ echo_with_time 'Waiting for node to be ready ...'
 time timeout 300 bash -c 'while ! (k3s kubectl wait --for condition=ready node/$(hostname) 2>/dev/null); do sleep 5; done'
 time timeout 300 bash -c 'while ! (k3s kubectl --namespace kube-system rollout status --timeout 10s deploy/coredns 2>/dev/null); do sleep 5; done'
 
-k3s kubectl get nodes -o wide
+k3s kubectl get nodes -o wide --show-labels
 
 docker image save rancher/backup-restore-operator:$TAG -o /tmp/bro.img
 
@@ -50,6 +45,12 @@ k3s kubectl get pods -n cattle-resources-system
 time timeout 300 bash -c 'while ! (k3s kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
 
 k3s kubectl get pods -n cattle-resources-system
+
+# Minio not available for s390x, only test on amd64 and arm64
+if [ "$ARCH" = "s390x" ]; then
+    echo_with_time "Minio part of integration test only run on amd64 and arm64"
+    exit 0
+fi
 
 #Deploy Minio
 ./scripts/deploy minio
