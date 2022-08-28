@@ -73,3 +73,7 @@ priorityClassName: ""
 # options: Always, Never, IfNotPresent
 # Defaults to Always
 imagePullPolicy: "Always"
+
+## Optional array of imagePullSecrets containing private registry credentials
+## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+imagePullSecrets: []
