@@ -183,3 +183,16 @@ tests:
         key: "example-key"
         operator: "Exists"
         effect: "NoSchedule"
+- it: should not set default imagePullSecrets
+  template: deployment.yaml
+  asserts:
+  - isNull:
+      path: spec.template.spec.imagePullSecrets
+- it: should set imagePullSecrets
+  set:
+    imagePullSecrets: [ 'pull-secret' ]
+  template: deployment.yaml
+  asserts:
+  - equal:
+      path: spec.template.spec.imagePullSecrets[0]
+      value: "pull-secret"

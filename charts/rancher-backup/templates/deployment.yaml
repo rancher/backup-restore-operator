@@ -21,6 +21,10 @@ spec:
         checksum/pvc: {{ include (print $.Template.BasePath "/pvc.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "backupRestore.serviceAccountName" . }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{ toYaml .Values.imagePullSecrets | indent 6 }}
+      {{- end }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
