@@ -54,11 +54,6 @@ k3s kubectl get pods -n cattle-resources-system
 #Deploy Minio
 ./scripts/deploy minio
 
-#Create Backup
-./scripts/deploy create-backup
-
-time timeout 60 bash -c 'while ! (k3s kubectl wait --for condition=ready backup.resources.cattle.io/s3-recurring-backup 2>/dev/null); do k3s kubectl get backup.resources.cattle.io -A; sleep 2; done'
-
 export POD_NAME=$(k3s kubectl get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
 k3s kubectl port-forward $POD_NAME 9000 --namespace minio &
 sleep 10
@@ -85,28 +80,43 @@ EOF
 
 echo "$PUBLIC_CRT" > $HOME/.mc/certs/CAs/public.crt
 export MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@localhost:9000
-mc ls --quiet --no-color miniolocal/rancherbackups
-FIRSTBACKUP=$(mc ls --quiet --no-color miniolocal/rancherbackups | awk '{ print $NF }')
-if [[ $FIRSTBACKUP != s3-recurring-backup* ]]; then
-    echo_with_time "$FIRSTBACKUP does not start with 's3-recurring-backup'"
-    exit 1
-fi
-sleep 90
-for BACKUP in $(mc ls --quiet --no-color miniolocal/rancherbackups | awk '{ print $NF }'); do
-    echo_with_time $BACKUP
-    if [[ $BACKUP != s3-recurring-backup* ]]; then
-        echo_with_time "$BACKUP does not start with 's3-recurring-backup'"
+
+for BACKUP in rancherbackups-insecure rancherbackups; do
+
+    if [[ $BACKUP = "rancherbackups-insecure" ]]; then
+        # Backup without CA / insecure TLS configured
+        ./scripts/deploy create-backup-insecure
+
+        BACKUPRS_NAME="s3-recurring-backup-insecure"
+    else
+        ./scripts/deploy create-backup
+        BACKUPRS_NAME="s3-recurring-backup"
+    fi
+
+    time timeout 60 bash -c 'while ! (k3s kubectl wait --for condition=ready backup.resources.cattle.io/'"${BACKUPRS_NAME}"' 2>/dev/null); do k3s kubectl get backup.resources.cattle.io -A; k3s kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=-1; sleep 2; done'
+
+    mc ls --quiet --no-color "miniolocal/${BACKUP}"
+    FIRSTBACKUP=$(mc ls --quiet --no-color miniolocal/${BACKUP} | awk '{ print $NF }')
+    if [[ $FIRSTBACKUP != ${BACKUPRS_NAME}* ]]; then
+        echo_with_time "$FIRSTBACKUP does not start with [${BACKUPRS_NAME}]"
         exit 1
     fi
+    sleep 90
+    for BACKUPFILE in $(mc ls --quiet --no-color miniolocal/${BACKUP} | awk '{ print $NF }'); do
+        echo_with_time $BACKUPFILE
+        if [[ $BACKUPFILE != ${BACKUPRS_NAME}* ]]; then
+            echo_with_time "$BACKUPFILE does not start with [${BACKUPRS_NAME}]"
+            exit 1
+        fi
 
-    if [ "${BACKUP}" = "${FIRSTBACKUP}" ]; then
-        echo_with_time "First was not removed!"
-	exit 1
-    fi
+        if [ "${BACKUPFILE}" = "${FIRSTBACKUP}" ]; then
+            echo_with_time "First was not removed!"
+            exit 1
+        fi
+    done
+    # Disable the recurring back-ups by deleting the backup CRD
+    k3s kubectl delete "backup.resources.cattle.io/${BACKUPRS_NAME}"
 done
-
-# Disable the recurring back-ups by deleting the backup CRD
-k3s kubectl delete backup.resources.cattle.io/s3-recurring-backup
 
 # Restore resource with spec.preserveUnknownFields
 # https://github.com/rancher/backup-restore-operator/issues/186
