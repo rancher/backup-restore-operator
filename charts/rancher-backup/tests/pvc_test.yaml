@@ -86,3 +86,20 @@ tests:
   - equal:
       path: spec.volumeName
       value: "volume-name"
+- it: should set claim from custom static volumeName
+  set:
+    persistence.enabled: true
+    persistence.volumeName: "PREDEFINED-VOLUME"
+    persistence.storageClass: "PREDEFINED-STORAGECLASS"
+    persistence.size: "PREDEFINED-SAMEAS-PVSIZE"
+  template: pvc.yaml
+  set:
+    persistence:
+      enabled: true
+  asserts:
+  - equal:
+      path: spec.resources.requests.storage
+      value: "PREDEFINED-SAMEAS-PVSIZE"
+  - equal:
+      path: spec.storageClassName
+      value: "PREDEFINED-STORAGECLASS"
