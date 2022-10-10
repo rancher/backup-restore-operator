@@ -124,7 +124,7 @@ tests:
   - equal:
       path: spec.template.spec.volumes[0].persistentVolumeClaim
       value:
-        claimName: PREDEFINED-VOLUME-pvc
+        claimName: PREDEFINED-VOLUME
 - it: should set private registry
   template: deployment.yaml
   set:
