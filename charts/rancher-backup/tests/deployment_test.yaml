@@ -108,6 +108,23 @@ tests:
       path: spec.template.spec.volumes[0].persistentVolumeClaim
       value:
         claimName: RELEASE-NAME-0
+- it: should set claim from custom static volumeName
+  set:
+    persistence.enabled: true
+    persistence.volumeName: "PREDEFINED-VOLUME"
+    persistence.storageClass: "PREDEFINED-STORAGECLASS"
+    persistence.size: "PREDIFINED-SAMEAS-PVSIZE"
+  template: deployment.yaml
+  asserts:
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: DEFAULT_PERSISTENCE_ENABLED
+        value: "persistence-enabled"
+  - equal:
+      path: spec.template.spec.volumes[0].persistentVolumeClaim
+      value:
+        claimName: PREDEFINED-VOLUME
 - it: should set private registry
   template: deployment.yaml
   set:

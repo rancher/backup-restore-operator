@@ -75,9 +75,13 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-Create PVC name using release and revision number.
+Create PVC name using release and revision number, unless a volumeName is given.
 */}}
 {{- define "backupRestore.pvcName" -}}
+{{- if and .Values.persistence.volumeName }}
+{{- printf "%s" .Values.persistence.volumeName }}
+{{- else -}}
 {{- printf "%s-%d" .Release.Name .Release.Revision }}
+{{- end }}
 {{- end }}
 
