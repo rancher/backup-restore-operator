@@ -190,9 +190,10 @@ tests:
       path: spec.template.spec.imagePullSecrets
 - it: should set imagePullSecrets
   set:
-    imagePullSecrets: [ 'pull-secret' ]
+    imagePullSecrets:
+    - name: "pull-secret"
   template: deployment.yaml
   asserts:
   - equal:
-      path: spec.template.spec.imagePullSecrets[0]
+      path: spec.template.spec.imagePullSecrets[0].name
       value: "pull-secret"
