@@ -15,9 +15,9 @@ if [ -e ${DOCKERFILE}.${ARCH} ]; then
 fi
 
 if [[ ${USE_DOCKER_BUILDX} -eq 1 ]]; then
-    docker buildx build --platform linux/amd64 -f ${DOCKERFILE} . -t ${IMAGE} 
+    docker buildx build --build-arg K8S_VERSION_FROM_DRONE="${K8S_VERSION}" --platform linux/amd64 -f ${DOCKERFILE} . -t ${IMAGE} 
 else
-    docker build -f ${DOCKERFILE} -t ${IMAGE} .
+    docker build --build-arg K8S_VERSION_FROM_DRONE="${K8S_VERSION}" -f ${DOCKERFILE} -t ${IMAGE} .
 fi
 echo Built ${IMAGE}
 
