@@ -10,6 +10,18 @@ steps:
 - name: build
   image: rancher/dapper:v0.4.1
   commands:
+  - export K8S_VERSION_FROM_DRONE="v1.24"
+  - dapper ci
+  volumes:
+  - name: docker
+    path: /var/run/docker.sock
+  settings:
+    no_cache: true
+
+- name: build_no_psp
+  image: rancher/dapper:v0.4.1
+  commands:
+  - export K8S_VERSION_FROM_DRONE="stable"
   - dapper ci
   volumes:
   - name: docker
@@ -117,6 +129,16 @@ steps:
 - name: build
   image: rancher/dapper:v0.4.1
   commands:
+  - export K8S_VERSION_FROM_DRONE="v1.24"
+  - dapper ci
+  volumes:
+  - name: docker
+    path: /var/run/docker.sock
+
+- name: build_no_psp
+  image: rancher/dapper:v0.4.1
+  commands:
+  - export K8S_VERSION_FROM_DRONE="stable"
   - dapper ci
   volumes:
   - name: docker
@@ -206,10 +228,20 @@ steps:
   - name: build
     image: rancher/dapper:v0.5.8
     commands:
+      - export K8S_VERSION_FROM_DRONE="v1.24"
       - dapper ci
     volumes:
       - name: docker
         path: /var/run/docker.sock
+
+  - name: build_no_psp
+    image: rancher/dapper:v0.5.8
+    commands:
+    - export K8S_VERSION_FROM_DRONE="stable"
+    - dapper ci
+    volumes:
+    - name: docker
+      path: /var/run/docker.sock
 
   - name: github_binary_prerelease
     image: rancher/drone-images:github-release-s390x

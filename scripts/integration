@@ -19,6 +19,9 @@ echo_with_time 'Waiting for node to be ready ...'
 time timeout 300 bash -c 'while ! (k3s kubectl wait --for condition=ready node/$(hostname) 2>/dev/null); do sleep 5; done'
 time timeout 300 bash -c 'while ! (k3s kubectl --namespace kube-system rollout status --timeout 10s deploy/coredns 2>/dev/null); do sleep 5; done'
 
+echo_with_time "using kubectl and kubernetes versions:"
+k3s kubectl version
+
 k3s kubectl get nodes -o wide --show-labels
 
 docker image save rancher/backup-restore-operator:$TAG -o /tmp/bro.img
