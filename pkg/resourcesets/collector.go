@@ -35,20 +35,21 @@ type ResourceHandler struct {
 	GVResourceToObjects map[GVResource][]unstructured.Unstructured
 }
 
-/*  GatherResources iterates over the ResourceSelectors in the given ResourceSet
-   	Each ResourceSelector can specify only one apigroupversion, example "v1" or "management.cattle.io/v3"
-	ResourceSelector can specify resource types/kinds to backup from this apigroupversion through Kinds and KindsRegexp.
-	Resources matching Kinds and KindsRegexp both will be backed up
-	ResourceSelector can also specify names of particular resources of this groupversionkind to backup, using ResourceNames and ResourceNamesRegex
-	It can specify namespaces from which to backup these resources through Namespaces and NamespacesRegex
-	And it can provide a labelSelector to backup resources of this gvk+name+ns combination containing some label
-	For each value that has two fields, for regex and an array of exact names GatherResources performs OR
-	But it performs AND for separate selector types, example:
-	apiversion: v1
-	kinds: namespaces
-	resourceNamesRegex: "^cattle-|^p-|^c-|^user-|^u-"
-	resourceNames: "local"
-	All namespaces that match resourceNamesRegex, also local ns is backed up
+/*
+	  GatherResources iterates over the ResourceSelectors in the given ResourceSet
+	   	Each ResourceSelector can specify only one apigroupversion, example "v1" or "management.cattle.io/v3"
+		ResourceSelector can specify resource types/kinds to backup from this apigroupversion through Kinds and KindsRegexp.
+		Resources matching Kinds and KindsRegexp both will be backed up
+		ResourceSelector can also specify names of particular resources of this groupversionkind to backup, using ResourceNames and ResourceNamesRegex
+		It can specify namespaces from which to backup these resources through Namespaces and NamespacesRegex
+		And it can provide a labelSelector to backup resources of this gvk+name+ns combination containing some label
+		For each value that has two fields, for regex and an array of exact names GatherResources performs OR
+		But it performs AND for separate selector types, example:
+		apiversion: v1
+		kinds: namespaces
+		resourceNamesRegex: "^cattle-|^p-|^c-|^user-|^u-"
+		resourceNames: "local"
+		All namespaces that match resourceNamesRegex, also local ns is backed up
 */
 func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors []v1.ResourceSelector) error {
 	h.GVResourceToObjects = make(map[GVResource][]unstructured.Unstructured)
