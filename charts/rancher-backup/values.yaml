@@ -50,6 +50,8 @@ noProxy: 127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.svc,.cluster.local
 global:
   cattle:
     systemDefaultRegistry: ""
+    psp:
+      enabled: false # PSP enablement should default to false
   kubectl:
     repository: rancher/kubectl
     tag: v1.21.9
