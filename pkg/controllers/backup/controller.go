@@ -124,7 +124,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 				return h.setReconcilingCondition(backup, err)
 			}
 			if nextSnapshotTime.After(time.Now()) {
-				after := nextSnapshotTime.Sub(time.Now())
+				after := time.Until(nextSnapshotTime)
 				h.backups.EnqueueAfter(backup.Name, after)
 				if backup.Generation != backup.Status.ObservedGeneration {
 					backup.Status.ObservedGeneration = backup.Generation
@@ -192,7 +192,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		if cronSchedule != nil {
 			nextBackupAt := cronSchedule.Next(time.Now())
 			backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
-			after := nextBackupAt.Sub(time.Now())
+			after := time.Until(nextBackupAt)
 			h.backups.EnqueueAfter(backup.Name, after)
 			backup.Status.BackupType = "Recurring"
 		} else {

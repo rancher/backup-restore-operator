@@ -189,8 +189,7 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.ResourceSelector) ([]unstructured.Unstructured, error) {
 	var filteredByNamespace, filteredObjects []unstructured.Unstructured
 	gvr := gv.WithResource(res.Name)
-	var dr dynamic.ResourceInterface
-	dr = h.DynamicClient.Resource(gvr)
+	dr := h.DynamicClient.Resource(gvr)
 
 	// only resources that match name+namespace+label combination will be backed up, so we can filter in any order
 	filteredByName, err := h.filterByNameAndLabel(ctx, dr, filter)

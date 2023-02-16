@@ -257,7 +257,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 
 	// prune by default
-	if restore.Spec.Prune == nil || *restore.Spec.Prune == true {
+	if restore.Spec.Prune == nil || *restore.Spec.Prune {
 		logrus.Infof("Pruning resources that are not part of the backup for restore CR %v", restore.Name)
 		if err := h.prune(objFromBackupCR.backupResourceSet.ResourceSelectors, transformerMap, objFromBackupCR, restore.Spec.DeleteTimeoutSeconds); err != nil {
 			h.scaleUpControllersFromResourceSet(objFromBackupCR)
@@ -658,7 +658,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 		}
 	}
 	// Drop immutable metadata.deletionGracePeriodSeconds
-	deletionGracePeriodSeconds, _ := fileMapMetadata[deletionGracePeriodSecondsKey]
+	deletionGracePeriodSeconds := fileMapMetadata[deletionGracePeriodSecondsKey]
 	logrus.Tracef("deletionGracePeriodSeconds for %v of type %v: %v", restoreObjInfo.Name, restoreObjInfo.GVR, deletionGracePeriodSeconds)
 	if deletionGracePeriodSeconds != nil {
 		logrus.Infof("Removing metadata.deletionGracePeriodSeconds for %v of type %v because it is immutable", restoreObjInfo.Name, restoreObjInfo.GVR)

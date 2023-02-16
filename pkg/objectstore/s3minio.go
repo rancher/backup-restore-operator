@@ -8,22 +8,21 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
+	log "github.com/sirupsen/logrus"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/minio-go/v7/pkg/s3utils"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	log "github.com/sirupsen/logrus"
 )
 
 // Almost everything in this file is from rke-tools with some modifications https://github.com/rancher/rke-tools/blob/master/main.go
@@ -266,7 +265,7 @@ func readS3EndpointCA(endpointCA string) ([]byte, error) {
 	if err == nil {
 		log.Info("reading s3-endpoint-ca as a base64 string")
 	} else {
-		ca, err = ioutil.ReadFile(endpointCA)
+		ca, err = os.ReadFile(endpointCA)
 		log.Infof("reading s3-endpoint-ca from [%v]", endpointCA)
 	}
 	return ca, err
@@ -279,6 +278,7 @@ func isValidCertificate(c []byte) bool {
 	}
 	_, err := x509.ParseCertificates(p.Bytes)
 	if err != nil {
+		log.Errorf("failed to parse certificates: %v", err)
 		return false
 	}
 	return true
