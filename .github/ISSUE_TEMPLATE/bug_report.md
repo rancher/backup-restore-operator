@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-Rancher Server Setup
+**Rancher Server Setup**
 - Rancher version:
 - Installation option (Docker install/Helm Chart):
 - Kubernetes Version and Engine:
