@@ -8,7 +8,7 @@ platform:
 
 steps:
 - name: build
-  image: rancher/dapper:v0.4.1
+  image: rancher/dapper:v0.6.0
   commands:
   - export K8S_VERSION_FROM_DRONE="v1.24"
   - dapper ci
@@ -19,7 +19,7 @@ steps:
     no_cache: true
 
 - name: build_no_psp
-  image: rancher/dapper:v0.4.1
+  image: rancher/dapper:v0.6.0
   commands:
   - export K8S_VERSION_FROM_DRONE="stable"
   volumes:
@@ -126,7 +126,7 @@ platform:
 
 steps:
 - name: build
-  image: rancher/dapper:v0.4.1
+  image: rancher/dapper:v0.6.0
   commands:
   - export K8S_VERSION_FROM_DRONE="v1.24"
   - dapper ci
@@ -135,7 +135,7 @@ steps:
     path: /var/run/docker.sock
 
 - name: build_no_psp
-  image: rancher/dapper:v0.4.1
+  image: rancher/dapper:v0.6.0
   commands:
   - export K8S_VERSION_FROM_DRONE="stable"
   - dapper ci
@@ -225,7 +225,7 @@ node:
 
 steps:
   - name: build
-    image: rancher/dapper:v0.5.8
+    image: rancher/dapper:v0.6.0
     commands:
       - export K8S_VERSION_FROM_DRONE="v1.24"
       - dapper ci
@@ -234,7 +234,7 @@ steps:
         path: /var/run/docker.sock
 
   - name: build_no_psp
-    image: rancher/dapper:v0.5.8
+    image: rancher/dapper:v0.6.0
     commands:
     - export K8S_VERSION_FROM_DRONE="stable"
     - dapper ci
