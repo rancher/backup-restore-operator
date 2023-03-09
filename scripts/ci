@@ -9,4 +9,5 @@ cd $(dirname $0)
 ./validate-ci
 ./package
 ./chart/test
+./hull
 ./integration

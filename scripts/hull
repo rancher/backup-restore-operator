@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+cd $(dirname $0)/..
+
+
+cd tests
+echo "Running Hull Tests"
+go test -timeout 30s -run ^TestChart$ github.com/rancher/backup-restore-operator/tests/hull
+
+cd ..
