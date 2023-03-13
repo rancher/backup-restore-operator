@@ -18,3 +18,8 @@
   resourceNameRegexp: "machine-plan$|rke-state$|machine-state$|machine-driver-secret$|machine-provision$|^harvesterconfig"
   namespaces:
   - "fleet-default"
+- apiVersion: "v1"
+  kindsRegexp: "^configmaps$"
+  resourceNames:
+    - "provisioning-log"
+  namespaceRegexp: "^c-m-"
