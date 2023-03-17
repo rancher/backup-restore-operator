@@ -606,6 +606,17 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 	name := restoreObjInfo.Name
 	namespace := restoreObjInfo.Namespace
 	gvr := restoreObjInfo.GVR
+	// TEMPORARY HOTFIX: Don't restore secrets of type fleet.cattle.io/cluster-registration-values
+	if gvr.Resource == "secrets" {
+		secretType, found, err := unstructured.NestedString(obj.Object, "type")
+		if err != nil {
+			return err
+		}
+		if found && secretType == "fleet.cattle.io/cluster-registration-values" {
+			logrus.Infof("restoreResource: Skiping secret %s/%s since it has type fleet.cattle.io/cluster-registration-values", namespace, name)
+			return nil
+		}
+	}
 	var dr dynamic.ResourceInterface
 	dr = h.dynamicClient.Resource(gvr)
 	if namespace != "" {
