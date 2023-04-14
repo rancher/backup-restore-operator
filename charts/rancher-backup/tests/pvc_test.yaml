@@ -93,9 +93,6 @@ tests:
     persistence.storageClass: "PREDEFINED-STORAGECLASS"
     persistence.size: "PREDEFINED-SAMEAS-PVSIZE"
   template: pvc.yaml
-  set:
-    persistence:
-      enabled: true
   asserts:
   - equal:
       path: spec.resources.requests.storage
