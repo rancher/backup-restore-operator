@@ -9,7 +9,7 @@ replace (
 
 require (
 	github.com/minio/minio-go/v7 v7.0.24
-	github.com/rancher/lasso v0.0.0-20210616224652-fc3ebd901c08
+	github.com/rancher/lasso f2977a658e8e
 	github.com/rancher/wrangler v0.8.11-0.20220411195911-c2b951ab3480
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.8.1
