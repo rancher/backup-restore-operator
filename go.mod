@@ -14,10 +14,10 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
-	k8s.io/api v0.21.2
-	k8s.io/apiextensions-apiserver v0.18.0
-	k8s.io/apimachinery v0.21.2
-	k8s.io/apiserver v0.18.0
+	k8s.io/api v0.25.9
+	k8s.io/apiextensions-apiserver v0.25.9
+	k8s.io/apimachinery v0.25.9
+	k8s.io/apiserver v0.25.9
 	k8s.io/client-go v0.18.8
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 )
