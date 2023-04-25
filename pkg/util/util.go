@@ -1,8 +1,10 @@
 package util
 
 import (
-	"bytes"
+	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
 
 	v1core "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
@@ -22,7 +24,7 @@ const (
 
 var ChartNamespace string
 
-func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core.SecretController) (map[schema.GroupResource]value.Transformer, error) {
+func GetEncryptionTransformers(ctx context.Context, encryptionConfigSecretName string, secrets v1core.SecretController) (map[schema.GroupResource]value.Transformer, error) {
 	var transformerMap map[schema.GroupResource]value.Transformer
 	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
 	// kubectl create secret generic test-encryptionconfig --from-file=./encryption-provider-config.yaml
@@ -35,7 +37,16 @@ func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core
 	if !ok {
 		return transformerMap, fmt.Errorf("no encryptionConfig provided")
 	}
-	return encryptionconfig.ParseEncryptionConfiguration(bytes.NewReader(encryptionConfigBytes))
+	err = ioutil.WriteFile(encryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
+	defer os.Remove(encryptionProviderConfigKey)
+	if err != nil {
+		return transformerMap, err
+	}
+	transformerOverrides, err := encryptionconfig.GetTransformerOverrides("encryptionConfig.yaml")
+	if err != nil {
+		return transformerMap, err
+	}
+	return transformerOverrides, nil
 }
 
 func GetObjectQueue(l interface{}, capacity int) chan interface{} {
