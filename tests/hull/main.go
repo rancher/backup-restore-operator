@@ -19,7 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var ChartPath = utils.MustGetPathFromModuleRoot("..", "dist", "artifacts", "rancher-backup-0.0.0-dev.tgz")
+var ChartPath = utils.MustGetPathFromModuleRoot("..", "dist", "artifacts", GetChartVersionFromEnv())
 
 var (
 	DefaultReleaseName = "rancher-backup"
@@ -294,7 +294,6 @@ var suite = test.Suite{
 					debug := checker.MustRenderValue[bool](tc, ".Values.debug")
 					trace := checker.MustRenderValue[bool](tc, ".Values.trace")
 					for _, container := range podTemplateSpec.Spec.Containers {
-						tc.T.Logf("%v", container.Args)
 						if (trace) && (debug) {
 							assert.Contains(tc.T, container.Args, "--debug",
 								"expected container %s in %T %s to have --debug arg",
@@ -352,7 +351,6 @@ var suite = test.Suite{
 						return
 					}
 					ipp := checker.MustRenderValue[corev1.PullPolicy](tc, ".Values.imagePullPolicy")
-					tc.T.Logf("%v", ipp)
 					for _, container := range podTemplateSpec.Spec.Containers {
 						assert.Equal(tc.T, container.ImagePullPolicy, ipp,
 							"expected container %s in %T %s to have no args",
@@ -453,7 +451,6 @@ var suite = test.Suite{
 					endpointCA := checker.MustRenderValue[string](tc, ".Values.s3.endpointCA")
 					folder := checker.MustRenderValue[string](tc, ".Values.s3.folder")
 					insecureTLSSkipVerify := strconv.FormatBool(checker.MustRenderValue[bool](tc, ".Values.s3.insecureTLSSkipVerify"))
-					// tc.T.Logf("%v", insecureTLSSkipVerify)
 					region := checker.MustRenderValue[string](tc, ".Values.s3.region")
 					if s3Enabled {
 						assert.Equal(tc.T, bucketName, secret.StringData["bucketName"], "S3 Secret Improperly configured (bucketName)")
@@ -627,7 +624,6 @@ var suite = test.Suite{
 					if checker.Select("rancher-backup-patch-sa", "cattle-resources-system", obj) || proxy == "" {
 						return
 					}
-					tc.T.Logf("proxy:%s, noProxy:%s", proxy, noProxy)
 					envVar := []corev1.EnvVar([]corev1.EnvVar{
 						corev1.EnvVar{
 							Name:      "CHART_NAMESPACE",
@@ -669,7 +665,6 @@ var suite = test.Suite{
 						return
 					}
 					imagePullSecrets, _ := checker.RenderValue[[]corev1.LocalObjectReference](tc, ".Values.imagePullSecrets")
-					tc.T.Logf("ips: %v", imagePullSecrets)
 					if len(imagePullSecrets) > 0 {
 						assert.Equal(tc.T, imagePullSecrets, podTemplateSpec.Spec.ImagePullSecrets, "ImagePullSecrets in Deployment %s/%s do not have correct configuration", obj.GetNamespace(), obj.GetName())
 					}
