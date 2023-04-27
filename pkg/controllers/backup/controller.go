@@ -219,7 +219,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	transformerMap := make(map[schema.GroupResource]value.Transformer)
 	if backup.Spec.EncryptionConfigSecretName != "" {
 		logrus.Infof("Processing encryption config %v for backup CR %v", backup.Spec.EncryptionConfigSecretName, backup.Name)
-		transformerMap, err = util.GetEncryptionTransformers(backup.Spec.EncryptionConfigSecretName, h.secrets)
+		transformerMap, err = util.GetEncryptionTransformers(h.ctx, backup.Spec.EncryptionConfigSecretName, h.secrets)
 		if err != nil {
 			return err
 		}
@@ -236,6 +236,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
 		TransformerMap:  transformerMap,
+		Ctx:             h.ctx,
 	}
 	err = rh.GatherResources(h.ctx, resourceSetTemplate.ResourceSelectors)
 	if err != nil {

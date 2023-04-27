@@ -111,7 +111,7 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 			logrus.Errorf("Error unmarshaling encrypted data for resource [%v]: %v", gvr.GroupResource(), err)
 			return fmt.Errorf("error unmarshaling encrypted data for resource [%v]: %v", gvr.GroupResource(), err)
 		}
-		decrypted, _, err := decryptionTransformer.TransformFromStorage(encryptedBytes, value.DefaultContext(additionalAuthenticatedData))
+		decrypted, _, err := decryptionTransformer.TransformFromStorage(h.ctx, encryptedBytes, value.DefaultContext(additionalAuthenticatedData))
 		if err != nil {
 			logrus.Errorf("Error decrypting encrypted resource [%v]: %v, provide same encryption config as used for backup", gvr.GroupResource(), err)
 			return fmt.Errorf("error decrypting encrypted resource [%v]: %v, provide same encryption config as used for backup", gvr.GroupResource(), err)

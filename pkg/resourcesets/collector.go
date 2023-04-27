@@ -33,6 +33,7 @@ type ResourceHandler struct {
 	DynamicClient       dynamic.Interface
 	TransformerMap      map[schema.GroupResource]value.Transformer
 	GVResourceToObjects map[GVResource][]unstructured.Unstructured
+	Ctx                 context.Context
 }
 
 /*
@@ -493,7 +494,7 @@ func (h *ResourceHandler) WriteBackupObjects(backupPath string) error {
 			}
 
 			// TODO: POST-preview-2: collect all objects first and then write??
-			err := writeToBackup(resObj.Object, resourcePath, objFilename, encryptionTransformer, additionalAuthenticatedData)
+			err := writeToBackup(h.Ctx, resObj.Object, resourcePath, objFilename, encryptionTransformer, additionalAuthenticatedData)
 			if err != nil {
 				return err
 			}
@@ -513,7 +514,7 @@ func createResourceDir(path string) error {
 	return nil
 }
 
-func writeToBackup(resource map[string]interface{}, backupPath, filename string, transformer value.Transformer, additionalAuthenticatedData string) error {
+func writeToBackup(ctx context.Context, resource map[string]interface{}, backupPath, filename string, transformer value.Transformer, additionalAuthenticatedData string) error {
 	f, err := os.Create(filepath.Join(backupPath, filepath.Base(filename+".json")))
 	if err != nil {
 		return fmt.Errorf("error creating temp file: %v", err)
@@ -525,7 +526,7 @@ func writeToBackup(resource map[string]interface{}, backupPath, filename string,
 		return fmt.Errorf("error converting resource to JSON: %v", err)
 	}
 	if transformer != nil {
-		encrypted, err := transformer.TransformToStorage(resourceBytes, value.DefaultContext([]byte(additionalAuthenticatedData)))
+		encrypted, err := transformer.TransformToStorage(ctx, resourceBytes, value.DefaultContext([]byte(additionalAuthenticatedData)))
 		if err != nil {
 			return fmt.Errorf("error converting resource to JSON: %v", err)
 		}
