@@ -19,7 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var ChartPath = utils.MustGetPathFromModuleRoot("..", "dist", "artifacts", "rancher-backup-0.0.0-dev.tgz")
+var ChartPath = utils.MustGetPathFromModuleRoot("..", "dist", "artifacts", GetChartFileNameWithVersion())
 
 var (
 	DefaultReleaseName = "rancher-backup"
