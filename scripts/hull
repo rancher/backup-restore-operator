@@ -1,13 +1,23 @@
 #!/bin/bash
 set -e
 
-source $(dirname $0)/version
+function extract_version() {
+    artifact_dir="../dist/artifacts"
+    crdfilename=$( ls $artifact_dir | grep rancher-backup-crd )
+    regex="backup-crd-(.*)\\.tgz"
+    if [[ $crdfilename =~ $regex ]]
+    then
+        version="${BASH_REMATCH[1]}"
+        export CHART_VERSION=$version
+    fi
+}
+
+extract_version
 
 cd $(dirname $0)/..
 
 cd tests
-echo "Running Hull Tests"
-
+echo "Running Hull Tests on Chart Version: $CHART_VERSION"
 go test -timeout 30s -run ^TestChart$ github.com/rancher/backup-restore-operator/tests/hull
 
 cd ..

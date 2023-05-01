@@ -33,7 +33,3 @@ if echo $TAG | grep -q dirty; then
     HELM_TAG=$HELM_TAG_DEV
     HELM_VERSION=$HELM_VERSION_DEV
 fi
-
-export GIT_TAG=$GIT_TAG
-export HELM_VERSION_DEV=$HELM_VERSION_DEV
-export HELM_VERSION=$HELM_VERSION
