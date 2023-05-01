@@ -1,11 +1,18 @@
 package hull
 
-import "os"
+import (
+	"os"
+)
 
 func GetChartVersionFromEnv() string {
-	if os.Getenv("GIT_TAG") != "" {
+	switch droneBuildEvent := os.Getenv("DRONE_BUILD_EVENT"); droneBuildEvent {
+	case "push":
 		return "rancher-backup-" + os.Getenv("HELM_VERSION") + ".tgz"
-	} else {
+	case "pull_request":
 		return "rancher-backup-" + os.Getenv("HELM_VERSION_DEV") + ".tgz"
+	case "tag":
+		return "rancher-backup-" + os.Getenv("HELM_VERSION") + ".tgz"
+	default:
+		return "rancher-backup-" + os.Getenv("HELM_VERSION") + ".tgz"
 	}
 }
