@@ -1,15 +1,11 @@
 package hull
 
-import (
-	"flag"
-)
+import "os"
 
-var helm_version string
-
-func GetChartFileNameWithVersion() string {
-	flag.StringVar(&helm_version, "helm_version", "", "Helm Chart Version")
-	if helm_version == "" {
-		helm_version = "0.0.0-dev"
+func GetChartVersionFromEnv() string {
+	if os.Getenv("GIT_TAG") != "" {
+		return "rancher-backup-" + os.Getenv("HELM_VERSION") + ".tgz"
+	} else {
+		return "rancher-backup-" + os.Getenv("HELM_VERSION_DEV") + ".tgz"
 	}
-	return "rancher-backup-" + helm_version + ".tgz"
 }
