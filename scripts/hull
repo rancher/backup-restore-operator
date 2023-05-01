@@ -7,10 +7,7 @@ cd $(dirname $0)/..
 
 cd tests
 echo "Running Hull Tests"
-if [[ -z "$DIRTY" && -n "$GIT_TAG" ]]; then
-    go test -timeout 30s -run ^TestChart$ github.com/rancher/backup-restore-operator/tests/hull -helm_version=$HELM_VERSION
-else
-    go test -timeout 30s -run ^TestChart$ github.com/rancher/backup-restore-operator/tests/hull -helm_version=$HELM_VERSION_DEV
-fi
+
+go test -timeout 30s -run ^TestChart$ github.com/rancher/backup-restore-operator/tests/hull
 
 cd ..
