@@ -60,8 +60,6 @@ github.com/Masterminds/squirrel v1.5.3/go.mod h1:NNaOrjSoIDfDA40n7sr2tPNZRfjzjA4
 github.com/Microsoft/go-winio v0.5.2 h1:a9IhgEQBCUEk6QCdml9CiJGhAws+YwffDHEMp1VMrpA=
 github.com/Microsoft/hcsshim v0.9.6 h1:VwnDOgLeoi2du6dAznfmspNqTiwczvjv4K7NxuY9jsY=
 github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d h1:UrqY+r/OJnIp5u0s1SbQ8dVfLCZJsnvazdBP5hS4iRs=
-github.com/aiyengar2/hull v0.0.0-20230315163057-84fda59150e8 h1:5UZy3dlRrbzHEzTpGhrV7D+SckRSTfn3Gb6cSBPr/ek=
-github.com/aiyengar2/hull v0.0.0-20230315163057-84fda59150e8/go.mod h1:i8ZjXvZ80oIRAPLj1niWN9CD9oX3NVmLtwkc/A6eHpE=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
@@ -497,8 +495,8 @@ github.com/prometheus/procfs v0.6.0/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1
 github.com/prometheus/procfs v0.7.3/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1xBZuNvfVA=
 github.com/prometheus/procfs v0.8.0 h1:ODq8ZFEaYeCaZOJlZZdJA2AbQR98dSHSM1KW/You5mo=
 github.com/prometheus/procfs v0.8.0/go.mod h1:z7EfXMXOkbkqb9IINtpCn86r/to3BnA0uaxHdg830/4=
-github.com/rancher/hull v0.0.0-20230329190516-51af9be6b929 h1:0tH29T8JSJzgB6gsbfkRZEtHlI7dnCIb2iaxwytpuuY=
-github.com/rancher/hull v0.0.0-20230329190516-51af9be6b929/go.mod h1:zzX4GCX5B2QJT6B1cBE+JYaHRYK29eurtDZv2rNXJLU=
+github.com/rancher/hull v0.0.0-20230424152137-627ef5347afd h1:IhBX+7apT16PSNV8lvu3LT6nXJ6VuxSoaP9iJ/kofbI=
+github.com/rancher/hull v0.0.0-20230424152137-627ef5347afd/go.mod h1:zzX4GCX5B2QJT6B1cBE+JYaHRYK29eurtDZv2rNXJLU=
 github.com/rancher/lasso v0.0.0-20221227210133-6ea88ca2fbcc h1:29VHrInLV4qSevvcvhBj5UhQWkPShxrxv4AahYg2Scw=
 github.com/rancher/lasso v0.0.0-20221227210133-6ea88ca2fbcc/go.mod h1:dEfC9eFQigj95lv/JQ8K5e7+qQCacWs1aIA6nLxKzT8=
 github.com/rancher/wrangler v1.1.1 h1:wmqUwqc2M7ADfXnBCJTFkTB5ZREWpD78rnZMzmxwMvM=
