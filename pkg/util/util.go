@@ -42,7 +42,7 @@ func GetEncryptionTransformers(ctx context.Context, encryptionConfigSecretName s
 	if err != nil {
 		return transformerMap, err
 	}
-	transformerOverrides, err := encryptionconfig.GetTransformerOverrides("encryptionConfig.yaml")
+	transformerOverrides, err := encryptionconfig.GetTransformerOverrides(encryptionProviderConfigKey)
 	if err != nil {
 		return transformerMap, err
 	}
