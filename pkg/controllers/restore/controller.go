@@ -530,6 +530,11 @@ func customize(obj *unstructured.Unstructured) {
 			if err := unstructured.SetNestedField(obj.Object, int64(redeploySystemAgentGeneration+1), "spec", "redeploySystemAgentGeneration"); err != nil {
 				logrus.Warnf("Provisioning cluster %s/%s can't be reset to be re-imported, error: %v", obj.GetNamespace(), obj.GetName(), err)
 			}
+		case "management.cattle.io/v3":
+			//Set io.cattle.agent.force.deploy to true to force cattle-cluster-agent redeployment
+			annotations := obj.GetAnnotations()
+			annotations["io.cattle.agent.force.deploy"] = "true"
+			obj.SetAnnotations(annotations)
 		}
 	}
 }
