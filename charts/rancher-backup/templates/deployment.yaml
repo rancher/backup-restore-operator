@@ -57,6 +57,8 @@ spec:
           {{- if .Values.persistence.enabled }}
         - name: DEFAULT_PERSISTENCE_ENABLED
           value: "persistence-enabled"
+        resources:
+          {{- toYaml . | nindent 12 }}
         volumeMounts:
         - mountPath: "/var/lib/backups"
           name: pv-storage

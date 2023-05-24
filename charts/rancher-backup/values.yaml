@@ -64,6 +64,8 @@ tolerations: []
 
 affinity: {}
 
+resources: {}
+
 serviceAccount:
   annotations: {}
 
