@@ -30,7 +30,7 @@
   resourceNameRegexp: "elemental.cattle.io$"
 - apiVersion: "elemental.cattle.io/v1beta1"
   kindsRegexp: "."
-  namespaceRegexp: "^cattle-fleet-|^fleet-|^cluster-fleet-"
+  namespaceRegexp: "^cattle-fleet-|^fleet-"
 - apiVersion: "rbac.authorization.k8s.io/v1"
   kindsRegexp: "^roles$|^rolebindings$"
   labelSelectors:
@@ -38,7 +38,7 @@
     - key: "elemental.cattle.io/managed"
       operator: "In"
       values: ["true"]
-  namespaceRegexp: "^cattle-fleet-|^fleet-|^cluster-fleet-"
+  namespaceRegexp: "^cattle-fleet-|^fleet-"
 - apiVersion: "v1"
   kindsRegexp: "^secrets$|^serviceaccounts$"
   labelSelectors:
@@ -46,4 +46,4 @@
     - key: "elemental.cattle.io/managed"
       operator: "In"
       values: ["true"]
-  namespaceRegexp: "^cattle-fleet-|^fleet-|^cluster-fleet-"
+  namespaceRegexp: "^cattle-fleet-|^fleet-"
