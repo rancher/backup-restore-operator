@@ -3,7 +3,7 @@ module github.com/rancher/backup-restore-operator/tests
 go 1.19
 
 require (
-	github.com/rancher/hull v0.0.0-20230329190516-51af9be6b929
+	github.com/rancher/hull v0.0.0-20230424152137-627ef5347afd
 	github.com/stretchr/testify v1.8.1
 	k8s.io/api v0.26.1
 	k8s.io/apimachinery v0.26.1
