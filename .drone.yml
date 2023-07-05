@@ -326,7 +326,7 @@ platform:
 
 steps:
 - name: manifest
-  image: plugins/manifest:1.2.4
+  image: plugins/manifest:1.4.0
   settings:
     username:
       from_secret: docker_username
