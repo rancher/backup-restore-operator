@@ -7,7 +7,7 @@ replace golang.org/x/crypto => golang.org/x/crypto v0.0.0-20220411220226-7b82a4e
 require (
 	github.com/minio/minio-go/v7 v7.0.24
 	github.com/rancher/lasso v0.0.0-20210616224652-fc3ebd901c08
-	github.com/rancher/wrangler v1.0.2
+	github.com/rancher/wrangler v1.1.1
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.4
