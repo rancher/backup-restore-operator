@@ -12,11 +12,11 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/sync v0.1.0
-	k8s.io/api v0.24.0
-	k8s.io/apiextensions-apiserver v0.24.0
-	k8s.io/apimachinery v0.24.0
-	k8s.io/apiserver v0.24.0
-	k8s.io/client-go v0.24.0
+	k8s.io/api v0.25.14
+	k8s.io/apiextensions-apiserver v0.25.14
+	k8s.io/apimachinery v0.25.14
+	k8s.io/apiserver v0.25.14
+	k8s.io/client-go v0.25.14
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491
 )
 
