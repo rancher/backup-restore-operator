@@ -1,7 +1,6 @@
 package util
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -24,7 +23,7 @@ const (
 
 var ChartNamespace string
 
-func GetEncryptionTransformers(ctx context.Context, encryptionConfigSecretName string, secrets v1core.SecretController) (map[schema.GroupResource]value.Transformer, error) {
+func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core.SecretController) (map[schema.GroupResource]value.Transformer, error) {
 	var transformerMap map[schema.GroupResource]value.Transformer
 	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
 	// kubectl create secret generic test-encryptionconfig --from-file=./encryption-provider-config.yaml
