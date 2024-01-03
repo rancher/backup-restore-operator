@@ -19,7 +19,6 @@ RUN if [ "${ARCH}" != "s390x" ]; then \
 
 ENV K3S_BINARY_amd64=k3s \
     K3S_BINARY_arm64=k3s-arm64 \
-    K3S_BINARY_s390x=k3s-s390x \
     K3S_BINARY=K3S_BINARY_${ARCH}
 
 ARG K8S_VERSION_FROM_DRONE
