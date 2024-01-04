@@ -233,7 +233,6 @@ steps:
     platforms:
       - linux/amd64
       - linux/arm64
-      - linux/s390x
     target: "rancher/backup-restore-operator:${DRONE_TAG}"
     template: "rancher/backup-restore-operator:${DRONE_TAG}-ARCH"
   when:
