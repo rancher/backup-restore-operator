@@ -13,9 +13,9 @@
 
 ### Branches and Releases
 
+*  the tag `v5.x.x` is cut from the `release/v5.0` branch for Rancher v2.9.x line
 *  the tag `v4.x.x` is cut from the `release/v4.0` branch for Rancher v2.8.x line
 *  the tag `v3.x.x` is cut from the `release/v3.0` branch for Rancher v2.7.x line
-*  the tag `v2.x.x` is cut from the `release/v2.0` branch for Rancher v2.6.x line
 ----
 
 ### Quickstart
