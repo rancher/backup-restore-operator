@@ -259,9 +259,9 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 
 	// filter out using ExcludeResourceNameRegexp
 	if filter.ExcludeResourceNameRegexp != "" {
-                if filter.ResourceNameRegexp == "" {
-                       filteredByName = resourceObjectsList.Items
-                }
+		if filter.ResourceNameRegexp == "" {
+			filteredByName = resourceObjectsList.Items
+		}
 		var newFilteredByName []unstructured.Unstructured
 		for _, resObj := range filteredByName {
 			metadata := resObj.Object["metadata"].(map[string]interface{})
