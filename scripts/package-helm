@@ -2,16 +2,16 @@
 set -e
 
 function edit-charts() {
-    sed -i \
+    sed -i.bak \
         -e 's/^version:.*/version: '${1}'/' \
         -e 's/^appVersion:.*/appVersion: '${1}'/' \
         build/charts/rancher-backup/Chart.yaml
 
-    sed -i \
+    sed -i.bak \
         -e 's/%TAG%/'${2}'/' \
         build/charts/rancher-backup/values.yaml
 
-    sed -i \
+    sed -i.bak \
         -e 's/^version:.*/version: '${1}'/' \
         -e 's/^appVersion:.*/appVersion: '${1}'/' \
         build/charts/rancher-backup-crd/Chart.yaml
