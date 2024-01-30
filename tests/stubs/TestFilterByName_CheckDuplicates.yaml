@@ -1,0 +1,48 @@
+---
+apiVersion: v1
+kind: Food
+metadata:
+  name: hotdog
+  namespace: hotdog-stand
+---
+apiVersion: v1
+kind: Food
+metadata:
+  name: hotdog-with-cheese
+  namespace: hotdog-stand
+---
+apiVersion: v1
+kind: Food
+metadata:
+  name: hotdog
+  namespace: hotdog-cart
+---
+apiVersion: v1
+kind: Food
+metadata:
+  name: popsicle
+  namespace: hotdog-cart
+---
+apiVersion: v1
+kind: Food
+metadata:
+  name: hamburger-with-cheese
+  namespace: hamburger-hut
+---
+apiVersion: v1
+kind: Food
+metadata:
+  name: cheeseburger
+  namespace: hamburger-hut
+---
+apiVersion: v1
+kind: Food
+metadata:
+  name: hamburger
+  namespace: hamburger-hut
+---
+apiVersion: v1
+kind: Food
+metadata:
+  name: raw-potato
+  namespace: hotdog-cart
