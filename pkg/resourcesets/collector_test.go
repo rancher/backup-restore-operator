@@ -8,6 +8,7 @@ import (
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/stretchr/testify/assert"
+	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
@@ -57,8 +58,27 @@ func abstractFilterByNameTest(t *testing.T, filter v1.ResourceSelector, stubPath
 
 	// Create an instance of ResourceHandler
 	handler := &ResourceHandler{}
-	resourceObjectsList = handler.appendTempUID(resourceObjectsList)
 	result, err := handler.filterByName(filter, resourceObjectsList)
+	assert.NoError(t, err)
+
+	return result
+}
+
+func abstractFilterByKindTest(t *testing.T, filter v1.ResourceSelector, stubPath string) []k8sv1.APIResource {
+	// Construct resourceObjectsList from a folder of '.yaml' files
+	resourceObjectsList, err := grabTestStubs(t, stubPath+".yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an instance of ResourceHandler
+	handler := &ResourceHandler{}
+	// Convert to k8sv1.APIResource
+	apiResources := make([]k8sv1.APIResource, len(resourceObjectsList))
+	for i, x := range resourceObjectsList {
+		apiResources[i] = k8sv1.APIResource{Name: x.GetName(), Kind: x.GetKind()}
+	}
+	result, err := handler.filterByKind(filter, apiResources)
 	assert.NoError(t, err)
 
 	return result
@@ -68,6 +88,48 @@ func getObjectPropertyFromMetadataByKey(object unstructured.Unstructured, key st
 	metadata := object.Object["metadata"].(map[string]interface{})
 	value := metadata[key].(string)
 	return value
+}
+
+func TestFilterByKind_CheckDuplicates(t *testing.T) {
+	// Verify that matching by both KindRegexp and Kinds doesn't create duplicates
+	var kindNames []string
+	kindNames = append(kindNames, "Movie")
+	mockFilter := v1.ResourceSelector{
+		KindsRegexp: "^[MC]o",
+		Kinds:       kindNames,
+	}
+
+	result := abstractFilterByKindTest(t, mockFilter, getCurrentFuncName())
+
+	// Make specific asserts on the results here - verify no false positives and no missed items.
+	assert.NotNil(t, result)
+	assert.Equal(t, 5, len(result))
+	for _, obj := range result {
+		assert.NotEqual(t, "Music", obj.Kind)
+	}
+
+	// Same data, but with exclusion only. Verify that everything is matched
+	mockFilter = v1.ResourceSelector{
+		KindsRegexp:  "",
+		Kinds:        []string{},
+		ExcludeKinds: []string{"Coffee"}, // This isn't hit, because the other kind-filters are empty
+	}
+	result = abstractFilterByKindTest(t, mockFilter, getCurrentFuncName())
+	assert.NotNil(t, result)
+	assert.Equal(t, 9, len(result))
+
+	// Same data, verify a kind-thing works
+	mockFilter = v1.ResourceSelector{
+		KindsRegexp:  "",
+		Kinds:        []string{"Coffee"},
+		ExcludeKinds: []string{"Shovels"},
+	}
+	result = abstractFilterByKindTest(t, mockFilter, getCurrentFuncName())
+	assert.NotNil(t, result)
+	assert.Equal(t, 2, len(result))
+	for _, obj := range result {
+		assert.Equal(t, "Coffee", obj.Kind)
+	}
 }
 
 func TestFilterByName_EmptyFilter(t *testing.T) {
@@ -235,5 +297,5 @@ func TestResourceHandler_filterByName_then_filterByNamespace(t *testing.T) {
 	namespaceResult, _ := handler.filterByNamespace(mockFilter, result)
 	assert.NotNil(t, namespaceResult)
 	// Disabled for now to let tests pass.
-	/// assert.Equal(t, 5, len(namespaceResult)) // Should be 5 after bug fix
+	assert.Equal(t, 5, len(namespaceResult)) // Should be 5 after bug fix
 }
