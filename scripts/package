@@ -6,7 +6,11 @@ source $(dirname $0)/version
 cd $(dirname $0)/..
 
 mkdir -p dist/artifacts
-cp bin/backup-restore-operator dist/artifacts/backup-restore-operator${SUFFIX}
+if [ "$CROSS_ARCH" != "true" ]; then
+  cp bin/backup-restore-operator dist/artifacts/backup-restore-operator${SUFFIX}
+else
+  cp bin/backup-restore-operator${SUFFIX} dist/artifacts/
+fi
 
 IMAGE=${REPO}/backup-restore-operator:${TAG}
 DOCKERFILE=package/Dockerfile

@@ -11,8 +11,19 @@ if [ "$(uname)" = "Linux" ]; then
 fi
 LINKFLAGS="-X main.Version=$VERSION"
 LINKFLAGS="-X main.GitCommit=$COMMIT $LINKFLAGS"
-CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o bin/backup-restore-operator
-if [ "$CROSS" = "true" ] && [ "$ARCH" = "amd64" ]; then
+if [ "$CROSS_ARCH" != "true" ]; then
+  CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o bin/backup-restore-operator
+  if [ "$CROSS" = "true" ] && [ "$ARCH" = "amd64" ]; then
     GOOS=darwin go build -ldflags "$LINKFLAGS" -o bin/backup-restore-operator-darwin
     GOOS=windows go build -ldflags "$LINKFLAGS" -o bin/backup-restore-operator-windows
+  fi
+else
+  GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o bin/backup-restore-operator
+  CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o "bin/backup-restore-operator$SUFFIX"
+  if [ "$CROSS" = "true" ]; then
+    GOARCH=amd64 GOOS=darwin go build -ldflags "$LINKFLAGS" -o bin/backup-restore-operator-darwin
+    GOOS=darwin go build -ldflags "$LINKFLAGS" -o "bin/backup-restore-operator-darwin$SUFFIX"
+    GOARCH=amd64 GOOS=windows go build -ldflags "$LINKFLAGS" -o bin/backup-restore-operator-windows
+    GOOS=windows go build -ldflags "$LINKFLAGS" -o "bin/backup-restore-operator-windows$SUFFIX"
+  fi
 fi
