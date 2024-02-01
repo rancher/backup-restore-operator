@@ -63,7 +63,10 @@ If you want to interact with the Minio deployed in the cluster, you can use the 
 
 ### Building on Different Architectures
 
-Currently we only support building this chart for amd64 nodes. The binary built by `make build` is set to build for amd64 and we have also included a flag for users running different architectures when trying to package the code into a docker image. Setting `USE_DOCKER_BUILDX=1` will force the package script to use docker buildx, setting the target platform to build for amd64. If you do not have `docker-buildx` installed please reference [this page](https://docs.docker.com/buildx/working-with-buildx/).
+Currently, we only support building this chart fully for `amd64` nodes. The binary and image building scripts will build "arch native" by default.
+So when building on `amd64` the resulting binary and image will both be `amd64` - same for `arm64`. This is how the drone builds operate.
+
+We have also included a flag for users running different architectures when trying to package the code into an `amd64` docker image. Building the binary with `CROSS_ARCH=true` set will cause it to build `amd64` and `arm64` binaries, and then setting `USE_DOCKER_BUILDX=1` will force the package script to use docker buildx, setting the container's target platform to build for `amd64`. If you do not have `docker-buildx` installed please reference [this page](https://docs.docker.com/buildx/working-with-buildx/).
 
 
 ### Developer Uninstallation
