@@ -123,7 +123,6 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 }
 
 func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.ResourceSelector) ([]unstructured.Unstructured, error) {
-	var filteredByNamespace, filteredObjects []unstructured.Unstructured
 	gvr := gv.WithResource(res.Name)
 	var dr dynamic.ResourceInterface
 	dr = h.DynamicClient.Resource(gvr)
@@ -132,26 +131,18 @@ func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv
 	// however, in practice filtering by label happens at an API level when we paginate the resources (creating our initial list)
 	filteredByLabel, err := h.filterByLabel(ctx, dr, filter)
 	if err != nil {
-		return filteredObjects, err
+		return nil, err
 	}
 
 	filteredByName, err := h.filterByName(filter, filteredByLabel.Items)
 	if err != nil {
-		return filteredObjects, err
+		return nil, err
 	}
 
 	if res.Namespaced {
-		if len(filter.Namespaces) > 0 || filter.NamespaceRegexp != "" {
-			filteredByNamespace, err = h.filterByNamespace(filter, filteredByName)
-			if err != nil {
-				return filteredObjects, err
-			}
-			filteredObjects = filteredByNamespace
-			return filteredObjects, nil
-		}
+		return h.filterByNamespace(filter, filteredByName)
 	}
-	filteredObjects = filteredByName
-	return filteredObjects, nil
+	return filteredByName, nil
 }
 
 func (h *ResourceHandler) filterByLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector) (*unstructured.UnstructuredList, error) {
@@ -166,12 +157,7 @@ func (h *ResourceHandler) filterByLabel(ctx context.Context, dr dynamic.Resource
 		logrus.Debugf("Listing objects using label selector %v", labelSelector)
 	}
 
-	resourceObjectsList, err := unrollPaginatedListResult(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector})
-	if err != nil {
-		return nil, err
-	}
-
-	return resourceObjectsList, nil
+	return unrollPaginatedListResult(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector})
 }
 
 func (h *ResourceHandler) filterByKind(filter v1.ResourceSelector, apiResources []k8sv1.APIResource) ([]k8sv1.APIResource, error) {
@@ -185,30 +171,33 @@ func (h *ResourceHandler) filterByKind(filter v1.ResourceSelector, apiResources 
 		var err error
 		kindRegexp, err = regexp.Compile(filter.KindsRegexp)
 		if err != nil {
-			return resourceList, err
+			return nil, err
 		}
 	}
-	allowedNames := make(map[string]bool)
-	disallowedNames := make(map[string]bool)
+	allowedKinds := make(map[string]bool)
+	disallowedKinds := make(map[string]bool)
 	for _, name := range filter.Kinds {
-		allowedNames[name] = true
+		allowedKinds[name] = true
 	}
 	for _, name := range filter.ExcludeKinds {
-		disallowedNames[name] = true
+		disallowedKinds[name] = true
 	}
 
 	// "resources" list has all resources under given groupVersion, first filter based on KindsRegexp
 	// Look for a match in either `Kind` (singular name) or `Name` (plural name).
-	// If an exclusion includes either of `Kind` or `Name`, then it's excluded, even if we matched on the other.
+	// If we match by regexp, we need to consider exclusions by both `Kind` and `Name`
+	// This means we can regexp-match on `Name` but will exclude due to matching on `Kind`, for example
 	for _, resObj := range apiResources {
-		includeIt := allowedNames[resObj.Kind] || allowedNames[resObj.Name]
-		if !includeIt && kindRegexp != nil {
-			includeIt = filter.KindsRegexp == "." || (kindRegexp.MatchString(resObj.Kind) || kindRegexp.MatchString(resObj.Name))
+		if allowedKinds[resObj.Kind] || allowedKinds[resObj.Name] {
+			resourceList = append(resourceList, resObj)
+			continue
 		}
-		if includeIt {
-			if !disallowedNames[resObj.Kind] && !disallowedNames[resObj.Name] {
-				resourceList = append(resourceList, resObj)
-			}
+		if kindRegexp == nil {
+			continue
+		}
+		if (filter.KindsRegexp == "." || kindRegexp.MatchString(resObj.Kind) || kindRegexp.MatchString(resObj.Name)) &&
+			!disallowedKinds[resObj.Kind] && !disallowedKinds[resObj.Name] {
+			resourceList = append(resourceList, resObj)
 		}
 	}
 	return resourceList, nil
@@ -238,13 +227,13 @@ func (h *ResourceHandler) filterByName(filter v1.ResourceSelector, resourceObjec
 	if resourceNameRegexpStr != "" {
 		resourceNameRegexp, err = regexp.Compile(resourceNameRegexpStr)
 		if err != nil {
-			return filteredByName, err
+			return nil, err
 		}
 	}
 	if excludeResourceNameRegexpStr != "" {
 		excludeResourceNameRegexp, err = regexp.Compile(excludeResourceNameRegexpStr)
 		if err != nil {
-			return filteredByName, err
+			return nil, err
 		}
 	}
 
@@ -276,7 +265,6 @@ func (h *ResourceHandler) filterByName(filter v1.ResourceSelector, resourceObjec
 func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filteredByName []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
 	var filteredObjects []unstructured.Unstructured
 	var namespaceRegexp *regexp.Regexp
-	var excludeNamespaceRegexp *regexp.Regexp
 
 	if len(filter.Namespaces) == 0 && filter.NamespaceRegexp == "" {
 		return filteredByName, nil
@@ -286,15 +274,7 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 		logrus.Debugf("Using NamespaceRegexp %s to filter resource names", filter.NamespaceRegexp)
 		namespaceRegexp, err = regexp.Compile(filter.NamespaceRegexp)
 		if err != nil {
-			return filteredObjects, err
-		}
-	}
-	if filter.ExcludeResourceNameRegexp != "" {
-		var err error
-		logrus.Debugf("Using ExcludeResourceNameRegexp %s to filter resource names", filter.ExcludeResourceNameRegexp)
-		excludeNamespaceRegexp, err = regexp.Compile(filter.ExcludeResourceNameRegexp)
-		if err != nil {
-			return filteredObjects, err
+			return nil, err
 		}
 	}
 	allowedNamespaces := make(map[string]bool)
@@ -303,15 +283,8 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 	}
 	for _, resObj := range filteredByName {
 		namespace := resObj.GetNamespace()
-		includeIt := allowedNamespaces[namespace]
-		if !includeIt && filter.NamespaceRegexp != "" {
-			if filter.NamespaceRegexp == "." || namespaceRegexp.MatchString(namespace) {
-				if excludeNamespaceRegexp == nil || !excludeNamespaceRegexp.MatchString(namespace) {
-					includeIt = true
-				}
-			}
-		}
-		if includeIt {
+		if allowedNamespaces[namespace] ||
+			(filter.NamespaceRegexp != "" && (filter.NamespaceRegexp == "." || namespaceRegexp.MatchString(namespace))) {
 			filteredObjects = append(filteredObjects, resObj)
 		}
 	}
@@ -365,7 +338,7 @@ func (h *ResourceHandler) gatherObjectsForNonListResource(ctx context.Context, r
 			for _, name := range filter.ResourceNames {
 				obj, err := dr.Get(ctx, name, k8sv1.GetOptions{})
 				if err != nil {
-					return gatheredObjects, err
+					return nil, err
 				}
 				gatheredObjects = append(gatheredObjects, *obj)
 			}
@@ -500,15 +473,5 @@ func canGetResource(verbs k8sv1.Verbs) bool {
 			return true
 		}
 	}
-	return false
-}
-
-func isKindExcluded(excludes []string, res k8sv1.APIResource) bool {
-	for _, exclude := range excludes {
-		if exclude == res.Name || exclude == res.Kind {
-			return true
-		}
-	}
-
 	return false
 }
