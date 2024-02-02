@@ -199,11 +199,13 @@ func (h *ResourceHandler) filterByKind(filter v1.ResourceSelector, apiResources 
 
 	// "resources" list has all resources under given groupVersion, first filter based on KindsRegexp
 	// Look for a match in either `Kind` (singular name) or `Name` (plural name).
-	// If an exclusion includes either of them, then it's excluded, even if we matched on the other.
+	// If an exclusion includes either of `Kind` or `Name`, then it's excluded, even if we matched on the other.
 	for _, resObj := range apiResources {
-		if allowedNames[resObj.Kind] || allowedNames[resObj.Name] ||
-			filter.KindsRegexp == "." ||
-			(kindRegexp != nil && (kindRegexp.MatchString(resObj.Kind) || kindRegexp.MatchString(resObj.Name))) {
+		includeIt := allowedNames[resObj.Kind] || allowedNames[resObj.Name]
+		if !includeIt && kindRegexp != nil {
+			includeIt = filter.KindsRegexp == "." || (kindRegexp.MatchString(resObj.Kind) || kindRegexp.MatchString(resObj.Name))
+		}
+		if includeIt {
 			if !disallowedNames[resObj.Kind] && !disallowedNames[resObj.Name] {
 				resourceList = append(resourceList, resObj)
 			}
@@ -274,6 +276,7 @@ func (h *ResourceHandler) filterByName(filter v1.ResourceSelector, resourceObjec
 func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filteredByName []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
 	var filteredObjects []unstructured.Unstructured
 	var namespaceRegexp *regexp.Regexp
+	var excludeNamespaceRegexp *regexp.Regexp
 
 	if len(filter.Namespaces) == 0 && filter.NamespaceRegexp == "" {
 		return filteredByName, nil
@@ -286,14 +289,29 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 			return filteredObjects, err
 		}
 	}
+	if filter.ExcludeResourceNameRegexp != "" {
+		var err error
+		logrus.Debugf("Using ExcludeResourceNameRegexp %s to filter resource names", filter.ExcludeResourceNameRegexp)
+		excludeNamespaceRegexp, err = regexp.Compile(filter.ExcludeResourceNameRegexp)
+		if err != nil {
+			return filteredObjects, err
+		}
+	}
 	allowedNamespaces := make(map[string]bool)
 	for _, ns := range filter.Namespaces {
 		allowedNamespaces[ns] = true
 	}
 	for _, resObj := range filteredByName {
-		metadata := resObj.Object["metadata"].(map[string]interface{})
-		namespace := metadata["namespace"].(string)
-		if allowedNamespaces[namespace] || filter.NamespaceRegexp == "" || filter.NamespaceRegexp == "." || namespaceRegexp.MatchString(namespace) {
+		namespace := resObj.GetNamespace()
+		includeIt := allowedNamespaces[namespace]
+		if !includeIt && filter.NamespaceRegexp != "" {
+			if filter.NamespaceRegexp == "." || namespaceRegexp.MatchString(namespace) {
+				if excludeNamespaceRegexp == nil || !excludeNamespaceRegexp.MatchString(namespace) {
+					includeIt = true
+				}
+			}
+		}
+		if includeIt {
 			filteredObjects = append(filteredObjects, resObj)
 		}
 	}
