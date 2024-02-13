@@ -187,47 +187,30 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 }
 
 func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.ResourceSelector) ([]unstructured.Unstructured, error) {
-	var filteredByNamespace, filteredObjects []unstructured.Unstructured
 	gvr := gv.WithResource(res.Name)
-	var dr dynamic.ResourceInterface
-	dr = h.DynamicClient.Resource(gvr)
+	dr := h.DynamicClient.Resource(gvr)
 
 	// only resources that match name+namespace+label combination will be backed up, so we can filter in any order
 	// however, in practice filtering by label happens at an API level when we paginate the resources (creating our initial list)
 	filteredByLabel, err := h.filterByLabel(ctx, dr, filter)
 	if err != nil {
-		return filteredObjects, err
+		return nil, err
 	}
 
-	filteredByLabelItems := h.appendTempUID(filteredByLabel.Items)
-	filteredByName, err := h.filterByName(filter, filteredByLabelItems)
+	filteredByName, err := h.filterByName(filter, filteredByLabel.Items)
 	if err != nil {
-		return filteredObjects, err
+		return nil, err
 	}
 
 	if res.Namespaced {
 		if len(filter.Namespaces) > 0 || filter.NamespaceRegexp != "" {
-			filteredByNamespace, err = h.filterByNamespace(filter, filteredByName)
-			if err != nil {
-				return filteredObjects, err
-			}
-			filteredObjects = filteredByNamespace
-			return filteredObjects, nil
+			return h.filterByNamespace(filter, filteredByName)
 		}
 	}
-	filteredObjects = filteredByName
-	return filteredObjects, nil
+	return filteredByName, nil
 }
 
-func (h *ResourceHandler) appendTempUID(filteredByLabel []unstructured.Unstructured) []unstructured.Unstructured {
-	// Prepare each object with a temp UID (not saved back to the CRD)
-	for id, obj := range filteredByLabel {
-		address := &filteredByLabel[id]
-		obj.Object["filterUid"] = fmt.Sprintf("%p", address)
-	}
-	return filteredByLabel
-}
-
+// filterByLabel actually uses a label selector to fetch, unroll, and return the initial list of objects
 func (h *ResourceHandler) filterByLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector) (*unstructured.UnstructuredList, error) {
 	var labelSelector string
 
@@ -249,96 +232,49 @@ func (h *ResourceHandler) filterByLabel(ctx context.Context, dr dynamic.Resource
 }
 
 func (h *ResourceHandler) filterByName(filter v1.ResourceSelector, resourceObjectsList []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
-	var filteredByName, filteredByResourceNames []unstructured.Unstructured
+	var filteredByName []unstructured.Unstructured
 
 	if len(filter.ResourceNames) == 0 && filter.ResourceNameRegexp == "" && filter.ExcludeResourceNameRegexp == "" {
 		// no filters for names of the resource, return all objects obtained from the list call
 		return resourceObjectsList, nil
 	}
 
-	filteredByNameMap := make(map[string]bool)
+	// Map to store included names for fast lookup
+	includeNameMap := make(map[string]bool)
+	for _, name := range filter.ResourceNames {
+		includeNameMap[name] = true
+	}
 
-	// filter out using ResourceNameRegexp
+	var includeRegex *regexp.Regexp
 	if filter.ResourceNameRegexp != "" {
-		logrus.Debugf("Using ResourceNameRegexp [%s] to filter resource names", filter.ResourceNameRegexp)
-		for _, resObj := range resourceObjectsList {
-			if filter.ResourceNameRegexp != "." {
-				metadata := resObj.Object["metadata"].(map[string]interface{})
-				name := metadata["name"].(string)
-				nameMatched, err := regexp.MatchString(filter.ResourceNameRegexp, name)
-				if err != nil {
-					return filteredByName, err
-				}
-				if !nameMatched {
-					logrus.Debugf("Skipping [%s] because it did not match ResourceNameRegexp [%s]", name, filter.ResourceNameRegexp)
-					continue
-				}
-			}
-			filteredByName = append(filteredByName, resObj)
-			key := resObj.Object["filterUid"].(string)
-			filteredByNameMap[key] = true
-		}
+		includeRegex = regexp.MustCompile(filter.ResourceNameRegexp)
 	}
-
-	// filter out using ExcludeResourceNameRegexp
+	var excludeRegex *regexp.Regexp
 	if filter.ExcludeResourceNameRegexp != "" {
-		if filter.ResourceNameRegexp == "" {
-			filteredByName = resourceObjectsList
-		}
-		var newFilteredByName []unstructured.Unstructured
-		for _, resObj := range filteredByName {
-			metadata := resObj.Object["metadata"].(map[string]interface{})
-			name := metadata["name"].(string)
-			nameMatched, err := regexp.MatchString(filter.ExcludeResourceNameRegexp, name)
-			if err != nil {
-				return filteredByName, err
-			}
-			if nameMatched {
-				logrus.Debugf("Skipping [%s] because it did match ExcludeResourceNameRegexp [%s]", name, filter.ExcludeResourceNameRegexp)
-				key := resObj.Object["filterUid"].(string)
-				filteredByNameMap[key] = false
-				continue
-			}
-			newFilteredByName = append(newFilteredByName, resObj)
-			key := resObj.Object["filterUid"].(string)
-			filteredByNameMap[key] = true
-		}
-		filteredByName = newFilteredByName
+		excludeRegex = regexp.MustCompile(filter.ExcludeResourceNameRegexp)
 	}
-	// filter by names as fieldSelector:
-	if len(filter.ResourceNames) > 0 {
-		logrus.Debugf("Using ResourceNames [%s] to filter resource names", strings.Join(filter.ResourceNames, ","))
-		allowedNames := make(map[string]bool)
-		for _, name := range filter.ResourceNames {
-			allowedNames[name] = true
-		}
-		for _, resObj := range resourceObjectsList {
-			metadata := resObj.Object["metadata"].(map[string]interface{})
-			name := metadata["name"].(string)
-			if allowedNames[name] {
-				filteredByResourceNames = append(filteredByResourceNames, resObj)
-			}
-		}
 
-		if len(filteredByResourceNames) == 0 {
-			// exact names were provided, but no resources found by that name
-			// so return anything obtained from matching resource names by regex
-			// if that list is empty too, means nothing matched the filters
-			return filteredByName, nil
-		}
-		if len(filteredByNameMap) > 0 {
-			// avoid duplicates
-			for _, resObj := range filteredByResourceNames {
-				key := resObj.Object["filterUid"].(string)
-				if !filteredByNameMap[key] {
-					filteredByName = append(filteredByName, resObj)
+	for resObjID := range resourceObjectsList {
+		// Check if the name is in the includeNames list
+		name := resourceObjectsList[resObjID].GetName()
+		if includeNameMap[name] {
+			filteredByName = append(filteredByName, resourceObjectsList[resObjID])
+			logrus.Debugf("Including [%s] because it matched a name in ResourceNames", name)
+		} else {
+			if filter.ResourceNameRegexp != "" || filter.ExcludeResourceNameRegexp != "" {
+				includeMatch := includeRegex == nil || includeRegex.MatchString(name)
+
+				if includeMatch {
+					excludeMatch := excludeRegex != nil && excludeRegex.MatchString(name)
+					if !excludeMatch {
+						filteredByName = append(filteredByName, resourceObjectsList[resObjID])
+						logrus.Debugf("Including [%s] because it matched ResourceNameRegexp [%s] and didn't match ExcludeResourceNameRegexp [%s]", name, filter.ResourceNameRegexp, filter.ExcludeResourceNameRegexp)
+					}
 				}
 			}
-		} else {
-			filteredByName = filteredByResourceNames
 		}
-
 	}
+
 	return filteredByName, nil
 }
 
