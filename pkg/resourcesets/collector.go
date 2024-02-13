@@ -187,81 +187,112 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 }
 
 func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv1.APIResource, gv schema.GroupVersion, filter v1.ResourceSelector) ([]unstructured.Unstructured, error) {
-	var filteredByNamespace, filteredObjects []unstructured.Unstructured
+	var filteredByNamespace []unstructured.Unstructured
 	gvr := gv.WithResource(res.Name)
 	var dr dynamic.ResourceInterface
 	dr = h.DynamicClient.Resource(gvr)
 
 	// only resources that match name+namespace+label combination will be backed up, so we can filter in any order
-	filteredByName, err := h.filterByNameAndLabel(ctx, dr, filter)
+	// however, in practice filtering by label happens at an API level when we paginate the resources (creating our initial list)
+	filteredByLabel, err := h.filterByLabel(ctx, dr, filter)
 	if err != nil {
-		return filteredObjects, err
+		return nil, err
+	}
+
+	filteredByLabelItems := h.appendTempUID(filteredByLabel.Items)
+	filteredByName, err := h.filterByName(filter, filteredByLabelItems)
+	if err != nil {
+		return nil, err
 	}
 
 	if res.Namespaced {
 		if len(filter.Namespaces) > 0 || filter.NamespaceRegexp != "" {
 			filteredByNamespace, err = h.filterByNamespace(filter, filteredByName)
 			if err != nil {
-				return filteredObjects, err
+				return nil, err
 			}
-			filteredObjects = filteredByNamespace
-			return filteredObjects, nil
+			return h.removeFilterUid(filteredByNamespace), nil
 		}
 	}
-	filteredObjects = filteredByName
-	return filteredObjects, nil
+	return h.removeFilterUid(filteredByName), nil
 }
 
-func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector) ([]unstructured.Unstructured, error) {
-	var filteredByName, filteredByResourceNames []unstructured.Unstructured
+func (h *ResourceHandler) appendTempUID(filteredByLabel []unstructured.Unstructured) []unstructured.Unstructured {
+	// Prepare each object with a temp UID (not saved back to the CRD)
+	for id, obj := range filteredByLabel {
+		address := &filteredByLabel[id]
+		obj.Object["filterUid"] = fmt.Sprintf("%p", address)
+	}
+	return filteredByLabel
+}
+
+func (h *ResourceHandler) removeFilterUid(filteredObjects []unstructured.Unstructured) []unstructured.Unstructured {
+	// Prepare each object with a temp UID (not saved back to the CRD)
+	for _, obj := range filteredObjects {
+		delete(obj.Object, "filterUid")
+	}
+	return filteredObjects
+}
+
+func (h *ResourceHandler) filterByLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector) (*unstructured.UnstructuredList, error) {
 	var labelSelector string
 
 	if filter.LabelSelectors != nil {
 		selector, err := k8sv1.LabelSelectorAsSelector(filter.LabelSelectors)
 		if err != nil {
-			return filteredByName, err
+			return nil, err
 		}
 		labelSelector = selector.String()
 		logrus.Debugf("Listing objects using label selector %v", labelSelector)
 	}
 
-	resourceObjectsList, err := paginateListResults(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector})
+	resourceObjectsList, err := unrollPaginatedListResult(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
-		return filteredByName, err
+		return nil, err
 	}
-	filteredByNameMap := make(map[*unstructured.Unstructured]bool)
+
+	return resourceObjectsList, nil
+}
+
+func (h *ResourceHandler) filterByName(filter v1.ResourceSelector, resourceObjectsList []unstructured.Unstructured) ([]unstructured.Unstructured, error) {
+	var filteredByName, filteredByResourceNames []unstructured.Unstructured
 
 	if len(filter.ResourceNames) == 0 && filter.ResourceNameRegexp == "" && filter.ExcludeResourceNameRegexp == "" {
 		// no filters for names of the resource, return all objects obtained from the list call
-		return resourceObjectsList.Items, nil
+		return resourceObjectsList, nil
 	}
+
+	filteredByNameMap := make(map[string]bool)
+
 	// filter out using ResourceNameRegexp
 	if filter.ResourceNameRegexp != "" {
 		logrus.Debugf("Using ResourceNameRegexp [%s] to filter resource names", filter.ResourceNameRegexp)
-		if filter.ResourceNameRegexp == "." {
-			// "." will match everything, so return all resources obtained from the list call
-			return resourceObjectsList.Items, nil
-		}
-
-		for _, resObj := range resourceObjectsList.Items {
-			metadata := resObj.Object["metadata"].(map[string]interface{})
-			name := metadata["name"].(string)
-			nameMatched, err := regexp.MatchString(filter.ResourceNameRegexp, name)
-			if err != nil {
-				return filteredByName, err
-			}
-			if !nameMatched {
-				logrus.Debugf("Skipping [%s] because it did not match ResourceNameRegexp [%s]", name, filter.ResourceNameRegexp)
-				continue
+		for _, resObj := range resourceObjectsList {
+			if filter.ResourceNameRegexp != "." {
+				metadata := resObj.Object["metadata"].(map[string]interface{})
+				name := metadata["name"].(string)
+				nameMatched, err := regexp.MatchString(filter.ResourceNameRegexp, name)
+				if err != nil {
+					return filteredByName, err
+				}
+				if !nameMatched {
+					logrus.Debugf("Skipping [%s] because it did not match ResourceNameRegexp [%s]", name, filter.ResourceNameRegexp)
+					continue
+				}
 			}
 			filteredByName = append(filteredByName, resObj)
-			filteredByNameMap[&resObj] = true
+			key := resObj.Object["filterUid"].(string)
+			filteredByNameMap[key] = true
 		}
 	}
 
 	// filter out using ExcludeResourceNameRegexp
 	if filter.ExcludeResourceNameRegexp != "" {
-		for _, resObj := range resourceObjectsList.Items {
+		if filter.ResourceNameRegexp == "" {
+			filteredByName = resourceObjectsList
+		}
+		var newFilteredByName []unstructured.Unstructured
+		for _, resObj := range filteredByName {
 			metadata := resObj.Object["metadata"].(map[string]interface{})
 			name := metadata["name"].(string)
 			nameMatched, err := regexp.MatchString(filter.ExcludeResourceNameRegexp, name)
@@ -269,27 +300,25 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 				return filteredByName, err
 			}
 			if nameMatched {
-				logrus.Debugf("Skipping %s because it did not match ExcludeResourceNameRegexp %s", name, filter.ExcludeResourceNameRegexp)
+				logrus.Debugf("Skipping [%s] because it did match ExcludeResourceNameRegexp [%s]", name, filter.ExcludeResourceNameRegexp)
+				key := resObj.Object["filterUid"].(string)
+				filteredByNameMap[key] = false
 				continue
 			}
-			filteredByName = append(filteredByName, resObj)
-			filteredByNameMap[&resObj] = true
+			newFilteredByName = append(newFilteredByName, resObj)
+			key := resObj.Object["filterUid"].(string)
+			filteredByNameMap[key] = true
 		}
+		filteredByName = newFilteredByName
 	}
-
 	// filter by names as fieldSelector:
 	if len(filter.ResourceNames) > 0 {
 		logrus.Debugf("Using ResourceNames [%s] to filter resource names", strings.Join(filter.ResourceNames, ","))
-		// TODO: POST-preview-2: set resourceVersion later when it becomes clear how to use it
-		filteredObjectsList, err := paginateListResults(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector})
-		if err != nil {
-			return filteredByName, err
-		}
 		allowedNames := make(map[string]bool)
 		for _, name := range filter.ResourceNames {
 			allowedNames[name] = true
 		}
-		for _, resObj := range filteredObjectsList.Items {
+		for _, resObj := range resourceObjectsList {
 			metadata := resObj.Object["metadata"].(map[string]interface{})
 			name := metadata["name"].(string)
 			if allowedNames[name] {
@@ -306,7 +335,8 @@ func (h *ResourceHandler) filterByNameAndLabel(ctx context.Context, dr dynamic.R
 		if len(filteredByNameMap) > 0 {
 			// avoid duplicates
 			for _, resObj := range filteredByResourceNames {
-				if !filteredByNameMap[&resObj] {
+				key := resObj.Object["filterUid"].(string)
+				if !filteredByNameMap[key] {
 					filteredByName = append(filteredByName, resObj)
 				}
 			}
@@ -378,7 +408,7 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 	return filteredObjects, nil
 }
 
-func paginateListResults(ctx context.Context, dr dynamic.ResourceInterface, listOptions k8sv1.ListOptions) (*unstructured.UnstructuredList, error) {
+func unrollPaginatedListResult(ctx context.Context, dr dynamic.ResourceInterface, listOptions k8sv1.ListOptions) (*unstructured.UnstructuredList, error) {
 	var resourceObjectsList *unstructured.UnstructuredList
 	listOptions.Limit = ListObjectsLimit
 	resourceObjectsListFirst, err := dr.List(ctx, listOptions)
