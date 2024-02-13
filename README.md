@@ -16,6 +16,8 @@
 *  the tag `v5.x.x` is cut from the `release/v5.0` branch for Rancher v2.9.x line
 *  the tag `v4.x.x` is cut from the `release/v4.0` branch for Rancher v2.8.x line
 *  the tag `v3.x.x` is cut from the `release/v3.0` branch for Rancher v2.7.x line
+
+Note that this repo doesn't use the `master` branch. The branch matching `release/v<MAX>.0/` is the effective master branch.
 ----
 
 ### Quickstart
