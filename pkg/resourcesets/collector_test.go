@@ -57,7 +57,6 @@ func abstractFilterByNameTest(t *testing.T, filter v1.ResourceSelector, stubPath
 
 	// Create an instance of ResourceHandler
 	handler := &ResourceHandler{}
-	resourceObjectsList = handler.appendTempUID(resourceObjectsList)
 	result, err := handler.filterByName(filter, resourceObjectsList)
 	assert.NoError(t, err)
 
