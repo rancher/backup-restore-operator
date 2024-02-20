@@ -83,7 +83,7 @@ list_minio_files() {
   fi
 
   docker run --rm --net=host -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc ls --insecure miniolocal/rancherbackups
-  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+  kill -9 "$(pgrep -f "kubectl.*port-forward.*minio")"
 }
 
 retrieve_minio_files() {
@@ -108,7 +108,7 @@ retrieve_minio_files() {
   mkdir $MINIO_FILES_DIR
 
   docker run --rm --net=host -v "${PWD}/${MINIO_FILES_DIR}":/data -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc cp --insecure --recursive miniolocal/rancherbackups/ /data/
-  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+  kill -9 "$(pgrep -f "kubectl.*port-forward.*minio")"
 
   echo "Copied all files from Minio to ./${MINIO_FILES_DIR}"
 }
@@ -135,7 +135,7 @@ copy_minio_files() {
   echo "Copying from directory ${SOURCE_FILES_DIR}"
 
   docker run --rm --net=host -v "${PWD}/${SOURCE_FILES_DIR}":/data -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc cp --insecure --recursive /data/ miniolocal/rancherbackups/
-  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+  kill -9 "$(pgrep -f "kubectl.*port-forward.*minio")"
 
   echo "Copied all files from directory ${SOURCE_FILES_DIR} to Minio"
 }
@@ -160,7 +160,7 @@ reset_minio_bucket() {
 
   docker run --rm --net=host -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc rb --insecure --force miniolocal/rancherbackups
   docker run --rm --net=host -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc mb --insecure miniolocal/rancherbackups
-  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+  kill -9 "$(pgrep -f "kubectl.*port-forward.*minio")"
 
   echo "Deleted and created the 'rancherbackups' bucket"
 }
@@ -255,7 +255,7 @@ create_restore() {
     check_kubeconfig
   fi
 
-  if [[ "$1" = "insecure" ]]; then
+  if [[ "$insecure" = "true" ]]; then
     ${KUBECTL_CMD} create -f - <<EOF
 apiVersion: resources.cattle.io/v1
 kind: Restore
