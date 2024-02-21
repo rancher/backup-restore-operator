@@ -8,6 +8,7 @@ import (
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/stretchr/testify/assert"
+	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
@@ -40,6 +41,20 @@ func grabTestStubs(t *testing.T, filename string) ([]unstructured.Unstructured, 
 	return resourceObjectsList, nil
 }
 
+func abstractFilterByKindTest(t *testing.T, filter v1.ResourceSelector, stubPath string) []k8sv1.APIResource {
+	// Construct resourceObjectsList from a folder of '.yaml' files
+	resourceObjectsList, err := grabTestStubs(t, stubPath+".yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// kinds work on APIResource objects. The subsequent filters work on
+	// unstructured.Unstructured objects
+	handler := &ResourceHandler{}
+	result, err := handler.filterByKind(filter, apiResourcesFromUnstructured(resourceObjectsList))
+	assert.NoError(t, err)
+	return result
+}
+
 func abstractFilterByNameTest(t *testing.T, filter v1.ResourceSelector, stubPath string) []unstructured.Unstructured {
 	// Construct resourceObjectsList from a folder of '.yaml' files
 	resourceObjectsList, err := grabTestStubs(t, stubPath+".yaml")
@@ -53,6 +68,17 @@ func abstractFilterByNameTest(t *testing.T, filter v1.ResourceSelector, stubPath
 	assert.NoError(t, err)
 
 	return result
+}
+
+func apiResourcesFromUnstructured(resourceObjectsList []unstructured.Unstructured) []k8sv1.APIResource {
+	apiResources := make([]k8sv1.APIResource, len(resourceObjectsList))
+	for i, obj := range resourceObjectsList {
+		apiResources[i] = k8sv1.APIResource{
+			Kind: obj.GetKind(),
+			Name: obj.GetName(),
+		}
+	}
+	return apiResources
 }
 
 func TestFilterByName_EmptyFilter(t *testing.T) {
@@ -145,14 +171,6 @@ func TestFilterByName_ResourceNamesRegexWithStaticNames(t *testing.T) {
 	assert.Equal(t, 1, len(result))
 	assert.Equal(t, "gitjob", result[0].GetName())
 }
-func memberOf(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
-}
 
 func TestFilterByName_OnlyResourceNames(t *testing.T) {
 	// Results should be any items with these 3 exact names.
@@ -208,6 +226,94 @@ func TestFilterByName_ExcludeRegexWithResourceNameMiss(t *testing.T) {
 	assert.Equal(t, 4, len(result))
 }
 
+func TestFilterByName_CatchInvalidNameRegexp(t *testing.T) {
+	// Construct resourceObjectsList from a folder of '.yaml' files
+	resourceObjectsList, err := grabTestStubs(t, "hamburgerStand01.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filter := v1.ResourceSelector{
+		ResourceNameRegexp:        "orphaned open paren: ) is invalid",
+		ExcludeResourceNameRegexp: ".",
+	}
+
+	// Create an instance of ResourceHandler
+	handler := &ResourceHandler{}
+	_, err = handler.filterByName(filter, resourceObjectsList)
+	assert.Error(t, err)
+}
+func TestFilterByName_CatchInvalidExcludeNameRegexp(t *testing.T) {
+	// Construct resourceObjectsList from a folder of '.yaml' files
+	resourceObjectsList, err := grabTestStubs(t, "hamburgerStand01.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filter := v1.ResourceSelector{
+		ResourceNameRegexp:        "closed-brace.{3}",
+		ExcludeResourceNameRegexp: "(unclosed paren",
+	}
+
+	// Create an instance of ResourceHandler
+	handler := &ResourceHandler{}
+	_, err = handler.filterByName(filter, resourceObjectsList)
+	assert.Error(t, err)
+}
+
+// kind-related tests: Kinds: []string, ExcludeKinds: []string, KindsRegexp: string
+
+func TestFilterByKind_KindsOnly(t *testing.T) {
+	kinds := []string{"Cat", "Dog"}
+	mockFilter := v1.ResourceSelector{
+		Kinds: kinds,
+	}
+
+	result := abstractFilterByKindTest(t, mockFilter, "pets02DifferentKinds")
+
+	// Make specific asserts on the results here - verify no false positives and no missed items.
+	assert.NotNil(t, result)
+	assert.Equal(t, 3, len(result))
+}
+
+func TestFilterByKind_KindsRegexp(t *testing.T) {
+	kinds := []string{"Dog"}
+	mockFilter := v1.ResourceSelector{
+		Kinds:       kinds,
+		KindsRegexp: `^Cat\b`,
+	}
+
+	result := abstractFilterByKindTest(t, mockFilter, "pets02DifferentKinds")
+
+	// Make specific asserts on the results here - verify no false positives and no missed items.
+	assert.NotNil(t, result)
+	assert.Equal(t, 3, len(result))
+}
+
+func TestFilterByKind_CatlikeButExcludeCats(t *testing.T) {
+	mockFilter := v1.ResourceSelector{
+		ExcludeKinds: []string{"Cat"},
+		KindsRegexp:  ".",
+	}
+
+	result := abstractFilterByKindTest(t, mockFilter, "pets02DifferentKinds")
+
+	// Make specific asserts on the results here - verify no false positives and no missed items.
+	assert.NotNil(t, result)
+	assert.Equal(t, 4, len(result))
+}
+
+func TestFilterByKind_BadIncludesRegexp(t *testing.T) {
+	resourceObjectsList, err := grabTestStubs(t, "pets02DifferentKinds.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filter := v1.ResourceSelector{
+		KindsRegexp: "bad: [missing close-bracket",
+	}
+	handler := &ResourceHandler{}
+	_, err = handler.filterByKind(filter, apiResourcesFromUnstructured(resourceObjectsList))
+	assert.Error(t, err)
+}
+
 // Intentionally failing due to existing bugs
 // TODO: Expand filterByNamespace to test more scenarios like previous regex tests...
 func TestResourceHandler_filterByName_then_filterByNamespace(t *testing.T) {
@@ -227,4 +333,26 @@ func TestResourceHandler_filterByName_then_filterByNamespace(t *testing.T) {
 	namespaceResult, _ := handler.filterByNamespace(mockFilter, result)
 	assert.NotNil(t, namespaceResult)
 	assert.Equal(t, 4, len(namespaceResult)) // Should be 5 after bug fix
+}
+
+func TestFilterByNamespace_BadNamespaceRegexp(t *testing.T) {
+	resourceObjectsList, err := grabTestStubs(t, "pets02DifferentKinds.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filter := v1.ResourceSelector{
+		NamespaceRegexp: ")",
+	}
+	handler := &ResourceHandler{}
+	_, err = handler.filterByNamespace(filter, resourceObjectsList)
+	assert.Error(t, err)
+}
+
+func memberOf(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }
