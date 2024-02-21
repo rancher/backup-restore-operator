@@ -136,25 +136,19 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 			}
 			return resourceListFromRegex, nil
 		}
+		kindsRegexp, err := regexp.Compile(filter.KindsRegexp)
+		if err != nil {
+			return nil, fmt.Errorf("error in kindsRegexp pattern %s: %w", filter.KindsRegexp, err)
+		}
 		// else filter out resource with regex match
 		for _, res := range resources.APIResources {
 			if isKindExcluded(filter.ExcludeKinds, res) {
 				continue
 			}
-			kindMatched, err := regexp.MatchString(filter.KindsRegexp, res.Kind)
-			if err != nil {
-				return resourceList, err
+			if kindsRegexp.MatchString(res.Kind) || kindsRegexp.MatchString(res.Name) {
+				logrus.Debugf("resource kind %s/%s, matched regex %s", res.Kind, res.Name, filter.KindsRegexp)
+				resourceListFromRegex = append(resourceListFromRegex, res)
 			}
-			pluralNameMatched, err := regexp.MatchString(filter.KindsRegexp, res.Name)
-			if err != nil {
-				return resourceList, err
-			}
-			if !kindMatched && !pluralNameMatched {
-				continue
-			}
-
-			logrus.Debugf("resource kind %v, matched regex %v", res.Name, filter.KindsRegexp)
-			resourceListFromRegex = append(resourceListFromRegex, res)
 		}
 	}
 
@@ -244,12 +238,19 @@ func (h *ResourceHandler) filterByName(filter v1.ResourceSelector, resourceObjec
 	}
 
 	var includeRegex *regexp.Regexp
+	var err error
 	if filter.ResourceNameRegexp != "" {
-		includeRegex = regexp.MustCompile(filter.ResourceNameRegexp)
+		includeRegex, err = regexp.Compile(filter.ResourceNameRegexp)
+		if err != nil {
+			return nil, fmt.Errorf("error in resource-name pattern %s: %w", filter.ResourceNameRegexp, err)
+		}
 	}
 	var excludeRegex *regexp.Regexp
 	if filter.ExcludeResourceNameRegexp != "" {
-		excludeRegex = regexp.MustCompile(filter.ExcludeResourceNameRegexp)
+		excludeRegex, err = regexp.Compile(filter.ExcludeResourceNameRegexp)
+		if err != nil {
+			return nil, fmt.Errorf("error in exclude-resource-name pattern %s: %w", filter.ResourceNameRegexp, err)
+		}
 	}
 
 	for resObjID := range resourceObjectsList {
@@ -288,7 +289,7 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 		logrus.Debugf("Using NamespaceRegexp %s to filter resource names", filter.NamespaceRegexp)
 		namespaceRegexp, err = regexp.Compile(filter.NamespaceRegexp)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error in namespace pattern %s: %w", filter.NamespaceRegexp, err)
 		}
 	}
 	allowedNamespaces := make(map[string]bool)
