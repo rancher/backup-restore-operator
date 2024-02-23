@@ -195,9 +195,10 @@ func (h *ResourceHandler) filterByKind(filter v1.ResourceSelector, apiResources 
 		if kindRegexp == nil {
 			continue
 		}
-		if (filter.KindsRegexp == "." || kindRegexp.MatchString(resObj.Kind) || kindRegexp.MatchString(resObj.Name)) &&
-			!disallowedKinds[resObj.Kind] && !disallowedKinds[resObj.Name] {
-			resourceList = append(resourceList, resObj)
+		if kindRegexp.MatchString(resObj.Kind) || kindRegexp.MatchString(resObj.Name) {
+			if !disallowedKinds[resObj.Kind] && !disallowedKinds[resObj.Name] {
+				resourceList = append(resourceList, resObj)
+			}
 		}
 	}
 	return resourceList, nil
@@ -279,7 +280,7 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 	for _, resObj := range filteredByName {
 		namespace := resObj.GetNamespace()
 		if allowedNamespaces[namespace] ||
-			(filter.NamespaceRegexp != "" && (filter.NamespaceRegexp == "." || namespaceRegexp.MatchString(namespace))) {
+			(filter.NamespaceRegexp != "" && namespaceRegexp.MatchString(namespace)) {
 			filteredObjects = append(filteredObjects, resObj)
 		}
 	}
