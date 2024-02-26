@@ -1,0 +1,18 @@
+---
+apiVersion: v1
+kind: Cat
+metadata:
+  name: oscar
+  namespace: dans-house
+---
+apiVersion: v1
+kind: Cat
+metadata:
+  name: dash
+  namespace: dans-house
+---
+apiVersion: v1
+kind: Dog
+metadata:
+  name: millie
+  namespace: kevins-house
