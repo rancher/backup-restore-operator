@@ -11,8 +11,28 @@ if [ "$(uname)" = "Linux" ]; then
 fi
 LINKFLAGS="-X main.Version=$VERSION"
 LINKFLAGS="-X main.GitCommit=$COMMIT $LINKFLAGS"
-CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o bin/backup-restore-operator
-if [ "$CROSS" = "true" ] && [ "$ARCH" = "amd64" ]; then
-    GOOS=darwin go build -ldflags "$LINKFLAGS" -o bin/backup-restore-operator-darwin
-    GOOS=windows go build -ldflags "$LINKFLAGS" -o bin/backup-restore-operator-windows
+
+case "$ARCH" in
+  amd64) XARCH=arm64 ; THIS_SUFFIX="" ; X_SUFFIX="-arm64" ;;
+  arm64) XARCH=amd64 ; THIS_SUFFIX="-arm64" ; X_SUFFIX="" ;;
+  *) echo "Unsupported ARCH of $ARCH" 1>&2 ; exit 1
+esac
+
+CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o "bin/backup-restore-operator${THIS_SUFFIX}"
+
+# Set CROSS to build for other platforms
+if [ "$CROSS" = "true" ]; then
+  for OS in darwin windows ; do
+        GOOS=$OS go build -ldflags "$LINKFLAGS" -o "bin/backup-restore-operator-$OS${THIS_SUFFIX}"
+  done
+fi
+
+# Set CROSS_ARCH to build for other architectures (one only currently)
+if [ "$CROSS_ARCH" == "true" ]; then
+  GOARCH=$XARCH CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o "bin/backup-restore-operator${X_SUFFIX}"
+  if [ "$CROSS" = "true" ]; then
+    for OS in darwin windows ; do
+      GOARCH=$XARCH GOOS=$OS go build -ldflags "$LINKFLAGS" -o "bin/backup-restore-operator-${OS}${X_SUFFIX}"
+    done
+  fi
 fi
