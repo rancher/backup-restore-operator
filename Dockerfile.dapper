@@ -37,7 +37,7 @@ RUN if [ "${ARCH}" != "s390x" ]; then \
         chmod +x /usr/local/bin/mc; \
     fi
 
-ENV DAPPER_ENV REPO TAG DRONE_TAG CROSS USE_DOCKER_BUILDX
+ENV DAPPER_ENV REPO TAG DRONE_TAG CROSS CROSS_ARCH USE_DOCKER_BUILDX
 ENV DAPPER_SOURCE /go/src/github.com/rancher/backup-restore-operator/
 ENV DAPPER_OUTPUT ./bin ./dist
 ENV GOCACHE /root/.cache/go-build

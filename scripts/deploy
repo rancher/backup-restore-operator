@@ -83,7 +83,7 @@ list_minio_files() {
   fi
 
   docker run --rm --net=host -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc ls --insecure miniolocal/rancherbackups
-  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+  kill -9 "$(pgrep -f "kubectl.*port-forward.*minio")"
 }
 
 retrieve_minio_files() {
@@ -108,7 +108,7 @@ retrieve_minio_files() {
   mkdir $MINIO_FILES_DIR
 
   docker run --rm --net=host -v "${PWD}/${MINIO_FILES_DIR}":/data -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc cp --insecure --recursive miniolocal/rancherbackups/ /data/
-  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+  kill -9 "$(pgrep -f "kubectl.*port-forward.*minio")"
 
   echo "Copied all files from Minio to ./${MINIO_FILES_DIR}"
 }
@@ -135,7 +135,7 @@ copy_minio_files() {
   echo "Copying from directory ${SOURCE_FILES_DIR}"
 
   docker run --rm --net=host -v "${PWD}/${SOURCE_FILES_DIR}":/data -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc cp --insecure --recursive /data/ miniolocal/rancherbackups/
-  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+  kill -9 "$(pgrep -f "kubectl.*port-forward.*minio")"
 
   echo "Copied all files from directory ${SOURCE_FILES_DIR} to Minio"
 }
@@ -160,7 +160,7 @@ reset_minio_bucket() {
 
   docker run --rm --net=host -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc rb --insecure --force miniolocal/rancherbackups
   docker run --rm --net=host -e MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@${DOCKER_HOSTNAME}:9000 minio/mc mb --insecure miniolocal/rancherbackups
-  kill -9 "$(pgrep -f "kubectl port-forward minio")"
+  kill -9 "$(pgrep -f "kubectl.*port-forward.*minio")"
 
   echo "Deleted and created the 'rancherbackups' bucket"
 }
@@ -231,6 +231,63 @@ spec:
   resourceSetName: rancher-resource-set
   schedule: "@every 30s"
   retentionCount: 2
+EOF
+  fi
+}
+
+create_restore() {
+  KUBECTL_CMD="kubectl"
+  insecure=false
+  case $# in
+    1) ;;
+    2) ;;
+    *) echo "Usage: $(basename $0) create-restore [--insecure] BACKUP_FILE" ; exit 1 ;;
+  esac
+  if [[ "$1" = "--insecure" ]] ; then
+    insecure=true
+    shift
+  fi
+  BACKUP="$1"
+
+  if command -v k3s &> /dev/null ; then
+    KUBECTL_CMD="k3s kubectl"
+  else
+    check_kubeconfig
+  fi
+
+  if [[ "$insecure" = "true" ]]; then
+    ${KUBECTL_CMD} create -f - <<EOF
+apiVersion: resources.cattle.io/v1
+kind: Restore
+metadata:
+  name: restore-minio
+spec:
+  backupFilename: ${BACKUP}
+  prune: true
+  storageLocation:
+    s3:
+      credentialSecretName: miniocreds
+      credentialSecretNamespace: default
+      bucketName: rancherbackups-insecure
+      endpoint: minio.minio.svc.cluster.local:9000
+      insecureTLSSkipVerify: true
+EOF
+  else
+    ${KUBECTL_CMD} create -f - <<EOF
+apiVersion: resources.cattle.io/v1
+kind: Restore
+metadata:
+  name: restore-minio
+spec:
+  backupFilename: ${BACKUP}
+  prune: true
+  storageLocation:
+    s3:
+      credentialSecretName: miniocreds
+      credentialSecretNamespace: default
+      bucketName: rancherbackups
+      endpoint: minio.minio.svc.cluster.local:9000
+      endpointCA: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUNTVENDQWUrZ0F3SUJBZ0lRV2dVVldDaVpkeU9HcnVOZTZtNGlXakFLQmdncWhrak9QUVFEQWpCTU1Sd3cKR2dZRFZRUUtFeE5EWlhKMFoyVnVJRVJsZG1Wc2IzQnRaVzUwTVN3d0tnWURWUVFMRENObGJHbDVZVzFzWlhaNQpRRVZzYVhsaGJYTXRUVUpRTG1GMGRHeHZZMkZzTG01bGREQWVGdzB5TWpBMU1URXhOREF4TWpCYUZ3MHpNakExCk1URXdNakF4TWpCYU1Fd3hIREFhQmdOVkJBb1RFME5sY25SblpXNGdSR1YyWld4dmNHMWxiblF4TERBcUJnTlYKQkFzTUkyVnNhWGxoYld4bGRubEFSV3hwZVdGdGN5MU5RbEF1WVhSMGJHOWpZV3d1Ym1WME1Ga3dFd1lIS29aSQp6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVGSDhVUENsL3ZBSGtNYlRGM0U4eWhTZExOSDJYdWVLVUhucytPNEZSCmhuMDk2T0pLbkdaRmIvSGlXOWlKV2hqNENKNEx1YlN2c2laSlo3WXVEbE05ZmFPQnNqQ0JyekFPQmdOVkhROEIKQWY4RUJBTUNBcVF3RXdZRFZSMGxCQXd3Q2dZSUt3WUJCUVVIQXdFd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVJbWpyZXNxbDc4ZkJwd1NWN2xwNGZUNCtObnd3V0FZRFZSMFJCRkV3VDRJRmJXbHVhVytDCkMyMXBibWx2TG0xcGJtbHZnZzl0YVc1cGJ5NXRhVzVwYnk1emRtT0NIVzFwYm1sdkxtMXBibWx2TG5OMll5NWoKYkhWemRHVnlMbXh2WTJGc2dnbHNiMk5oYkdodmMzUXdDZ1lJS29aSXpqMEVBd0lEU0FBd1JRSWdXVDRDVTVpYgpMTmVYSm1oMmxucUV2YWVLZ3FMSFBGZ01PUWcrNFR5Tyt1UUNJUUNJNVdYMUU4NEIrejZ5WDdXS0lCWUpJanRvClJqUWk3NVFuaUYxMHBpMmpLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
 EOF
   fi
 }
@@ -329,6 +386,14 @@ case $1 in
 
     create-backup-insecure)
       create_backup insecure
+    ;;
+
+    create-restore)
+      create_restore "$2"
+    ;;
+
+    create-restore-insecure)
+      create_restore --insecure "$2"
     ;;
 
     remove-charts)
