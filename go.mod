@@ -2,7 +2,7 @@ module github.com/rancher/backup-restore-operator
 
 go 1.22
 
-replace golang.org/x/crypto => golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
+replace golang.org/x/crypto => golang.org/x/crypto v0.22.0
 
 require (
 	github.com/minio/minio-go/v7 v7.0.69
