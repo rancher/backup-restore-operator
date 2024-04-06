@@ -5,8 +5,8 @@ go 1.20
 require (
 	github.com/rancher/hull v0.0.0-20230424152137-627ef5347afd
 	github.com/stretchr/testify v1.8.4
-	k8s.io/api v0.26.1
-	k8s.io/apimachinery v0.26.1
+	k8s.io/api v0.27.12
+	k8s.io/apimachinery v0.27.12
 )
 
 require (
