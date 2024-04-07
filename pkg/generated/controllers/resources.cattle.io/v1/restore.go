@@ -20,269 +20,47 @@ package v1
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/lasso/pkg/client"
-	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/v2/pkg/apply"
 	"github.com/rancher/wrangler/v2/pkg/condition"
 	"github.com/rancher/wrangler/v2/pkg/generic"
 	"github.com/rancher/wrangler/v2/pkg/kv"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/tools/cache"
 )
 
-type RestoreHandler func(string, *v1.Restore) (*v1.Restore, error)
-
+// RestoreController interface for managing Restore resources.
 type RestoreController interface {
-	generic.ControllerMeta
-	RestoreClient
-
-	OnChange(ctx context.Context, name string, sync RestoreHandler)
-	OnRemove(ctx context.Context, name string, sync RestoreHandler)
-	Enqueue(name string)
-	EnqueueAfter(name string, duration time.Duration)
-
-	Cache() RestoreCache
+	generic.NonNamespacedControllerInterface[*v1.Restore, *v1.RestoreList]
 }
 
+// RestoreClient interface for managing Restore resources in Kubernetes.
 type RestoreClient interface {
-	Create(*v1.Restore) (*v1.Restore, error)
-	Update(*v1.Restore) (*v1.Restore, error)
-	UpdateStatus(*v1.Restore) (*v1.Restore, error)
-	Delete(name string, options *metav1.DeleteOptions) error
-	Get(name string, options metav1.GetOptions) (*v1.Restore, error)
-	List(opts metav1.ListOptions) (*v1.RestoreList, error)
-	Watch(opts metav1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.Restore, err error)
+	generic.NonNamespacedClientInterface[*v1.Restore, *v1.RestoreList]
 }
 
+// RestoreCache interface for retrieving Restore resources in memory.
 type RestoreCache interface {
-	Get(name string) (*v1.Restore, error)
-	List(selector labels.Selector) ([]*v1.Restore, error)
-
-	AddIndexer(indexName string, indexer RestoreIndexer)
-	GetByIndex(indexName, key string) ([]*v1.Restore, error)
+	generic.NonNamespacedCacheInterface[*v1.Restore]
 }
 
-type RestoreIndexer func(obj *v1.Restore) ([]string, error)
-
-type restoreController struct {
-	controller    controller.SharedController
-	client        *client.Client
-	gvk           schema.GroupVersionKind
-	groupResource schema.GroupResource
-}
-
-func NewRestoreController(gvk schema.GroupVersionKind, resource string, namespaced bool, controller controller.SharedControllerFactory) RestoreController {
-	c := controller.ForResourceKind(gvk.GroupVersion().WithResource(resource), gvk.Kind, namespaced)
-	return &restoreController{
-		controller: c,
-		client:     c.Client(),
-		gvk:        gvk,
-		groupResource: schema.GroupResource{
-			Group:    gvk.Group,
-			Resource: resource,
-		},
-	}
-}
-
-func FromRestoreHandlerToHandler(sync RestoreHandler) generic.Handler {
-	return func(key string, obj runtime.Object) (ret runtime.Object, err error) {
-		var v *v1.Restore
-		if obj == nil {
-			v, err = sync(key, nil)
-		} else {
-			v, err = sync(key, obj.(*v1.Restore))
-		}
-		if v == nil {
-			return nil, err
-		}
-		return v, err
-	}
-}
-
-func (c *restoreController) Updater() generic.Updater {
-	return func(obj runtime.Object) (runtime.Object, error) {
-		newObj, err := c.Update(obj.(*v1.Restore))
-		if newObj == nil {
-			return nil, err
-		}
-		return newObj, err
-	}
-}
-
-func UpdateRestoreDeepCopyOnChange(client RestoreClient, obj *v1.Restore, handler func(obj *v1.Restore) (*v1.Restore, error)) (*v1.Restore, error) {
-	if obj == nil {
-		return obj, nil
-	}
-
-	copyObj := obj.DeepCopy()
-	newObj, err := handler(copyObj)
-	if newObj != nil {
-		copyObj = newObj
-	}
-	if obj.ResourceVersion == copyObj.ResourceVersion && !equality.Semantic.DeepEqual(obj, copyObj) {
-		return client.Update(copyObj)
-	}
-
-	return copyObj, err
-}
-
-func (c *restoreController) AddGenericHandler(ctx context.Context, name string, handler generic.Handler) {
-	c.controller.RegisterHandler(ctx, name, controller.SharedControllerHandlerFunc(handler))
-}
-
-func (c *restoreController) AddGenericRemoveHandler(ctx context.Context, name string, handler generic.Handler) {
-	c.AddGenericHandler(ctx, name, generic.NewRemoveHandler(name, c.Updater(), handler))
-}
-
-func (c *restoreController) OnChange(ctx context.Context, name string, sync RestoreHandler) {
-	c.AddGenericHandler(ctx, name, FromRestoreHandlerToHandler(sync))
-}
-
-func (c *restoreController) OnRemove(ctx context.Context, name string, sync RestoreHandler) {
-	c.AddGenericHandler(ctx, name, generic.NewRemoveHandler(name, c.Updater(), FromRestoreHandlerToHandler(sync)))
-}
-
-func (c *restoreController) Enqueue(name string) {
-	c.controller.Enqueue("", name)
-}
-
-func (c *restoreController) EnqueueAfter(name string, duration time.Duration) {
-	c.controller.EnqueueAfter("", name, duration)
-}
-
-func (c *restoreController) Informer() cache.SharedIndexInformer {
-	return c.controller.Informer()
-}
-
-func (c *restoreController) GroupVersionKind() schema.GroupVersionKind {
-	return c.gvk
-}
-
-func (c *restoreController) Cache() RestoreCache {
-	return &restoreCache{
-		indexer:  c.Informer().GetIndexer(),
-		resource: c.groupResource,
-	}
-}
-
-func (c *restoreController) Create(obj *v1.Restore) (*v1.Restore, error) {
-	result := &v1.Restore{}
-	return result, c.client.Create(context.TODO(), "", obj, result, metav1.CreateOptions{})
-}
-
-func (c *restoreController) Update(obj *v1.Restore) (*v1.Restore, error) {
-	result := &v1.Restore{}
-	return result, c.client.Update(context.TODO(), "", obj, result, metav1.UpdateOptions{})
-}
-
-func (c *restoreController) UpdateStatus(obj *v1.Restore) (*v1.Restore, error) {
-	result := &v1.Restore{}
-	return result, c.client.UpdateStatus(context.TODO(), "", obj, result, metav1.UpdateOptions{})
-}
-
-func (c *restoreController) Delete(name string, options *metav1.DeleteOptions) error {
-	if options == nil {
-		options = &metav1.DeleteOptions{}
-	}
-	return c.client.Delete(context.TODO(), "", name, *options)
-}
-
-func (c *restoreController) Get(name string, options metav1.GetOptions) (*v1.Restore, error) {
-	result := &v1.Restore{}
-	return result, c.client.Get(context.TODO(), "", name, result, options)
-}
-
-func (c *restoreController) List(opts metav1.ListOptions) (*v1.RestoreList, error) {
-	result := &v1.RestoreList{}
-	return result, c.client.List(context.TODO(), "", result, opts)
-}
-
-func (c *restoreController) Watch(opts metav1.ListOptions) (watch.Interface, error) {
-	return c.client.Watch(context.TODO(), "", opts)
-}
-
-func (c *restoreController) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*v1.Restore, error) {
-	result := &v1.Restore{}
-	return result, c.client.Patch(context.TODO(), "", name, pt, data, result, metav1.PatchOptions{}, subresources...)
-}
-
-type restoreCache struct {
-	indexer  cache.Indexer
-	resource schema.GroupResource
-}
-
-func (c *restoreCache) Get(name string) (*v1.Restore, error) {
-	obj, exists, err := c.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(c.resource, name)
-	}
-	return obj.(*v1.Restore), nil
-}
-
-func (c *restoreCache) List(selector labels.Selector) (ret []*v1.Restore, err error) {
-
-	err = cache.ListAll(c.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.Restore))
-	})
-
-	return ret, err
-}
-
-func (c *restoreCache) AddIndexer(indexName string, indexer RestoreIndexer) {
-	utilruntime.Must(c.indexer.AddIndexers(map[string]cache.IndexFunc{
-		indexName: func(obj interface{}) (strings []string, e error) {
-			return indexer(obj.(*v1.Restore))
-		},
-	}))
-}
-
-func (c *restoreCache) GetByIndex(indexName, key string) (result []*v1.Restore, err error) {
-	objs, err := c.indexer.ByIndex(indexName, key)
-	if err != nil {
-		return nil, err
-	}
-	result = make([]*v1.Restore, 0, len(objs))
-	for _, obj := range objs {
-		result = append(result, obj.(*v1.Restore))
-	}
-	return result, nil
-}
-
-// RestoreStatusHandler is executed for every added or modified Restore. Should return the new status to be updated
 type RestoreStatusHandler func(obj *v1.Restore, status v1.RestoreStatus) (v1.RestoreStatus, error)
 
-// RestoreGeneratingHandler is the top-level handler that is executed for every Restore event. It extends RestoreStatusHandler by a returning a slice of child objects to be passed to apply.Apply
 type RestoreGeneratingHandler func(obj *v1.Restore, status v1.RestoreStatus) ([]runtime.Object, v1.RestoreStatus, error)
 
-// RegisterRestoreStatusHandler configures a RestoreController to execute a RestoreStatusHandler for every events observed.
-// If a non-empty condition is provided, it will be updated in the status conditions for every handler execution
 func RegisterRestoreStatusHandler(ctx context.Context, controller RestoreController, condition condition.Cond, name string, handler RestoreStatusHandler) {
 	statusHandler := &restoreStatusHandler{
 		client:    controller,
 		condition: condition,
 		handler:   handler,
 	}
-	controller.AddGenericHandler(ctx, name, FromRestoreHandlerToHandler(statusHandler.sync))
+	controller.AddGenericHandler(ctx, name, generic.FromObjectHandlerToHandler(statusHandler.sync))
 }
 
-// RegisterRestoreGeneratingHandler configures a RestoreController to execute a RestoreGeneratingHandler for every events observed, passing the returned objects to the provided apply.Apply.
-// If a non-empty condition is provided, it will be updated in the status conditions for every handler execution
 func RegisterRestoreGeneratingHandler(ctx context.Context, controller RestoreController, apply apply.Apply,
 	condition condition.Cond, name string, handler RestoreGeneratingHandler, opts *generic.GeneratingHandlerOptions) {
 	statusHandler := &restoreGeneratingHandler{
@@ -304,7 +82,6 @@ type restoreStatusHandler struct {
 	handler   RestoreStatusHandler
 }
 
-// sync is executed on every resource addition or modification. Executes the configured handlers and sends the updated status to the Kubernetes API
 func (a *restoreStatusHandler) sync(key string, obj *v1.Restore) (*v1.Restore, error) {
 	if obj == nil {
 		return obj, nil
@@ -350,10 +127,8 @@ type restoreGeneratingHandler struct {
 	opts  generic.GeneratingHandlerOptions
 	gvk   schema.GroupVersionKind
 	name  string
-	seen  sync.Map
 }
 
-// Remove handles the observed deletion of a resource, cascade deleting every associated resource previously applied
 func (a *restoreGeneratingHandler) Remove(key string, obj *v1.Restore) (*v1.Restore, error) {
 	if obj != nil {
 		return obj, nil
@@ -363,17 +138,12 @@ func (a *restoreGeneratingHandler) Remove(key string, obj *v1.Restore) (*v1.Rest
 	obj.Namespace, obj.Name = kv.RSplit(key, "/")
 	obj.SetGroupVersionKind(a.gvk)
 
-	if a.opts.UniqueApplyForResourceVersion {
-		a.seen.Delete(key)
-	}
-
 	return nil, generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
 		WithOwner(obj).
 		WithSetID(a.name).
 		ApplyObjects()
 }
 
-// Handle executes the configured RestoreGeneratingHandler and pass the resulting objects to apply.Apply, finally returning the new status of the resource
 func (a *restoreGeneratingHandler) Handle(obj *v1.Restore, status v1.RestoreStatus) (v1.RestoreStatus, error) {
 	if !obj.DeletionTimestamp.IsZero() {
 		return status, nil
@@ -383,41 +153,9 @@ func (a *restoreGeneratingHandler) Handle(obj *v1.Restore, status v1.RestoreStat
 	if err != nil {
 		return newStatus, err
 	}
-	if !a.isNewResourceVersion(obj) {
-		return newStatus, nil
-	}
 
-	err = generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
+	return newStatus, generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
 		WithOwner(obj).
 		WithSetID(a.name).
 		ApplyObjects(objs...)
-	if err != nil {
-		return newStatus, err
-	}
-	a.storeResourceVersion(obj)
-	return newStatus, nil
-}
-
-// isNewResourceVersion detects if a specific resource version was already successfully processed.
-// Only used if UniqueApplyForResourceVersion is set in generic.GeneratingHandlerOptions
-func (a *restoreGeneratingHandler) isNewResourceVersion(obj *v1.Restore) bool {
-	if !a.opts.UniqueApplyForResourceVersion {
-		return true
-	}
-
-	// Apply once per resource version
-	key := obj.Namespace + "/" + obj.Name
-	previous, ok := a.seen.Load(key)
-	return !ok || previous != obj.ResourceVersion
-}
-
-// storeResourceVersion keeps track of the latest resource version of an object for which Apply was executed
-// Only used if UniqueApplyForResourceVersion is set in generic.GeneratingHandlerOptions
-func (a *restoreGeneratingHandler) storeResourceVersion(obj *v1.Restore) {
-	if !a.opts.UniqueApplyForResourceVersion {
-		return
-	}
-
-	key := obj.Namespace + "/" + obj.Name
-	a.seen.Store(key, obj.ResourceVersion)
 }
