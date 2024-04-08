@@ -1,11 +1,11 @@
 {
   "extends": [
-    "github>rancher/renovate-config#release"
+    "github>rancher/renovate-config#release",
+    "group:all"
   ],
   "baseBranches": [
     "release/v3.0",
     "release/v4.0",
     "release/v5.0"
-  ],
-  "prHourlyLimit": 2
+  ]
 }
