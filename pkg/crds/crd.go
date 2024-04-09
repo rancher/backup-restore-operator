@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	resources "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/wrangler/pkg/crd"
-	_ "github.com/rancher/wrangler/pkg/generated/controllers/apiextensions.k8s.io/v1" // Imported to use init function
-	"github.com/rancher/wrangler/pkg/yaml"
+	"github.com/rancher/wrangler/v2/pkg/crd"
+	_ "github.com/rancher/wrangler/v2/pkg/generated/controllers/apiextensions.k8s.io/v1" // Imported to use init function
+	"github.com/rancher/wrangler/v2/pkg/yaml"
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
