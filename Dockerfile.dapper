@@ -1,6 +1,6 @@
-FROM registry.suse.com/bci/golang:1.20
+FROM registry.suse.com/bci/golang:1.22
 # Add buildx plugin
-COPY --from=docker.io/docker/buildx-bin:0.11.0 /buildx /usr/libexec/docker/cli-plugins/docker-buildx
+COPY --from=docker.io/docker/buildx-bin:0.13.1 /buildx /usr/libexec/docker/cli-plugins/docker-buildx
 
 ARG DAPPER_HOST_ARCH
 ENV ARCH $DAPPER_HOST_ARCH
@@ -10,7 +10,7 @@ RUN zypper -n in git-core curl tar gzip docker wget awk hostname && \
     rm -rf /tmp/* /var/tmp/* /usr/share/doc/packages/*
 
 RUN if [ "${ARCH}" == "amd64" ]; then \
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.54.2; \
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.57.2; \
     fi
 RUN curl -sL https://get.helm.sh/helm-v3.9.0-linux-${ARCH}.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
 RUN if [ "${ARCH}" != "s390x" ]; then \

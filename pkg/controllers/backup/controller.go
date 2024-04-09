@@ -15,9 +15,9 @@ import (
 	backupControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	"github.com/rancher/backup-restore-operator/pkg/util"
-	"github.com/rancher/wrangler/pkg/condition"
-	v1core "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
-	"github.com/rancher/wrangler/pkg/genericcondition"
+	"github.com/rancher/wrangler/v2/pkg/condition"
+	v1core "github.com/rancher/wrangler/v2/pkg/generated/controllers/core/v1"
+	"github.com/rancher/wrangler/v2/pkg/genericcondition"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 
