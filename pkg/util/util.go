@@ -1,12 +1,13 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
 
-	v1core "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	v1core "github.com/rancher/wrangler/v2/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -41,11 +42,11 @@ func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core
 	if err != nil {
 		return transformerMap, err
 	}
-	transformerOverrides, err := encryptionconfig.GetTransformerOverrides(encryptionProviderConfigKey)
+	encryptionConfig, err := encryptionconfig.LoadEncryptionConfig(context.Background(), encryptionProviderConfigKey, false)
 	if err != nil {
 		return transformerMap, err
 	}
-	return transformerOverrides, nil
+	return encryptionConfig.Transformers, nil
 }
 
 func GetObjectQueue(l interface{}, capacity int) chan interface{} {

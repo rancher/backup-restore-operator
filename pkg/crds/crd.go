@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	resources "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/wrangler/pkg/crd"
-	_ "github.com/rancher/wrangler/pkg/generated/controllers/apiextensions.k8s.io/v1" // Imported to use init function
-	"github.com/rancher/wrangler/pkg/yaml"
+	"github.com/rancher/wrangler/v2/pkg/crd"
+	_ "github.com/rancher/wrangler/v2/pkg/generated/controllers/apiextensions.k8s.io/v1" // Imported to use init function
+	"github.com/rancher/wrangler/v2/pkg/yaml"
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,25 +23,25 @@ func WriteCRD() error {
 			return err
 		}
 		newObj, _ := bCrd.(*unstructured.Unstructured)
-		var crd apiext.CustomResourceDefinition
-		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(newObj.Object, &crd); err != nil {
+		var crdItem apiext.CustomResourceDefinition
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(newObj.Object, &crdItem); err != nil {
 			return err
 		}
-		switch crd.Name {
+		switch crdItem.Name {
 		case "backups.resources.cattle.io":
-			customizeBackup(&crd)
+			customizeBackup(&crdItem)
 		case "resourcesets.resources.cattle.io":
-			customizeResourceSet(&crd)
+			customizeResourceSet(&crdItem)
 		case "restores.resources.cattle.io":
-			customizeRestore(&crd)
+			customizeRestore(&crdItem)
 		}
 
-		yamlBytes, err := yaml.Export(&crd)
+		yamlBytes, err := yaml.Export(&crdItem)
 		if err != nil {
 			return err
 		}
 
-		filename := fmt.Sprintf("./charts/rancher-backup-crd/templates/%s.yaml", strings.ToLower(crd.Spec.Names.Kind))
+		filename := fmt.Sprintf("./charts/rancher-backup-crd/templates/%s.yaml", strings.ToLower(crdItem.Spec.Names.Kind))
 		err = ioutil.WriteFile(filename, yamlBytes, 0644)
 		if err != nil {
 			return err
@@ -128,7 +128,7 @@ func customizeRestore(restore *apiext.CustomResourceDefinition) {
 }
 
 func newCRD(obj interface{}, customize func(crd.CRD) crd.CRD) crd.CRD {
-	crd := crd.CRD{
+	crdItem := crd.CRD{
 		GVK: schema.GroupVersionKind{
 			Group:   "resources.cattle.io",
 			Version: "v1",
@@ -138,7 +138,7 @@ func newCRD(obj interface{}, customize func(crd.CRD) crd.CRD) crd.CRD {
 		NonNamespace: true,
 	}
 	if customize != nil {
-		crd = customize(crd)
+		crdItem = customize(crdItem)
 	}
-	return crd
+	return crdItem
 }

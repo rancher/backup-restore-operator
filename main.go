@@ -17,11 +17,11 @@ import (
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	lasso "github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/lasso/pkg/mapper"
-	v1core "github.com/rancher/wrangler/pkg/generated/controllers/core"
-	"github.com/rancher/wrangler/pkg/kubeconfig"
-	"github.com/rancher/wrangler/pkg/ratelimit"
-	"github.com/rancher/wrangler/pkg/signals"
-	"github.com/rancher/wrangler/pkg/start"
+	v2core "github.com/rancher/wrangler/v2/pkg/generated/controllers/core"
+	"github.com/rancher/wrangler/v2/pkg/kubeconfig"
+	"github.com/rancher/wrangler/v2/pkg/ratelimit"
+	"github.com/rancher/wrangler/v2/pkg/signals"
+	"github.com/rancher/wrangler/v2/pkg/start"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,7 +100,7 @@ func main() {
 		logrus.Fatalf("Error building backups sample controllers: %s", err.Error())
 	}
 
-	core, err := v1core.NewFactoryFromConfig(restKubeConfig)
+	core, err := v2core.NewFactoryFromConfig(restKubeConfig)
 	if err != nil {
 		logrus.Fatalf("Error building core sample controllers: %s", err.Error())
 	}
