@@ -17,25 +17,6 @@ RUN if [ "${ARCH}" != "s390x" ]; then \
         helm plugin install https://github.com/quintush/helm-unittest; \
     fi
 
-ENV K3S_BINARY_amd64=k3s \
-    K3S_BINARY_arm64=k3s-arm64 \
-    K3S_BINARY=K3S_BINARY_${ARCH}
-
-ARG K8S_VERSION_FROM_DRONE
-ENV K8S_VERSION $K8S_VERSION_FROM_DRONE
-
-RUN if [ -z "${K8S_VERSION}" ]; then export K8S_VERSION="v1.24" && echo $(date +%s%N); fi
-# ENV K8S_VERSION="${K8S_VERSION_FROM_DRONE:-'v1.24'}"
-
-RUN echo "${K8S_VERSION}"
-
-RUN curl -sL https://github.com/rancher/k3s/releases/download/$(curl -Ls -o /dev/null -w %{url_effective} https://update.k3s.io/v1-release/channels/${K8S_VERSION} | awk -F/ '{ print $NF }')/${!K3S_BINARY} > /usr/local/bin/k3s && \
-    chmod +x /usr/local/bin/k3s
-
-RUN if [ "${ARCH}" != "s390x" ]; then \
-        curl -sL https://dl.min.io/client/mc/release/linux-${ARCH}/mc > /usr/local/bin/mc  && \
-        chmod +x /usr/local/bin/mc; \
-    fi
 
 ENV DAPPER_ENV REPO TAG DRONE_TAG CROSS CROSS_ARCH USE_DOCKER_BUILDX
 ENV DAPPER_SOURCE /go/src/github.com/rancher/backup-restore-operator/
