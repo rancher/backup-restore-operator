@@ -1,0 +1,87 @@
+name: Backup Restore CI
+
+permissions:
+  contents : read
+
+on:
+  push:
+    branches:
+      - release/v5.0
+      - release/v4.0
+      - release/v3.0
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+      - 'CODEOWNERS'
+      - 'LICENSE'
+  pull_request:
+    paths-ignore:
+    - 'docs/**'
+    - '*.md'
+    - '.gitignore'
+    - 'CODEOWNERS'
+    - 'LICENSE'
+jobs:
+  build:
+    strategy:
+      matrix:
+        os : [ 
+          ubuntu-latest
+          # org-rancher-arm64-containers
+          ]
+    name : CI
+    runs-on : ${{ matrix.os }}
+    outputs:
+      k3sversions: ${{ steps.support.outputs.k3sversions }}
+    steps:
+      - name : Checkout repository
+        uses : actions/checkout@v4
+        with :
+          fetch-depth : 0
+      - name: Set K3s support output
+        id : support
+        run: ./.github/workflows/scripts/supported-versions.sh | awk '{print "k3sversions="$0}' >> $GITHUB_OUTPUT
+      - name : CI
+        run : make ci
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bro-build-artifacts-${{ matrix.os }}
+          path: ./dist/artifacts
+        
+  test:
+    name : integration-test
+    needs : [
+      build
+    ]
+    runs-on : ${{ matrix.os }}
+    strategy:
+      matrix:
+        os : [ 
+          ubuntu-latest
+          # org-rancher-arm64-containers,
+         ]
+        K3S_VERSION : ${{ fromJSON(needs.build.outputs.k3sversions) }}
+    steps:
+      - name : Checkout repository
+        uses : actions/checkout@v4
+      - name : Fetch build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: bro-build-artifacts-${{ matrix.os }}
+          path: ./dist/artifacts/
+      - name : Debug
+        run : ls -R ./dist/artifacts
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name : Load backup-restore-operator image
+        run : docker image load -i ./dist/artifacts/backup-restore-operator.img
+      - name : Setup up K3d
+        run : ./.github/workflows/scripts/install-k3d.sh
+      - name : Setup up mc
+        run : ./.github/workflows/scripts/install-mc.sh
+      - name : Setup k3d cluster
+        run : CLUSTER_NAME=backup-restore K3S_VERSION=${{ matrix.K3S_VERSION }} ./.github/workflows/scripts/setup-cluster.sh
+      - name : Run integration tests
+        run : ./scripts/integration
