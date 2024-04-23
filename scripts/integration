@@ -4,29 +4,9 @@ function echo_with_time {
     echo "$(date --utc +%Y-%m-%dT%H:%M:%SZ) "$@""
 }
 
-source $(dirname $0)/version
+source ./scripts/version
 
 echo_with_time "INFO - Running $0"
-
-cd $(dirname $0)/..
-
-k3s server --disable servicelb --disable traefik --disable local-storage --disable metrics-server > /tmp/k3s.log 2>&1 &
-k3s_pid=$!
-
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-
-echo_with_time 'Waiting for node to be ready ...'
-time timeout 300 bash -c 'while ! (k3s kubectl wait --for condition=ready node/$(hostname) 2>/dev/null); do sleep 5; done'
-time timeout 300 bash -c 'while ! (k3s kubectl --namespace kube-system rollout status --timeout 10s deploy/coredns 2>/dev/null); do sleep 5; done'
-
-echo_with_time "using kubectl and kubernetes versions:"
-k3s kubectl version
-
-k3s kubectl get nodes -o wide --show-labels
-
-docker image save rancher/backup-restore-operator:$TAG -o /tmp/bro.img
-
-k3s ctr images import /tmp/bro.img
 
 ls -la ./dist/artifacts
 
@@ -41,13 +21,13 @@ fi
 helm install rancher-backup-crd ./dist/artifacts/rancher-backup-crd-$HELM_CHART_VERSION.tgz -n cattle-resources-system --create-namespace --wait
 helm install rancher-backup ./dist/artifacts/rancher-backup-$HELM_CHART_VERSION.tgz -n cattle-resources-system --set image.tag=$TAG --set imagePullPolicy=IfNotPresent
 
-time timeout 300 bash -c 'while ! (k3s kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
+time timeout 300 bash -c 'while ! (kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
 
-k3s kubectl get pods -n cattle-resources-system
+kubectl get pods -n cattle-resources-system
 
-time timeout 300 bash -c 'while ! (k3s kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
+time timeout 300 bash -c 'while ! (kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
 
-k3s kubectl get pods -n cattle-resources-system
+kubectl get pods -n cattle-resources-system
 
 # Minio not available for s390x, only test on amd64 and arm64
 if [ "$ARCH" = "s390x" ]; then
@@ -58,8 +38,8 @@ fi
 #Deploy Minio
 ./scripts/deploy minio
 
-export POD_NAME=$(k3s kubectl get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
-k3s kubectl port-forward $POD_NAME 9000 --namespace minio &
+export POD_NAME=$(kubectl get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
+kubectl port-forward $POD_NAME 9000 --namespace minio &
 sleep 10
 
 mkdir -p $HOME/.mc/certs/CAs
@@ -97,7 +77,7 @@ for BACKUP in rancherbackups-insecure rancherbackups; do
         BACKUPRS_NAME="s3-recurring-backup"
     fi
 
-    time timeout 60 bash -c 'while ! (k3s kubectl wait --for condition=ready backup.resources.cattle.io/'"${BACKUPRS_NAME}"' 2>/dev/null); do k3s kubectl get backup.resources.cattle.io -A; k3s kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=-1; sleep 2; done'
+    time timeout 60 bash -c 'while ! (kubectl wait --for condition=ready backup.resources.cattle.io/'"${BACKUPRS_NAME}"' 2>/dev/null); do kubectl get backup.resources.cattle.io -A; kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=-1; sleep 2; done'
 
     mc ls --quiet --no-color "miniolocal/${BACKUP}"
     FIRSTBACKUP=$(mc ls --quiet --no-color miniolocal/${BACKUP} | awk '{ print $NF }')
@@ -119,20 +99,20 @@ for BACKUP in rancherbackups-insecure rancherbackups; do
         fi
     done
     # Disable the recurring back-ups by deleting the backup CRD
-    k3s kubectl delete "backup.resources.cattle.io/${BACKUPRS_NAME}"
+    kubectl delete "backup.resources.cattle.io/${BACKUPRS_NAME}"
 done
 
 # Restore resource with spec.preserveUnknownFields
 # https://github.com/rancher/backup-restore-operator/issues/186
 
-cd tests/files/preserve-unknown-fields
+cd ./tests/files/preserve-unknown-fields
 tar cvzf /tmp/preserve-unknown-fields.tar.gz -- *
 cd -
 mc cp --quiet --no-color /tmp/preserve-unknown-fields.tar.gz miniolocal/rancherbackups
 
 mc ls --quiet --no-color miniolocal/rancherbackups
 
-k3s kubectl create -f - <<EOF
+kubectl create -f - <<EOF
 apiVersion: resources.cattle.io/v1
 kind: Restore
 metadata:
@@ -149,12 +129,12 @@ spec:
       endpointCA: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUNTVENDQWUrZ0F3SUJBZ0lRV2dVVldDaVpkeU9HcnVOZTZtNGlXakFLQmdncWhrak9QUVFEQWpCTU1Sd3cKR2dZRFZRUUtFeE5EWlhKMFoyVnVJRVJsZG1Wc2IzQnRaVzUwTVN3d0tnWURWUVFMRENObGJHbDVZVzFzWlhaNQpRRVZzYVhsaGJYTXRUVUpRTG1GMGRHeHZZMkZzTG01bGREQWVGdzB5TWpBMU1URXhOREF4TWpCYUZ3MHpNakExCk1URXdNakF4TWpCYU1Fd3hIREFhQmdOVkJBb1RFME5sY25SblpXNGdSR1YyWld4dmNHMWxiblF4TERBcUJnTlYKQkFzTUkyVnNhWGxoYld4bGRubEFSV3hwZVdGdGN5MU5RbEF1WVhSMGJHOWpZV3d1Ym1WME1Ga3dFd1lIS29aSQp6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVGSDhVUENsL3ZBSGtNYlRGM0U4eWhTZExOSDJYdWVLVUhucytPNEZSCmhuMDk2T0pLbkdaRmIvSGlXOWlKV2hqNENKNEx1YlN2c2laSlo3WXVEbE05ZmFPQnNqQ0JyekFPQmdOVkhROEIKQWY4RUJBTUNBcVF3RXdZRFZSMGxCQXd3Q2dZSUt3WUJCUVVIQXdFd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVJbWpyZXNxbDc4ZkJwd1NWN2xwNGZUNCtObnd3V0FZRFZSMFJCRkV3VDRJRmJXbHVhVytDCkMyMXBibWx2TG0xcGJtbHZnZzl0YVc1cGJ5NXRhVzVwYnk1emRtT0NIVzFwYm1sdkxtMXBibWx2TG5OMll5NWoKYkhWemRHVnlMbXh2WTJGc2dnbHNiMk5oYkdodmMzUXdDZ1lJS29aSXpqMEVBd0lEU0FBd1JRSWdXVDRDVTVpYgpMTmVYSm1oMmxucUV2YWVLZ3FMSFBGZ01PUWcrNFR5Tyt1UUNJUUNJNVdYMUU4NEIrejZ5WDdXS0lCWUpJanRvClJqUWk3NVFuaUYxMHBpMmpLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
 EOF
 
-time timeout 60 bash -c 'while ! (k3s kubectl wait --for condition=ready restore.resources.cattle.io/restore-preserve-unknown-fields 2>/dev/null); do k3s kubectl get restore.resources.cattle.io -A; k3s kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=15; sleep 5; done'
+time timeout 60 bash -c 'while ! (kubectl wait --for condition=ready restore.resources.cattle.io/restore-preserve-unknown-fields 2>/dev/null); do kubectl get restore.resources.cattle.io -A; kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=15; sleep 5; done'
 
 # Restore resource with metadata.deletionGracePeriodSeconds
 # https://github.com/rancher/backup-restore-operator/issues/188
 
-cd tests/files/deletion-grace-period-seconds
+cd ./tests/files/deletion-grace-period-seconds
 tar cvzf /tmp/deletion-grace-period-seconds.tar.gz -- *
 cd -
 mc cp --quiet --no-color /tmp/deletion-grace-period-seconds.tar.gz miniolocal/rancherbackups
@@ -165,7 +145,7 @@ mc ls --quiet --no-color miniolocal/rancherbackups
 for i in $(seq 1 2); do
     echo "Running restore #${i} with resource having metadata.deletionGracePeriodSeconds"
 
-    k3s kubectl create -f - <<EOF
+    kubectl create -f - <<EOF
 apiVersion: resources.cattle.io/v1
 kind: Restore
 metadata:
@@ -182,6 +162,6 @@ spec:
       endpointCA: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUNTVENDQWUrZ0F3SUJBZ0lRV2dVVldDaVpkeU9HcnVOZTZtNGlXakFLQmdncWhrak9QUVFEQWpCTU1Sd3cKR2dZRFZRUUtFeE5EWlhKMFoyVnVJRVJsZG1Wc2IzQnRaVzUwTVN3d0tnWURWUVFMRENObGJHbDVZVzFzWlhaNQpRRVZzYVhsaGJYTXRUVUpRTG1GMGRHeHZZMkZzTG01bGREQWVGdzB5TWpBMU1URXhOREF4TWpCYUZ3MHpNakExCk1URXdNakF4TWpCYU1Fd3hIREFhQmdOVkJBb1RFME5sY25SblpXNGdSR1YyWld4dmNHMWxiblF4TERBcUJnTlYKQkFzTUkyVnNhWGxoYld4bGRubEFSV3hwZVdGdGN5MU5RbEF1WVhSMGJHOWpZV3d1Ym1WME1Ga3dFd1lIS29aSQp6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVGSDhVUENsL3ZBSGtNYlRGM0U4eWhTZExOSDJYdWVLVUhucytPNEZSCmhuMDk2T0pLbkdaRmIvSGlXOWlKV2hqNENKNEx1YlN2c2laSlo3WXVEbE05ZmFPQnNqQ0JyekFPQmdOVkhROEIKQWY4RUJBTUNBcVF3RXdZRFZSMGxCQXd3Q2dZSUt3WUJCUVVIQXdFd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVJbWpyZXNxbDc4ZkJwd1NWN2xwNGZUNCtObnd3V0FZRFZSMFJCRkV3VDRJRmJXbHVhVytDCkMyMXBibWx2TG0xcGJtbHZnZzl0YVc1cGJ5NXRhVzVwYnk1emRtT0NIVzFwYm1sdkxtMXBibWx2TG5OMll5NWoKYkhWemRHVnlMbXh2WTJGc2dnbHNiMk5oYkdodmMzUXdDZ1lJS29aSXpqMEVBd0lEU0FBd1JRSWdXVDRDVTVpYgpMTmVYSm1oMmxucUV2YWVLZ3FMSFBGZ01PUWcrNFR5Tyt1UUNJUUNJNVdYMUU4NEIrejZ5WDdXS0lCWUpJanRvClJqUWk3NVFuaUYxMHBpMmpLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
 EOF
 
-    time timeout 60 bash -c 'while ! (k3s kubectl wait --for condition=ready restore.resources.cattle.io/restore-deletion-grace-period-seconds 2>/dev/null); do k3s kubectl get restore.resources.cattle.io -A; k3s kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=15; sleep 5; done'
-    k3s kubectl delete restore.resources.cattle.io/restore-deletion-grace-period-seconds
+    time timeout 60 bash -c 'while ! (kubectl wait --for condition=ready restore.resources.cattle.io/restore-deletion-grace-period-seconds 2>/dev/null); do kubectl get restore.resources.cattle.io -A; kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=15; sleep 5; done'
+    kubectl delete restore.resources.cattle.io/restore-deletion-grace-period-seconds
 done
