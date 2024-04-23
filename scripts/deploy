@@ -41,11 +41,7 @@ EOF
   )
 
   KUBECTL_CMD="kubectl"
-  if command -v k3s &> /dev/null ; then
-      KUBECTL_CMD="k3s kubectl"
-  else
-    check_kubeconfig
-  fi
+  check_kubeconfig
 
   helm repo add minio https://charts.min.io/
   helm repo update
@@ -66,11 +62,7 @@ EOF
 
 list_minio_files() {
   KUBECTL_CMD="kubectl"
-  if command -v k3s &> /dev/null ; then
-      KUBECTL_CMD="k3s kubectl"
-  else
-    check_kubeconfig
-  fi
+  check_kubeconfig
 
   local POD_NAME
   POD_NAME=$("${KUBECTL_CMD}" get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
@@ -88,11 +80,7 @@ list_minio_files() {
 
 retrieve_minio_files() {
   KUBECTL_CMD="kubectl"
-  if command -v k3s &> /dev/null ; then
-      KUBECTL_CMD="k3s kubectl"
-  else
-    check_kubeconfig
-  fi
+  check_kubeconfig
 
   local POD_NAME
   POD_NAME=$("${KUBECTL_CMD}" get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
@@ -115,11 +103,7 @@ retrieve_minio_files() {
 
 copy_minio_files() {
   KUBECTL_CMD="kubectl"
-  if command -v k3s &> /dev/null ; then
-      KUBECTL_CMD="k3s kubectl"
-  else
-    check_kubeconfig
-  fi
+  check_kubeconfig
 
   local POD_NAME
   POD_NAME=$("${KUBECTL_CMD}" get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
@@ -142,11 +126,7 @@ copy_minio_files() {
 
 reset_minio_bucket() {
   KUBECTL_CMD="kubectl"
-  if command -v k3s &> /dev/null ; then
-      KUBECTL_CMD="k3s kubectl"
-  else
-    check_kubeconfig
-  fi
+  check_kubeconfig
 
   local POD_NAME
   POD_NAME=$("${KUBECTL_CMD}" get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
@@ -190,11 +170,7 @@ deploy_backup_restore() {
 create_backup() {
   KUBECTL_CMD="kubectl"
 
-  if command -v k3s &> /dev/null ; then
-    KUBECTL_CMD="k3s kubectl"
-  else
-    check_kubeconfig
-  fi
+  check_kubeconfig
 
   if [[ "$1" = "insecure" ]]; then
     ${KUBECTL_CMD} create -f - <<EOF
@@ -249,11 +225,7 @@ create_restore() {
   fi
   BACKUP="$1"
 
-  if command -v k3s &> /dev/null ; then
-    KUBECTL_CMD="k3s kubectl"
-  else
-    check_kubeconfig
-  fi
+  check_kubeconfig
 
   if [[ "$insecure" = "true" ]]; then
     ${KUBECTL_CMD} create -f - <<EOF
