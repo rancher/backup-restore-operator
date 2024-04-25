@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 function echo_with_time {
-    echo "$(date --utc +%Y-%m-%dT%H:%M:%SZ) "$@""
+    echo "$(date --utc +%Y-%m-%dT%H:%M:%SZ) $*"
 }
 
 source ./scripts/version
@@ -10,7 +10,7 @@ echo_with_time "INFO - Running $0"
 
 ls -la ./dist/artifacts
 
-# In case short commit only conists of numbers, it is regarded valid by Helm when packaging
+# In case short commit only consists of numbers, it is regarded valid by Helm when packaging
 # Or if a tag is set (if its a (pre) release)
 if [[ $HELM_VERSION =~ ^[0-9]+$ ]] || [[ -n $GIT_TAG ]]; then
   HELM_CHART_VERSION=$HELM_VERSION
