@@ -10,7 +10,7 @@ if [ -z "$CLUSTER_NAME" ]; then
 fi
 
 if [ -z "$K3S_VERSION" ]; then
-  echo "K3S_VERSION must be specified when setting up a cluster, use `k3d version list k3s` to find valid versions"
+  echo "K3S_VERSION must be specified when setting up a cluster, use $(k3d version list k3s) to find valid versions"
   exit 1
 fi
 
@@ -39,12 +39,12 @@ wait_for_nodes(){
   done
 }
 
-k3d cluster delete ${CLUSTER_NAME} || true
-k3d cluster create ${CLUSTER_NAME} --image "docker.io/rancher/k3s:${K3S_VERSION}"
+k3d cluster delete $CLUSTER_NAME || true
+k3d cluster create $CLUSTER_NAME --image "docker.io/rancher/k3s:${K3S_VERSION}"
 
 wait_for_nodes
 
-echo "${CLUSTER_NAME} ready"
+echo "$CLUSTER_NAME ready"
 
 kubectl cluster-info --context k3d-${CLUSTER_NAME}
 kubectl config use-context k3d-${CLUSTER_NAME}
@@ -52,4 +52,4 @@ kubectl get nodes -o wide
 
 IMAGE=${REPO}/backup-restore-operator:${TAG}
 
-k3d image import ${IMAGE} -c ${CLUSTER_NAME}
+k3d image import ${IMAGE} -c $CLUSTER_NAME
