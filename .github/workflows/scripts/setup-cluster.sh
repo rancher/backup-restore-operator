@@ -16,14 +16,29 @@ fi
 
 # waits until all nodes are ready
 wait_for_nodes(){
+  timeout=120
+  start_time=$(date +%s)
   echo "wait until all agents are ready"
   while :
   do
+    current_time=$(date +%s)
+    elapsed_time=$((current_time - start_time))
+    if [ $elapsed_time -ge $timeout ]; then
+        echo "Timeout reached, exiting..."
+        exit 1
+    fi
+    
     readyNodes=1
     statusList=$(kubectl get nodes --no-headers | awk '{ print $2}')
     # shellcheck disable=SC2162
     while read status
     do
+      current_time=$(date +%s)
+      elapsed_time=$((current_time - start_time))
+      if [ $elapsed_time -ge $timeout ]; then
+          echo "Timeout reached, exiting..."
+          exit 1
+      fi
       if [ "$status" == "NotReady" ] || [ "$status" == "" ]
       then
         readyNodes=0
