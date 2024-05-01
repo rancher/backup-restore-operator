@@ -11,6 +11,8 @@ permissions:
 jobs:
   ci:
     uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@release/v5.0
+    permissions:
+      contents: read
   goreleaser:
     needs: [
       ci
