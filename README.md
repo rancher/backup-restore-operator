@@ -1,15 +1,18 @@
 # Backup and Restore Operator
 
-### Latest release
+## Latest release
 
 [![Latest](https://img.shields.io/badge/dynamic/yaml?label=backup-restore-operator&query=%24.entries%5B%27rancher-backup%27%5D%5B0%5D.appVersion&url=https%3A%2F%2Fcharts.rancher.io%2Findex.yaml)](https://github.com/rancher/backup-restore-operator/releases/latest)
 
-### Description
+## Description
 
-* This operator provides ability to backup and restore Kubernetes applications (metadata) running on any cluster. It accepts a list of resources that need to be backed up for a particular application. It then gathers these resources by querying the Kubernetes API server, packages all the resources to create a tarball file and pushes it to the configured backup storage location. Since it gathers resources by querying the API server, it can back up applications from any type of Kubernetes cluster.
-* The operator preserves the ownerReferences on all resources, hence maintaining dependencies between objects.
-* It also provides encryption support, to encrypt user specified resources before saving them in the backup file. It uses the same encryption configuration that is used to enable [Kubernetes Encryption at Rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/). Follow the steps in [this section](https://ranchermanager.docs.rancher.com/reference-guides/backup-restore-configuration/backup-configuration#encryption) to configure this.
+The Backup and Restore Operator provides ability to back up and restore the Rancher application running on any Kubernetes cluster.
 
+### Supported Use-Cases
+- Backing up Rancher before upgrades and restoring after a failed one.
+- Restoring your Rancher cluster to a new cluster in a DR scenario.
+- Migrating your Rancher application between K8S clusters (of the same version).
+- (Optional) Storing and restoring backups using [Kubernetes Encryption at Rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/).
 
 ### Branches and Releases
 
@@ -18,7 +21,7 @@
 *  the tag `v3.x.x` is cut from the `release/v3.0` branch for Rancher v2.7.x line
 ----
 
-### Quickstart
+## Quickstart
 
 If Rancher v2.5+ is installed, you can install the `backup-restore-operator`, from the [Cluster Explorer UI](https://ranchermanager.docs.rancher.com/pages-for-subheaders/backup-restore-and-disaster-recovery).
 Otherwise, you can install the charts via `helm repo` by executing the commands below.
@@ -58,6 +61,15 @@ kubectl delete namespace cattle-resources-system
 ```
 
 ----
+
+## More Info
+
+Our default chart is built for the use-case of backing up and restoring the Rancher application.
+However, under the hood the Backup Restore Operator is rather flexible extension for backup and restore of Kubernetes resources.
+
+* This operator provides ability to backup and restore Kubernetes applications (metadata) running on any cluster. It accepts a list of resources that need to be backed up for a particular application. It then gathers these resources by querying the Kubernetes API server, packages all the resources to create a tarball file and pushes it to the configured backup storage location. Since it gathers resources by querying the API server, it can back up applications from any type of Kubernetes cluster.
+* The operator preserves the ownerReferences on all resources, hence maintaining dependencies between objects.
+* It also provides encryption support, to encrypt user specified resources before saving them in the backup file. It uses the same encryption configuration that is used to enable [Kubernetes Encryption at Rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/). Follow the steps in [this section](https://ranchermanager.docs.rancher.com/reference-guides/backup-restore-configuration/backup-configuration#encryption) to configure this.
 
 ### CRDs
 
