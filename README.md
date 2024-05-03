@@ -23,8 +23,11 @@ The Backup and Restore Operator provides ability to back up and restore the Ranc
 
 ## Quickstart
 
-If Rancher v2.5+ is installed, you can install the `backup-restore-operator`, from the [Cluster Explorer UI](https://ranchermanager.docs.rancher.com/pages-for-subheaders/backup-restore-and-disaster-recovery).
-Otherwise, you can install the charts via `helm repo` by executing the commands below.
+You will need to install the `backup-restore-operator`, from the [Cluster Explorer UI](https://ranchermanager.docs.rancher.com/pages-for-subheaders/backup-restore-and-disaster-recovery).
+Within the App catalog look for the `Rancher Backups` application chart.
+
+However, when performing a Rancher migration you will not have the UI installed.  
+So, you will need to install the charts via `helm repo` by executing the commands below.
 
 First, add our charts repository.
 
