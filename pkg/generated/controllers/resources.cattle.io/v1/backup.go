@@ -20,6 +20,7 @@ package v1
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
@@ -48,10 +49,14 @@ type BackupCache interface {
 	generic.NonNamespacedCacheInterface[*v1.Backup]
 }
 
+// BackupStatusHandler is executed for every added or modified Backup. Should return the new status to be updated
 type BackupStatusHandler func(obj *v1.Backup, status v1.BackupStatus) (v1.BackupStatus, error)
 
+// BackupGeneratingHandler is the top-level handler that is executed for every Backup event. It extends BackupStatusHandler by a returning a slice of child objects to be passed to apply.Apply
 type BackupGeneratingHandler func(obj *v1.Backup, status v1.BackupStatus) ([]runtime.Object, v1.BackupStatus, error)
 
+// RegisterBackupStatusHandler configures a BackupController to execute a BackupStatusHandler for every events observed.
+// If a non-empty condition is provided, it will be updated in the status conditions for every handler execution
 func RegisterBackupStatusHandler(ctx context.Context, controller BackupController, condition condition.Cond, name string, handler BackupStatusHandler) {
 	statusHandler := &backupStatusHandler{
 		client:    controller,
@@ -61,6 +66,8 @@ func RegisterBackupStatusHandler(ctx context.Context, controller BackupControlle
 	controller.AddGenericHandler(ctx, name, generic.FromObjectHandlerToHandler(statusHandler.sync))
 }
 
+// RegisterBackupGeneratingHandler configures a BackupController to execute a BackupGeneratingHandler for every events observed, passing the returned objects to the provided apply.Apply.
+// If a non-empty condition is provided, it will be updated in the status conditions for every handler execution
 func RegisterBackupGeneratingHandler(ctx context.Context, controller BackupController, apply apply.Apply,
 	condition condition.Cond, name string, handler BackupGeneratingHandler, opts *generic.GeneratingHandlerOptions) {
 	statusHandler := &backupGeneratingHandler{
@@ -82,6 +89,7 @@ type backupStatusHandler struct {
 	handler   BackupStatusHandler
 }
 
+// sync is executed on every resource addition or modification. Executes the configured handlers and sends the updated status to the Kubernetes API
 func (a *backupStatusHandler) sync(key string, obj *v1.Backup) (*v1.Backup, error) {
 	if obj == nil {
 		return obj, nil
@@ -127,8 +135,10 @@ type backupGeneratingHandler struct {
 	opts  generic.GeneratingHandlerOptions
 	gvk   schema.GroupVersionKind
 	name  string
+	seen  sync.Map
 }
 
+// Remove handles the observed deletion of a resource, cascade deleting every associated resource previously applied
 func (a *backupGeneratingHandler) Remove(key string, obj *v1.Backup) (*v1.Backup, error) {
 	if obj != nil {
 		return obj, nil
@@ -138,12 +148,17 @@ func (a *backupGeneratingHandler) Remove(key string, obj *v1.Backup) (*v1.Backup
 	obj.Namespace, obj.Name = kv.RSplit(key, "/")
 	obj.SetGroupVersionKind(a.gvk)
 
+	if a.opts.UniqueApplyForResourceVersion {
+		a.seen.Delete(key)
+	}
+
 	return nil, generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
 		WithOwner(obj).
 		WithSetID(a.name).
 		ApplyObjects()
 }
 
+// Handle executes the configured BackupGeneratingHandler and pass the resulting objects to apply.Apply, finally returning the new status of the resource
 func (a *backupGeneratingHandler) Handle(obj *v1.Backup, status v1.BackupStatus) (v1.BackupStatus, error) {
 	if !obj.DeletionTimestamp.IsZero() {
 		return status, nil
@@ -153,9 +168,41 @@ func (a *backupGeneratingHandler) Handle(obj *v1.Backup, status v1.BackupStatus)
 	if err != nil {
 		return newStatus, err
 	}
+	if !a.isNewResourceVersion(obj) {
+		return newStatus, nil
+	}
 
-	return newStatus, generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
+	err = generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
 		WithOwner(obj).
 		WithSetID(a.name).
 		ApplyObjects(objs...)
+	if err != nil {
+		return newStatus, err
+	}
+	a.storeResourceVersion(obj)
+	return newStatus, nil
+}
+
+// isNewResourceVersion detects if a specific resource version was already successfully processed.
+// Only used if UniqueApplyForResourceVersion is set in generic.GeneratingHandlerOptions
+func (a *backupGeneratingHandler) isNewResourceVersion(obj *v1.Backup) bool {
+	if !a.opts.UniqueApplyForResourceVersion {
+		return true
+	}
+
+	// Apply once per resource version
+	key := obj.Namespace + "/" + obj.Name
+	previous, ok := a.seen.Load(key)
+	return !ok || previous != obj.ResourceVersion
+}
+
+// storeResourceVersion keeps track of the latest resource version of an object for which Apply was executed
+// Only used if UniqueApplyForResourceVersion is set in generic.GeneratingHandlerOptions
+func (a *backupGeneratingHandler) storeResourceVersion(obj *v1.Backup) {
+	if !a.opts.UniqueApplyForResourceVersion {
+		return
+	}
+
+	key := obj.Namespace + "/" + obj.Name
+	a.seen.Store(key, obj.ResourceVersion)
 }

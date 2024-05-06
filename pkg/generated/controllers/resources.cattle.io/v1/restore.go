@@ -20,6 +20,7 @@ package v1
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
@@ -48,10 +49,14 @@ type RestoreCache interface {
 	generic.NonNamespacedCacheInterface[*v1.Restore]
 }
 
+// RestoreStatusHandler is executed for every added or modified Restore. Should return the new status to be updated
 type RestoreStatusHandler func(obj *v1.Restore, status v1.RestoreStatus) (v1.RestoreStatus, error)
 
+// RestoreGeneratingHandler is the top-level handler that is executed for every Restore event. It extends RestoreStatusHandler by a returning a slice of child objects to be passed to apply.Apply
 type RestoreGeneratingHandler func(obj *v1.Restore, status v1.RestoreStatus) ([]runtime.Object, v1.RestoreStatus, error)
 
+// RegisterRestoreStatusHandler configures a RestoreController to execute a RestoreStatusHandler for every events observed.
+// If a non-empty condition is provided, it will be updated in the status conditions for every handler execution
 func RegisterRestoreStatusHandler(ctx context.Context, controller RestoreController, condition condition.Cond, name string, handler RestoreStatusHandler) {
 	statusHandler := &restoreStatusHandler{
 		client:    controller,
@@ -61,6 +66,8 @@ func RegisterRestoreStatusHandler(ctx context.Context, controller RestoreControl
 	controller.AddGenericHandler(ctx, name, generic.FromObjectHandlerToHandler(statusHandler.sync))
 }
 
+// RegisterRestoreGeneratingHandler configures a RestoreController to execute a RestoreGeneratingHandler for every events observed, passing the returned objects to the provided apply.Apply.
+// If a non-empty condition is provided, it will be updated in the status conditions for every handler execution
 func RegisterRestoreGeneratingHandler(ctx context.Context, controller RestoreController, apply apply.Apply,
 	condition condition.Cond, name string, handler RestoreGeneratingHandler, opts *generic.GeneratingHandlerOptions) {
 	statusHandler := &restoreGeneratingHandler{
@@ -82,6 +89,7 @@ type restoreStatusHandler struct {
 	handler   RestoreStatusHandler
 }
 
+// sync is executed on every resource addition or modification. Executes the configured handlers and sends the updated status to the Kubernetes API
 func (a *restoreStatusHandler) sync(key string, obj *v1.Restore) (*v1.Restore, error) {
 	if obj == nil {
 		return obj, nil
@@ -127,8 +135,10 @@ type restoreGeneratingHandler struct {
 	opts  generic.GeneratingHandlerOptions
 	gvk   schema.GroupVersionKind
 	name  string
+	seen  sync.Map
 }
 
+// Remove handles the observed deletion of a resource, cascade deleting every associated resource previously applied
 func (a *restoreGeneratingHandler) Remove(key string, obj *v1.Restore) (*v1.Restore, error) {
 	if obj != nil {
 		return obj, nil
@@ -138,12 +148,17 @@ func (a *restoreGeneratingHandler) Remove(key string, obj *v1.Restore) (*v1.Rest
 	obj.Namespace, obj.Name = kv.RSplit(key, "/")
 	obj.SetGroupVersionKind(a.gvk)
 
+	if a.opts.UniqueApplyForResourceVersion {
+		a.seen.Delete(key)
+	}
+
 	return nil, generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
 		WithOwner(obj).
 		WithSetID(a.name).
 		ApplyObjects()
 }
 
+// Handle executes the configured RestoreGeneratingHandler and pass the resulting objects to apply.Apply, finally returning the new status of the resource
 func (a *restoreGeneratingHandler) Handle(obj *v1.Restore, status v1.RestoreStatus) (v1.RestoreStatus, error) {
 	if !obj.DeletionTimestamp.IsZero() {
 		return status, nil
@@ -153,9 +168,41 @@ func (a *restoreGeneratingHandler) Handle(obj *v1.Restore, status v1.RestoreStat
 	if err != nil {
 		return newStatus, err
 	}
+	if !a.isNewResourceVersion(obj) {
+		return newStatus, nil
+	}
 
-	return newStatus, generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
+	err = generic.ConfigureApplyForObject(a.apply, obj, &a.opts).
 		WithOwner(obj).
 		WithSetID(a.name).
 		ApplyObjects(objs...)
+	if err != nil {
+		return newStatus, err
+	}
+	a.storeResourceVersion(obj)
+	return newStatus, nil
+}
+
+// isNewResourceVersion detects if a specific resource version was already successfully processed.
+// Only used if UniqueApplyForResourceVersion is set in generic.GeneratingHandlerOptions
+func (a *restoreGeneratingHandler) isNewResourceVersion(obj *v1.Restore) bool {
+	if !a.opts.UniqueApplyForResourceVersion {
+		return true
+	}
+
+	// Apply once per resource version
+	key := obj.Namespace + "/" + obj.Name
+	previous, ok := a.seen.Load(key)
+	return !ok || previous != obj.ResourceVersion
+}
+
+// storeResourceVersion keeps track of the latest resource version of an object for which Apply was executed
+// Only used if UniqueApplyForResourceVersion is set in generic.GeneratingHandlerOptions
+func (a *restoreGeneratingHandler) storeResourceVersion(obj *v1.Restore) {
+	if !a.opts.UniqueApplyForResourceVersion {
+		return
+	}
+
+	key := obj.Namespace + "/" + obj.Name
+	a.seen.Store(key, obj.ResourceVersion)
 }
