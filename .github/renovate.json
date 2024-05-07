@@ -3,6 +3,20 @@
     "github>rancher/renovate-config#release",
     "group:all"
   ],
+  "packageRules": [
+    {
+      "packageNames": [
+        "github.com/rancher/hull",
+        "github.com/rancher/lasso",
+        "github.com/rancher/wrangler/v2"
+      ],
+      "enabled": false,
+      "branches": [
+        "release/v3.0",
+        "release/v4.0"
+      ]
+    }
+  ],
   "baseBranches": [
     "release/v3.0",
     "release/v4.0",
