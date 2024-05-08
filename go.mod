@@ -2,9 +2,9 @@ module github.com/rancher/backup-restore-operator
 
 go 1.22.0
 
-toolchain go1.22.2
+toolchain go1.22.3
 
-replace golang.org/x/crypto => golang.org/x/crypto v0.22.0
+replace golang.org/x/crypto => golang.org/x/crypto v0.23.0
 
 require (
 	github.com/minio/minio-go/v7 v7.0.70
@@ -19,7 +19,7 @@ require (
 	k8s.io/apimachinery v0.28.6
 	k8s.io/apiserver v0.28.6
 	k8s.io/client-go v0.28.6
-	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
+	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
 )
 
 require (
@@ -65,9 +65,9 @@ require (
 	golang.org/x/mod v0.15.0 // indirect
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/oauth2 v0.10.0 // indirect
-	golang.org/x/sys v0.19.0 // indirect
-	golang.org/x/term v0.19.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/term v0.20.0 // indirect
+	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.18.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
