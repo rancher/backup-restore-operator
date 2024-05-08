@@ -11,6 +11,8 @@
   "ignoreDeps": [
     "github.com/rancher/hull",
     "github.com/rancher/lasso",
-    "github.com/rancher/wrangler/v2"
+    "github.com/rancher/wrangler",
+    "github.com/rancher/wrangler/v2",
+    "github.com/rancher/wrangler/v3"
   ]
 }
