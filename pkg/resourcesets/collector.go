@@ -211,10 +211,10 @@ func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv
 			if err != nil {
 				return nil, err
 			}
-			return h.removeFilterUid(filteredByNamespace), nil
+			return h.removeFilterUID(filteredByNamespace), nil
 		}
 	}
-	return h.removeFilterUid(filteredByName), nil
+	return h.removeFilterUID(filteredByName), nil
 }
 
 func (h *ResourceHandler) appendTempUID(filteredByLabel []unstructured.Unstructured) []unstructured.Unstructured {
@@ -226,7 +226,7 @@ func (h *ResourceHandler) appendTempUID(filteredByLabel []unstructured.Unstructu
 	return filteredByLabel
 }
 
-func (h *ResourceHandler) removeFilterUid(filteredObjects []unstructured.Unstructured) []unstructured.Unstructured {
+func (h *ResourceHandler) removeFilterUID(filteredObjects []unstructured.Unstructured) []unstructured.Unstructured {
 	// Prepare each object with a temp UID (not saved back to the CRD)
 	for _, obj := range filteredObjects {
 		delete(obj.Object, "filterUid")
