@@ -1,39 +1,32 @@
 package resourcesets
 
 import (
-	"os"
-	"runtime"
+	"embed"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/stretchr/testify/assert"
+	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
-func getCurrentFuncName() string {
-	pc, _, _, _ := runtime.Caller(1)
-	fullFuncName := runtime.FuncForPC(pc).Name()
-	// Extract just the function name
-	lastDotIndex := strings.LastIndex(fullFuncName, ".")
-	if lastDotIndex != -1 {
-		return fullFuncName[lastDotIndex+1:]
-	}
-	return fullFuncName
-}
+//go:embed testdata/*.yaml
+var testfolder embed.FS
 
 func grabTestStubs(t *testing.T, filename string) ([]unstructured.Unstructured, error) {
 	var resourceObjectsList []unstructured.Unstructured
 
 	// Read YAML file
-	yamlFile, err := os.ReadFile("./../../tests/stubs/" + filename)
+	content, err := testfolder.ReadFile(filepath.Join("testdata", filename))
 	if err != nil {
 		return nil, err
 	}
 
 	// Split YAML file into individual YAML documents
-	decoder := yaml.NewYAMLToJSONDecoder(strings.NewReader(string(yamlFile)))
+	decoder := yaml.NewYAMLToJSONDecoder(strings.NewReader(string(content)))
 	for {
 		var obj unstructured.Unstructured
 		err := decoder.Decode(&obj)
@@ -48,6 +41,20 @@ func grabTestStubs(t *testing.T, filename string) ([]unstructured.Unstructured, 
 	return resourceObjectsList, nil
 }
 
+func abstractFilterByKindTest(t *testing.T, filter v1.ResourceSelector, stubPath string) []k8sv1.APIResource {
+	// Construct resourceObjectsList from a folder of '.yaml' files
+	resourceObjectsList, err := grabTestStubs(t, stubPath+".yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// kinds work on APIResource objects. The subsequent filters work on
+	// unstructured.Unstructured objects
+	handler := &ResourceHandler{}
+	result, err := handler.filterByKind(filter, apiResourcesFromUnstructured(resourceObjectsList))
+	assert.NoError(t, err)
+	return result
+}
+
 func abstractFilterByNameTest(t *testing.T, filter v1.ResourceSelector, stubPath string) []unstructured.Unstructured {
 	// Construct resourceObjectsList from a folder of '.yaml' files
 	resourceObjectsList, err := grabTestStubs(t, stubPath+".yaml")
@@ -57,24 +64,28 @@ func abstractFilterByNameTest(t *testing.T, filter v1.ResourceSelector, stubPath
 
 	// Create an instance of ResourceHandler
 	handler := &ResourceHandler{}
-	resourceObjectsList = handler.appendTempUID(resourceObjectsList)
 	result, err := handler.filterByName(filter, resourceObjectsList)
 	assert.NoError(t, err)
 
 	return result
 }
 
-func getObjectPropertyFromMetadataByKey(object unstructured.Unstructured, key string) string {
-	metadata := object.Object["metadata"].(map[string]interface{})
-	value := metadata[key].(string)
-	return value
+func apiResourcesFromUnstructured(resourceObjectsList []unstructured.Unstructured) []k8sv1.APIResource {
+	apiResources := make([]k8sv1.APIResource, len(resourceObjectsList))
+	for i, obj := range resourceObjectsList {
+		apiResources[i] = k8sv1.APIResource{
+			Kind: obj.GetKind(),
+			Name: obj.GetName(),
+		}
+	}
+	return apiResources
 }
 
 func TestFilterByName_EmptyFilter(t *testing.T) {
 	// Empty filter should get all results.
 	mockFilter := v1.ResourceSelector{}
 
-	result := abstractFilterByNameTest(t, mockFilter, getCurrentFuncName())
+	result := abstractFilterByNameTest(t, mockFilter, "pets01")
 
 	// Make specific asserts on the results here - verify no false positives and no missed items.
 	assert.NotNil(t, result)
@@ -86,14 +97,18 @@ func TestFilterByName_OnlyHasResourceNameRegexp(t *testing.T) {
 	mockFilter := v1.ResourceSelector{
 		ResourceNameRegexp: "^hotdog",
 	}
-	result := abstractFilterByNameTest(t, mockFilter, getCurrentFuncName())
+	result := abstractFilterByNameTest(t, mockFilter, "hamburgerStand01")
 	// Results are not empty...
 	assert.NotNil(t, result)
 	// Results has exactly 1 item...
-	assert.Equal(t, 2, len(result))
+	assert.Equal(t, 3, len(result))
 	// verify item name
-	assert.Equal(t, "hotdog", getObjectPropertyFromMetadataByKey(result[0], "name"))
-	assert.Equal(t, "hotdog-cart", getObjectPropertyFromMetadataByKey(result[0], "namespace"))
+	assert.Equal(t, "hotdog", result[0].GetName())
+	assert.Equal(t, "hotdog-stand", result[0].GetNamespace())
+	assert.Equal(t, "hotdog-with-cheese", result[1].GetName())
+	assert.Equal(t, "hotdog-stand", result[1].GetNamespace())
+	assert.Equal(t, "hotdog", result[2].GetName())
+	assert.Equal(t, "hotdog-cart", result[2].GetNamespace())
 }
 
 func TestFilterByName_ExcludeRegexWithWildcardInclude(t *testing.T) {
@@ -104,7 +119,7 @@ func TestFilterByName_ExcludeRegexWithWildcardInclude(t *testing.T) {
 		ExcludeResourceNameRegexp: "^default$",
 	}
 
-	result := abstractFilterByNameTest(t, mockFilter, getCurrentFuncName())
+	result := abstractFilterByNameTest(t, mockFilter, "serviceAccounts01")
 
 	// Make specific asserts on the results here - verify no false positives and no missed items.
 	// Results are not empty...
@@ -112,7 +127,7 @@ func TestFilterByName_ExcludeRegexWithWildcardInclude(t *testing.T) {
 	// Results has exactly 1 item...
 	assert.Equal(t, 1, len(result))
 	// verify item name
-	assert.Equal(t, "fleet-agent", getObjectPropertyFromMetadataByKey(result[0], "name"))
+	assert.Equal(t, "fleet-agent", result[0].GetName())
 }
 
 func TestFilterByName_ExcludeRegexWithoutInclude(t *testing.T) {
@@ -123,12 +138,12 @@ func TestFilterByName_ExcludeRegexWithoutInclude(t *testing.T) {
 		ExcludeResourceNameRegexp: "^default$",
 	}
 
-	result := abstractFilterByNameTest(t, mockFilter, getCurrentFuncName())
+	result := abstractFilterByNameTest(t, mockFilter, "serviceAccounts01")
 
 	// Make specific asserts on the results here - verify no false positives and no missed items.
 	assert.NotNil(t, result)
 	assert.Equal(t, 1, len(result))
-	assert.Equal(t, "mustard-bottle", getObjectPropertyFromMetadataByKey(result[0], "name"))
+	assert.Equal(t, "fleet-agent", result[0].GetName())
 }
 
 func TestFilterByName_ResourceNamesRegexWithStaticNames(t *testing.T) {
@@ -149,29 +164,29 @@ func TestFilterByName_ResourceNamesRegexWithStaticNames(t *testing.T) {
 		ResourceNames:      resourceNames,
 	}
 
-	result := abstractFilterByNameTest(t, mockFilter, getCurrentFuncName())
+	result := abstractFilterByNameTest(t, mockFilter, "service01")
 
 	// Make specific asserts on the results here - verify no false positives and no missed items.
 	assert.NotNil(t, result)
 	assert.Equal(t, 1, len(result))
-	assert.Equal(t, "gitjob", getObjectPropertyFromMetadataByKey(result[0], "name"))
+	assert.Equal(t, "gitjob", result[0].GetName())
 }
 
 func TestFilterByName_OnlyResourceNames(t *testing.T) {
 	// Results should be any items with these 3 exact names.
-	var resourceNames []string
-	resourceNames = append(resourceNames, "hotdog")
-	resourceNames = append(resourceNames, "hamburger")
-	resourceNames = append(resourceNames, "fries")
+	resourceNames := []string{"hotdog", "hamburger", "fries"}
 	mockFilter := v1.ResourceSelector{
 		ResourceNames: resourceNames,
 	}
 
-	result := abstractFilterByNameTest(t, mockFilter, getCurrentFuncName())
+	result := abstractFilterByNameTest(t, mockFilter, "hamburgerStand01")
 
 	// Make specific asserts on the results here - verify no false positives and no missed items.
 	assert.NotNil(t, result)
-	assert.Equal(t, 2, len(result))
+	assert.Equal(t, 3, len(result))
+	for _, obj := range result {
+		assert.True(t, memberOf(resourceNames, obj.GetName()))
+	}
 }
 
 // Intentionally failing due to existing bugs
@@ -188,7 +203,7 @@ func TestFilterByName_CheckDuplicates(t *testing.T) {
 	// Hotdog items should not be duplicated...
 	// hamburger-with-cheese will be re-added after it was excluded (making 5 total)
 
-	result := abstractFilterByNameTest(t, mockFilter, getCurrentFuncName())
+	result := abstractFilterByNameTest(t, mockFilter, "hamburgerStand01")
 
 	// Make specific asserts on the results here - verify no false positives and no missed items.
 	assert.NotNil(t, result)
@@ -198,27 +213,112 @@ func TestFilterByName_CheckDuplicates(t *testing.T) {
 
 func TestFilterByName_ExcludeRegexWithResourceNameMiss(t *testing.T) {
 	// This test verifies what happens when `filteredByResourceNames` is equal to 0
-	var resourceNames []string
-	resourceNames = append(resourceNames, "cheeseburger")
+	resourceNames := []string{"lobster", "geoduck"}
 	mockFilter := v1.ResourceSelector{
 		ExcludeResourceNameRegexp: ".*burger.*|^raw-",
 		ResourceNames:             resourceNames,
 	}
 
-	result := abstractFilterByNameTest(t, mockFilter, getCurrentFuncName())
+	result := abstractFilterByNameTest(t, mockFilter, "hamburgerStand01")
 
 	// Make specific asserts on the results here - verify no false positives and no missed items.
 	assert.NotNil(t, result)
-	assert.Equal(t, 2, len(result))
+	assert.Equal(t, 4, len(result))
+}
+
+func TestFilterByName_CatchInvalidNameRegexp(t *testing.T) {
+	// Construct resourceObjectsList from a folder of '.yaml' files
+	resourceObjectsList, err := grabTestStubs(t, "hamburgerStand01.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filter := v1.ResourceSelector{
+		ResourceNameRegexp:        "orphaned open paren: ) is invalid",
+		ExcludeResourceNameRegexp: ".",
+	}
+
+	// Create an instance of ResourceHandler
+	handler := &ResourceHandler{}
+	_, err = handler.filterByName(filter, resourceObjectsList)
+	assert.Error(t, err)
+}
+
+func TestFilterByName_CatchInvalidExcludeNameRegexp(t *testing.T) {
+	// Construct resourceObjectsList from a folder of '.yaml' files
+	resourceObjectsList, err := grabTestStubs(t, "hamburgerStand01.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filter := v1.ResourceSelector{
+		ResourceNameRegexp:        "closed-brace.{3}",
+		ExcludeResourceNameRegexp: "(unclosed paren",
+	}
+
+	// Create an instance of ResourceHandler
+	handler := &ResourceHandler{}
+	_, err = handler.filterByName(filter, resourceObjectsList)
+	assert.Error(t, err)
+}
+
+// kind-related tests: Kinds: []string, ExcludeKinds: []string, KindsRegexp: string
+
+func TestFilterByKind_KindsOnly(t *testing.T) {
+	kinds := []string{"Cat", "Dog"}
+	mockFilter := v1.ResourceSelector{
+		Kinds: kinds,
+	}
+
+	result := abstractFilterByKindTest(t, mockFilter, "pets02DifferentKinds")
+
+	// Make specific asserts on the results here - verify no false positives and no missed items.
+	assert.NotNil(t, result)
+	assert.Equal(t, 3, len(result))
+}
+
+func TestFilterByKind_KindsRegexp(t *testing.T) {
+	kinds := []string{"Dog"}
+	mockFilter := v1.ResourceSelector{
+		Kinds:       kinds,
+		KindsRegexp: `^Cat\b`,
+	}
+
+	result := abstractFilterByKindTest(t, mockFilter, "pets02DifferentKinds")
+
+	// Make specific asserts on the results here - verify no false positives and no missed items.
+	assert.NotNil(t, result)
+	assert.Equal(t, 3, len(result))
+}
+
+func TestFilterByKind_CatlikeButExcludeCats(t *testing.T) {
+	mockFilter := v1.ResourceSelector{
+		ExcludeKinds: []string{"Cat"},
+		KindsRegexp:  ".",
+	}
+
+	result := abstractFilterByKindTest(t, mockFilter, "pets02DifferentKinds")
+
+	// Make specific asserts on the results here - verify no false positives and no missed items.
+	assert.NotNil(t, result)
+	assert.Equal(t, 4, len(result))
+}
+
+func TestFilterByKind_BadIncludesRegexp(t *testing.T) {
+	resourceObjectsList, err := grabTestStubs(t, "pets02DifferentKinds.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filter := v1.ResourceSelector{
+		KindsRegexp: "bad: [missing close-bracket",
+	}
+	handler := &ResourceHandler{}
+	_, err = handler.filterByKind(filter, apiResourcesFromUnstructured(resourceObjectsList))
+	assert.Error(t, err)
 }
 
 // Intentionally failing due to existing bugs
 // TODO: Expand filterByNamespace to test more scenarios like previous regex tests...
 func TestResourceHandler_filterByName_then_filterByNamespace(t *testing.T) {
-	var resourceNames []string
-	resourceNames = append(resourceNames, "hamburger")
-	resourceNames = append(resourceNames, "cheeseburger")
-	resourceNames = append(resourceNames, "fries")
+	var resourceNames = []string{"hamburger", "cheeseburger", "fries"}
 	mockFilter := v1.ResourceSelector{
 		NamespaceRegexp:           "^hotdog",
 		ResourceNameRegexp:        ".",
@@ -226,14 +326,34 @@ func TestResourceHandler_filterByName_then_filterByNamespace(t *testing.T) {
 		ResourceNames:             resourceNames,
 	}
 
-	result := abstractFilterByNameTest(t, mockFilter, getCurrentFuncName())
+	result := abstractFilterByNameTest(t, mockFilter, "hamburgerStand01")
 	assert.NotNil(t, result)
-	assert.NotEqual(t, 9, len(result)) // Not all the stub/mock items
-	assert.Equal(t, 7, len(result))    // Only expected items...
+	assert.Equal(t, 6, len(result)) // Only expected items...
 
 	handler := &ResourceHandler{}
 	namespaceResult, _ := handler.filterByNamespace(mockFilter, result)
 	assert.NotNil(t, namespaceResult)
-	// Disabled for now to let tests pass.
-	/// assert.Equal(t, 5, len(namespaceResult)) // Should be 5 after bug fix
+	assert.Equal(t, 4, len(namespaceResult)) // Should be 5 after bug fix
+}
+
+func TestFilterByNamespace_BadNamespaceRegexp(t *testing.T) {
+	resourceObjectsList, err := grabTestStubs(t, "pets02DifferentKinds.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filter := v1.ResourceSelector{
+		NamespaceRegexp: ")",
+	}
+	handler := &ResourceHandler{}
+	_, err = handler.filterByNamespace(filter, resourceObjectsList)
+	assert.Error(t, err)
+}
+
+func memberOf(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }
