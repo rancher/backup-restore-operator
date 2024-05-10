@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -41,11 +42,11 @@ func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core
 	if err != nil {
 		return transformerMap, err
 	}
-	transformerOverrides, err := encryptionconfig.GetTransformerOverrides(encryptionProviderConfigKey)
+	encryptionConfig, err := encryptionconfig.LoadEncryptionConfig(context.Background(), encryptionProviderConfigKey, false)
 	if err != nil {
-		return transformerMap, err
+		return nil, err
 	}
-	return transformerOverrides, nil
+	return encryptionConfig.Transformers, nil
 }
 
 func GetObjectQueue(l interface{}, capacity int) chan interface{} {
