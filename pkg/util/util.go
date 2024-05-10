@@ -39,8 +39,6 @@ func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core
 	err = ioutil.WriteFile(encryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
 	defer os.Remove(encryptionProviderConfigKey)
 
-	// ctx context.Context, filepath string, reload bool, apiServerID string
-
 	if err != nil {
 		return nil, err
 	}
