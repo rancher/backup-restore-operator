@@ -16,6 +16,9 @@ jobs:
     permissions:
       contents: read
   push:
+    needs : [
+      ci
+    ]
     permissions:
       contents : read
       id-token: write
