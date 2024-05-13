@@ -25,8 +25,8 @@ archives:
       builds:
         - backup-restore-operator 
       name_template: '{{ .Binary }}_{{ .Arch }}'
-    - extra_files:
-      - glob: ./dist/artifacts/*.tgz
+    - files:
+      - ./dist/artifacts/*.tgz
 checksum:
   name_template: 'checksums.txt'
 snapshot:
