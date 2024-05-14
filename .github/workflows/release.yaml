@@ -26,6 +26,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 1.22
+      - name : Package release helm charts
+        run : make package-helm
+      - run : mkdir -p ./build/artifacts/ && mv -v ./dist/artifacts/ ./build/
       - uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
