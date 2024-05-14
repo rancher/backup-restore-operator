@@ -9,7 +9,7 @@ replace golang.org/x/crypto => golang.org/x/crypto v0.23.0
 require (
 	github.com/minio/minio-go/v7 v7.0.70
 	github.com/rancher/lasso v0.0.0-20240424194130-d87ec407d941
-	github.com/rancher/wrangler v1.1.2
+	github.com/rancher/wrangler/v2 v2.2.0-rc6
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0

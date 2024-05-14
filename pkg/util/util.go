@@ -7,7 +7,7 @@ import (
 	"os"
 	"reflect"
 
-	v1core "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	v1core "github.com/rancher/wrangler/v2/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"

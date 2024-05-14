@@ -21,7 +21,8 @@ package v1
 import (
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/lasso/pkg/controller"
-	"github.com/rancher/wrangler/pkg/schemes"
+	"github.com/rancher/wrangler/v2/pkg/generic"
+	"github.com/rancher/wrangler/v2/pkg/schemes"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -45,12 +46,14 @@ type version struct {
 	controllerFactory controller.SharedControllerFactory
 }
 
-func (c *version) Backup() BackupController {
-	return NewBackupController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "Backup"}, "backups", false, c.controllerFactory)
+func (v *version) Backup() BackupController {
+	return generic.NewNonNamespacedController[*v1.Backup, *v1.BackupList](schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "Backup"}, "backups", v.controllerFactory)
 }
-func (c *version) ResourceSet() ResourceSetController {
-	return NewResourceSetController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "ResourceSet"}, "resourcesets", false, c.controllerFactory)
+
+func (v *version) ResourceSet() ResourceSetController {
+	return generic.NewNonNamespacedController[*v1.ResourceSet, *v1.ResourceSetList](schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "ResourceSet"}, "resourcesets", v.controllerFactory)
 }
-func (c *version) Restore() RestoreController {
-	return NewRestoreController(schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "Restore"}, "restores", false, c.controllerFactory)
+
+func (v *version) Restore() RestoreController {
+	return generic.NewNonNamespacedController[*v1.Restore, *v1.RestoreList](schema.GroupVersionKind{Group: "resources.cattle.io", Version: "v1", Kind: "Restore"}, "restores", v.controllerFactory)
 }

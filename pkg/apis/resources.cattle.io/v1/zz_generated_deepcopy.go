@@ -22,7 +22,7 @@ limitations under the License.
 package v1
 
 import (
-	genericcondition "github.com/rancher/wrangler/pkg/genericcondition"
+	genericcondition "github.com/rancher/wrangler/v2/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
