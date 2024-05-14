@@ -2,6 +2,7 @@
 /.cache
 /bin
 /dist
+/build
 *.swp
 .idea
 ./backup
