@@ -20,7 +20,7 @@ package v1
 
 import (
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/wrangler/v2/pkg/generic"
+	"github.com/rancher/wrangler/v3/pkg/generic"
 )
 
 // ResourceSetController interface for managing ResourceSet resources.
