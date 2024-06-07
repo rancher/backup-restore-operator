@@ -8,7 +8,7 @@
 
 The Backup and Restore Operator provides ability to back up and restore the Rancher application running on any Kubernetes cluster.
 
-### Supported Use-Cases
+### Use-Cases
 - Backing up Rancher before Rancher upgrades and restoring after a failed one.
 - Restoring your *Rancher application* to a new cluster in a DR scenario.
 - Migrating your *Rancher application* between K8S distributions (of the same version).
