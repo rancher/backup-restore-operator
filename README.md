@@ -14,6 +14,11 @@ The Backup and Restore Operator provides ability to back up and restore the Ranc
 - Migrating your *Rancher application* between K8S distributions (of the same version).
 - (Optional) Storing and restoring backups using [Kubernetes Encryption at Rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/).
 
+What the Backup Restore Operator is not:
+- A downstream cluster snapshot tool,
+- A replacement for ETCD cluster backups,
+- Configured to back up user-created resources on the Rancher cluster.
+
 ### Branches and Releases
 
 *  the tag `v5.x.x` is cut from the `release/v5.0` branch for Rancher v2.9.x line
