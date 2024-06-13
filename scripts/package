@@ -6,23 +6,20 @@ source $(dirname $0)/version
 cd $(dirname $0)/..
 
 mkdir -p dist/artifacts
-if [ "$CROSS_ARCH" != "true" ]; then
-  cp bin/backup-restore-operator dist/artifacts/backup-restore-operator${SUFFIX}
-else
-  cp bin/backup-restore-operator${SUFFIX} dist/artifacts/
-fi
 
 IMAGE=${REPO}/backup-restore-operator:${TAG}
-DOCKERFILE=package/Dockerfile
+DOCKERFILE=./package/Dockerfile
 if [ -e ${DOCKERFILE}.${ARCH} ]; then
     DOCKERFILE=${DOCKERFILE}.${ARCH}
 fi
 
 if [[ ${USE_DOCKER_BUILDX} -eq 1 ]]; then
-    docker buildx build --build-arg K8S_VERSION_FROM_DRONE="${K8S_VERSION}" --platform linux/amd64 -f ${DOCKERFILE} . -t ${IMAGE} 
+    docker buildx build --platform linux/amd64 -f ${DOCKERFILE} . -t ${IMAGE} 
 else
-    docker build --build-arg K8S_VERSION_FROM_DRONE="${K8S_VERSION}" -f ${DOCKERFILE} -t ${IMAGE} .
+    docker build -f ${DOCKERFILE} -t ${IMAGE} .
 fi
 echo Built ${IMAGE}
+
+docker image save rancher/backup-restore-operator:$TAG -o ./dist/artifacts/backup-restore-operator.img
 
 ./scripts/package-helm
