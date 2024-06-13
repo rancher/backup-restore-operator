@@ -9,6 +9,7 @@ mkdir -p bin
 if [ "$(uname)" = "Linux" ]; then
     OTHER_LINKFLAGS="-extldflags -static -s"
 fi
+
 LINKFLAGS="-X main.Version=$VERSION"
 LINKFLAGS="-X main.GitCommit=$COMMIT $LINKFLAGS"
 
