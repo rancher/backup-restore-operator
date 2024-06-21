@@ -79,8 +79,8 @@ jobs:
           gh pr diff $ORIGINAL_ISSUE_NUMBER --patch > $PATCH_FILE
           BRANCH="gha-portpr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "branch=${BRANCH}" >> $GITHUB_ENV
-          git config --global user.email "rancherdashboardportbot@suse.com"
-          git config --global user.name "Rancher Dashboard Port Bot"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "Rancher PR Port Bot"
           git checkout -b $BRANCH
 
           if ! git am -3 "$PATCH_FILE" > error.log 2>&1; then
