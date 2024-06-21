@@ -13,7 +13,7 @@
   kindsRegexp: "."
 - apiVersion: "v1"
   kindsRegexp: "^secrets$"
-  resourceNameRegexp: "machine-plan$|rke-state$|machine-state$|machine-driver-secret$|machine-provision$|^harvesterconfig"
+  resourceNameRegexp: "machine-plan$|rke-state$|machine-state$|machine-driver-secret$|machine-provision$|^harvesterconfig|^registryconfig-auth"
   namespaces:
   - "fleet-default"
 - apiVersion: "v1"
