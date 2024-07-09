@@ -10,7 +10,7 @@ on:
 jobs:
   port-issue:
     runs-on: ubuntu-latest
-    if: contains(github.event.comment.body, '/backport') || contains(github.event.comment.body, '/forwardport') && !github.event.issue.pull_request
+    if: ${{ !github.event.issue.pull_request && (contains(github.event.comment.body, '/backport') || contains(github.event.comment.body, '/forwardport')) }}
     steps:
       - name: Check org membership
         env:
