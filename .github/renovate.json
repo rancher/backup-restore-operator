@@ -1,11 +1,34 @@
 {
   "extends": [
-    "github>rancher/renovate-config#release"
+    "github>rancher/renovate-config#release",
+    "group:allNonMajor"
   ],
   "baseBranches": [
     "release/v3.0",
     "release/v4.0",
     "release/v5.0"
   ],
-  "prHourlyLimit": 2
+  "ignoreDeps": [
+    "github.com/rancher/hull",
+    "github.com/rancher/lasso",
+    "github.com/rancher/wrangler",
+    "github.com/rancher/wrangler/v2",
+    "github.com/rancher/wrangler/v3"
+  ],
+  "packageRules": [
+    {
+      "groupName": "GitHub Workflow Actions",
+      "groupSlug": "gha-deps",
+      "matchManagers": [
+        "github-actions"
+      ]
+    },
+    {
+      "groupName": "Docker File Deps",
+      "groupSlug": "docker-bumps",
+      "matchManagers": [
+        "dockerfile"
+      ]
+    }
+  ]
 }
