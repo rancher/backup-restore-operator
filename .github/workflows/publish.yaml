@@ -1,4 +1,4 @@
-name : Publish Images
+name : Publish Images & artifacts (via goreleaser)
 
 on:
   push:
@@ -9,12 +9,38 @@ env:
   REGISTRY: docker.io
   REPO : rancher
 
+permissions:
+  contents: write
 
 jobs:
   ci :
     uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@release/v5.0
     permissions:
       contents: read
+  goreleaser:
+    needs: [
+      ci
+    ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.22
+      - name : Package release helm charts
+        run : make package-helm
+      - run : mkdir -p ./build/artifacts/ && mv -v ./dist/artifacts/ ./build/
+      - uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ vars.GITHUB_REF_NAME }}
   push:
     needs : [
       ci
