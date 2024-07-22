@@ -5,7 +5,7 @@ go 1.22.0
 toolchain go1.22.3
 
 replace (
-	github.com/imdario/mergo => dario.cat/mergo v0.3.16
+	github.com/imdario/mergo => dario.cat/mergo v1.0.0
 	golang.org/x/crypto => golang.org/x/crypto v0.23.0
 )
 
