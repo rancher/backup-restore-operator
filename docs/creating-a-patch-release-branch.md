@@ -31,6 +31,6 @@ Meaning we should only backport to these branches and never forward-port to from
 
 ### How do I release from a patch release branch?
 
-Follow the normal process however, the only version that we will ever release from the branch is the one it mathces.
+Follow the normal process however, the only version that we will ever release from the branch is the one it mathches.
 In the example above, we should only produce `v5.0.1` based releases (alphas, betas, RCs, and stable).
 The patch release branch should not be used to produce any other release versions.
