@@ -27,7 +27,7 @@ How do we make those moves?
 Once the new branch is pushed to Rancher remote repo you should PR a backport to it.
 
 In general treat this the same way as a normal release branch for older release versions.
-Meaning we should only backport to these branches and never forward-port to from them to others.
+Meaning we should only backport to these branches and never forward-port from them to others.
 
 ### How do I release from a patch release branch?
 
