@@ -4,16 +4,30 @@ This doc will cover the how's and when's of creating a minor release branch for 
 Ideally for this repo we will not create these before we need them to reduce branch noise.
 So in this repo "patch release branch" should only be created JIT, not preemptively.
 
+### What is a patch release branch?
+A patch release branch is simply a branch targeting a specific patch version.
+
+An example of this would be the [`release/v2.8.5`](https://github.com/rancher/rancher/tree/release/v2.8.5) branch on the `rancher/rancher` repo.
+As this branch exists so that the team could produce a `v2.8.5` that only fixes upon `v2.8.4`.
+Rather than include all the changes included in `release/v2.8` at the time which may target a later release.
+
 ### Why would I create a patch release branch?
-Technically repos like ours do not have to withhold progress due to the main rancher/rancher code-freeze.
-So in theory we can continue merging to our release branch as we please during a release freeze.
+During the release process of `rancher/rancher` there are phases when we cannot merge PRs to that repo.
+And often other repositories honor that freeze as well to simplify things if a patch were needed.
 
-Unfortunately, if PRs are merged and need to create a last minute patch release the HEAD branch is no longer valid for this.
-As cutting a release from that would include more changes than the small fix a last minute patch would require.
+Yet, observing that code freeze can reduce forward progress for repos like this one.
+The primary benefit to observing the freeze is it avoids needing and using a process like this.
+However, if a process is established then a squad/repo should be able to continue forward progress.
 
-In that event, you would need to create a `release/vX.Y.(Z+1)` branch where all values are defined based on the version being patched.
-This new patch release branch would be created based on the original tag being patched.
-Finally, you will backport the fix from the HEAD release branch to this patch release branch.
+### When would I create a patch release branch?
+
+Essentially, if PRs are merged during a time when `r/r` is frozen and we need to create a last minute patch release.
+In this situation, the HEAD branch is no longer valid for this as cutting a release would include more changes.
+And we should only ship a small fix in this patch release required to fix the issue.
+
+In that event, you would create a `release/vX.Y.(Z+1)` branch based on the version needing a patch.
+First you would implement the patch on the `release/vX.Y` branch and verify it fixes the issue.
+Finally, you will backport that fix from the HEAD release branch to this new patch release branch.
 
 ### How do I create a patch release branch?
 
