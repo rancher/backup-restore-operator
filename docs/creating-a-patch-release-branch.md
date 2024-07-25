@@ -36,7 +36,11 @@ How do we make those moves?
 
 1. Start by checking out the tag being patched: ```git checkout tags/v5.0.0```
 2. Now create a new patch branch from this spot: ```git checkout -b release/v5.0.1```
-3. Push the new patch branch to the BRO repo.
+3. Push the new patch branch to the BRO repo: ```git push upstream release/v5.0.1```
+
+> Note: You will need to update the above examples for your situation.
+> Pay close attention to what tag you checkout, the version of the patch branch, and the name of the remote you push to.
+> In this example "upstream" is the `rancher/backup-restore-repo`.
 
 Once the new branch is pushed to Rancher remote repo you should PR a backport to it.
 
