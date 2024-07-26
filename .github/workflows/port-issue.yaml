@@ -24,7 +24,7 @@ jobs:
               echo "is_member=false" >> $GITHUB_ENV
           fi
       - name: Check milestone
-        if: env.is_member == 'true'
+        if: ${{ env.is_member == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ORIGINAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -46,9 +46,7 @@ jobs:
             echo "milestone_exists=false" >> $GITHUB_ENV
           fi
       - name: Port issue
-        if: |
-          env.is_member == 'true' &&
-          env.milestone_exists == 'true'
+        if: ${{ env.is_member == 'true' && env.milestone_exists == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ORIGINAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
