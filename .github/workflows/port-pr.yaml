@@ -69,7 +69,7 @@ jobs:
           echo "Type: ${TYPE}" >> $GITHUB_STEP_SUMMARY
           echo "type=${TYPE}" >> $GITHUB_ENV
           TARGET_BRANCH=$(echo "${COMMENT_BODY}" | awk '{ print $3 }')
-          echo "Target brach: ${TARGET_BRANCH}" >> $GITHUB_STEP_SUMMARY
+          echo "Target branch: ${TARGET_BRANCH}" >> $GITHUB_STEP_SUMMARY
           echo "target_branch=${TARGET_BRANCH}" >> $GITHUB_ENV
           if gh api repos/${GITHUB_REPOSITORY}/branches --paginate | jq -e --arg TARGET_BRANCH "$TARGET_BRANCH" '.[] | select(.name == $TARGET_BRANCH)' > /dev/null; then
               echo "target_branch_exists=true" >> $GITHUB_ENV
