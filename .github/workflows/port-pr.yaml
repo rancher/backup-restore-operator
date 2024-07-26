@@ -17,7 +17,7 @@ jobs:
     steps:
       - name: Check org membership or repo ownership
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Check if the repository owner is an organization
           is_org=$(gh api users/${GITHUB_REPOSITORY_OWNER} | jq -r '.type == "Organization"')
@@ -45,7 +45,7 @@ jobs:
       - name: Check milestone
         if: ${{ env.is_member == 'true' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           BODY_MILESTONE=$(echo "${COMMENT_BODY}" | awk '{ print $2 }')
@@ -63,7 +63,7 @@ jobs:
         if: ${{ env.is_member == 'true' }}
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TYPE=$(echo "${COMMENT_BODY}" | awk '{ print $1 }' | sed -e 's_/__')
           echo "Type: ${TYPE}" >> $GITHUB_STEP_SUMMARY
@@ -87,7 +87,7 @@ jobs:
       - name: Port PR
         if: ${{ env.is_member == 'true' && env.target_branch_exists == 'true' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TYPE: ${{ env.type }}
           TARGET_BRANCH: ${{ env.target_branch }}
           MILESTONE: ${{ env.milestone }}
