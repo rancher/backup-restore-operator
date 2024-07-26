@@ -40,7 +40,7 @@ How do we make those moves?
 
 > Note: You will need to update the above examples for your situation.
 > Pay close attention to what tag you checkout, the version of the patch branch, and the name of the remote you push to.
-> In this example "upstream" is the `rancher/backup-restore-repo`.
+> In this example "upstream" is the `rancher/backup-restore-operator` repo.
 
 Once the new branch is pushed to Rancher remote repo you should PR a backport to it.
 
@@ -49,6 +49,6 @@ Meaning we should only backport to these branches and never forward-port from th
 
 ### How do I release from a patch release branch?
 
-Follow the normal process however, the only version that we will ever release from the branch is the one it mathches.
+Follow the normal process however, the only version that we will ever release from the branch is the one it matches.
 In the example above, we should only produce `v5.0.1` based releases (alphas, betas, RCs, and stable).
 The patch release branch should not be used to produce any other release versions.
