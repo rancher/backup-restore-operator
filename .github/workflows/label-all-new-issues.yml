@@ -17,4 +17,4 @@ jobs:
         run: gh issue edit -R ${GITHUB_REPOSITORY} --add-label ${LABEL} ${{ github.event.issue.number }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LABEL: "team/area3"
+          LABEL: "team/observability&backup"
