@@ -7,6 +7,9 @@ on:
     types:
       - created
 
+env:
+  ORIGINAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+
 jobs:
   port-pr:
     runs-on: ubuntu-latest
@@ -27,7 +30,6 @@ jobs:
         if: ${{ env.is_member == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ORIGINAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           BODY_MILESTONE=$(echo "${COMMENT_BODY}" | awk '{ print $2 }')
@@ -39,11 +41,10 @@ jobs:
               echo "milestone=${MILESTONE}" >> $GITHUB_ENV
            else
               echo "Milestone ${MILESTONE} does not exist" >> $GITHUB_STEP_SUMMARY
-              gh issue comment -R ${GITHUB_REPOSITORY} ${ORIGINAL_ISSUE_NUMBER} --body "Not creating port issue, milestone ${MILESTONE} does not exist or is not an open milestone"
               echo "milestone_exists=false" >> $GITHUB_ENV
            fi
       - name: Get target branch
-        if: ${{ env.is_member == 'true' }} && ${{ env.milestone_exists == 'true' }}
+        if: ${{ env.is_member == 'true' }}
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,20 +58,20 @@ jobs:
           if gh api repos/${GITHUB_REPOSITORY}/branches --paginate | jq -e --arg TARGET_BRANCH "$TARGET_BRANCH" '.[] | select(.name == $TARGET_BRANCH)' > /dev/null; then
               echo "target_branch_exists=true" >> $GITHUB_ENV
           else
+              gh issue comment -R ${GITHUB_REPOSITORY} ${ORIGINAL_ISSUE_NUMBER} --body "Not creating port issue, target ${TARGET_BRANCH} does not exist"
               echo "target_branch_exists=false" >> $GITHUB_ENV
           fi
       - name: Checkout
-        if: ${{ env.is_member == 'true' }} && ${{ env.milestone_exists == 'true' }} && ${{ env.target_branch_exists == 'true' }}
+        if: ${{ env.is_member == 'true' && env.target_branch_exists == 'true' }}
         uses: actions/checkout@v4
         with:
           ref: ${{ env.target_branch }}
           fetch-depth: '0'
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Port PR
-        if: ${{ env.is_member == 'true' }} && ${{ env.milestone_exists == 'true' }} && ${{ env.target_branch_exists == 'true' }}
+        if: ${{ env.is_member == 'true' && env.target_branch_exists == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ORIGINAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
           TYPE: ${{ env.type }}
           TARGET_BRANCH: ${{ env.target_branch }}
           MILESTONE: ${{ env.milestone }}
@@ -115,6 +116,10 @@ jobs:
                       additional_cmd+=("${NEW_ASSIGNEES}")
                   fi
               fi
-              NEW_PR=$(gh pr create --title="[${TYPE} ${MILESTONE}] ${ORIGINAL_TITLE}" --body-file="${BODY}" --head "${BRANCH}" --base "${TARGET_BRANCH}" --milestone "${MILESTONE}" "${additional_cmd[@]}")
+              NAMED_TARGET=${MILESTONE}
+              if [ -z "${MILESTONE" ]]; then
+                NAMED_TARGET=${TARGET_BRANCH}
+              fi
+              NEW_PR=$(gh pr create --title="[${TYPE} ${NAMED_TARGET}] ${ORIGINAL_TITLE}" --body-file="${BODY}" --head "${BRANCH}" --base "${TARGET_BRANCH}" --milestone "${MILESTONE}" "${additional_cmd[@]}")
               echo "Port PR created: ${NEW_PR}" >> $GITHUB_STEP_SUMMARY
           fi
