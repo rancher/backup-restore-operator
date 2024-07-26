@@ -15,16 +15,32 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.issue.pull_request && (startsWith(github.event.comment.body, '/backport') || startsWith(github.event.comment.body, '/forwardport')) }}
     steps:
-      - name: Check org membership
+      - name: Check org membership or repo ownership
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh api orgs/${GITHUB_REPOSITORY_OWNER}/members --paginate | jq -e --arg GITHUB_ACTOR "$GITHUB_ACTOR" '.[] | select(.login == $GITHUB_ACTOR)' > /dev/null; then
-              echo "${GITHUB_ACTOR} is a member"
-              echo "is_member=true" >> $GITHUB_ENV
+          # Check if the repository owner is an organization
+          is_org=$(gh api users/${GITHUB_REPOSITORY_OWNER} | jq -r '.type == "Organization"')
+          
+          if [[ "$is_org" == "true" ]]; then
+            # Check if the actor is a member of the organization
+            # User's membership must be set public
+            if gh api orgs/${GITHUB_REPOSITORY_OWNER}/members --paginate | jq -e --arg GITHUB_ACTOR "$GITHUB_ACTOR" '.[] | select(.login == $GITHUB_ACTOR)' > /dev/null; then
+                echo "${GITHUB_ACTOR} is a member"
+                echo "is_member=true" >> $GITHUB_ENV
+            else
+                echo "${GITHUB_ACTOR} is not a member of ${GITHUB_REPOSITORY_OWNER}" >> $GITHUB_STEP_SUMMARY
+                echo "is_member=false" >> $GITHUB_ENV
+            fi
           else
-              echo "${GITHUB_ACTOR} is not a member" >> $GITHUB_STEP_SUMMARY
-              echo "is_member=false" >> $GITHUB_ENV
+            # If the owner is not an organization, treat it as an individual repo
+            if [[ "$GITHUB_REPOSITORY_OWNER" == "$GITHUB_ACTOR" ]]; then
+                echo "${GITHUB_ACTOR} is the repository owner"
+                echo "is_member=true" >> $GITHUB_ENV
+            else
+                echo "${GITHUB_ACTOR} is not the repository owner" >> $GITHUB_STEP_SUMMARY
+                echo "is_member=false" >> $GITHUB_ENV
+            fi
           fi
       - name: Check milestone
         if: ${{ env.is_member == 'true' }}
