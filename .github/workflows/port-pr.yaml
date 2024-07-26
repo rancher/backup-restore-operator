@@ -133,8 +133,8 @@ jobs:
                   fi
               fi
               NAMED_TARGET=${MILESTONE}
-              if [ -z "${MILESTONE" ]]; then
-                NAMED_TARGET=${TARGET_BRANCH}
+              if [ -z "${MILESTONE}" ]; then
+                NAMED_TARGET="${TARGET_BRANCH}"
               fi
               NEW_PR=$(gh pr create --title="[${TYPE} ${NAMED_TARGET}] ${ORIGINAL_TITLE}" --body-file="${BODY}" --head "${BRANCH}" --base "${TARGET_BRANCH}" --milestone "${MILESTONE}" "${additional_cmd[@]}")
               echo "Port PR created: ${NEW_PR}" >> $GITHUB_STEP_SUMMARY
