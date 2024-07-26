@@ -7,27 +7,45 @@ on:
     types:
       - created
 
+env:
+  ORIGINAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+
 jobs:
   port-pr:
     runs-on: ubuntu-latest
     if: ${{ github.event.issue.pull_request && (startsWith(github.event.comment.body, '/backport') || startsWith(github.event.comment.body, '/forwardport')) }}
     steps:
-      - name: Check org membership
+      - name: Check org membership or repo ownership
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh api orgs/${GITHUB_REPOSITORY_OWNER}/members --paginate | jq -e --arg GITHUB_ACTOR "$GITHUB_ACTOR" '.[] | select(.login == $GITHUB_ACTOR)' > /dev/null; then
-              echo "${GITHUB_ACTOR} is a member"
-              echo "is_member=true" >> $GITHUB_ENV
+          # Check if the repository owner is an organization
+          is_org=$(gh api users/${GITHUB_REPOSITORY_OWNER} | jq -r '.type == "Organization"')
+          
+          if [[ "$is_org" == "true" ]]; then
+            # Check if the actor is a member of the organization
+            # User's membership must be set public
+            if gh api orgs/${GITHUB_REPOSITORY_OWNER}/members --paginate | jq -e --arg GITHUB_ACTOR "$GITHUB_ACTOR" '.[] | select(.login == $GITHUB_ACTOR)' > /dev/null; then
+                echo "${GITHUB_ACTOR} is a member"
+                echo "is_member=true" >> $GITHUB_ENV
+            else
+                echo "${GITHUB_ACTOR} is not a member of ${GITHUB_REPOSITORY_OWNER}" >> $GITHUB_STEP_SUMMARY
+                echo "is_member=false" >> $GITHUB_ENV
+            fi
           else
-              echo "${GITHUB_ACTOR} is not a member" >> $GITHUB_STEP_SUMMARY
-              echo "is_member=false" >> $GITHUB_ENV
+            # If the owner is not an organization, treat it as an individual repo
+            if [[ "$GITHUB_REPOSITORY_OWNER" == "$GITHUB_ACTOR" ]]; then
+                echo "${GITHUB_ACTOR} is the repository owner"
+                echo "is_member=true" >> $GITHUB_ENV
+            else
+                echo "${GITHUB_ACTOR} is not the repository owner" >> $GITHUB_STEP_SUMMARY
+                echo "is_member=false" >> $GITHUB_ENV
+            fi
           fi
       - name: Check milestone
         if: ${{ env.is_member == 'true' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ORIGINAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           BODY_MILESTONE=$(echo "${COMMENT_BODY}" | awk '{ print $2 }')
@@ -39,38 +57,37 @@ jobs:
               echo "milestone=${MILESTONE}" >> $GITHUB_ENV
            else
               echo "Milestone ${MILESTONE} does not exist" >> $GITHUB_STEP_SUMMARY
-              gh issue comment -R ${GITHUB_REPOSITORY} ${ORIGINAL_ISSUE_NUMBER} --body "Not creating port issue, milestone ${MILESTONE} does not exist or is not an open milestone"
               echo "milestone_exists=false" >> $GITHUB_ENV
            fi
       - name: Get target branch
-        if: ${{ env.is_member == 'true' }} && ${{ env.milestone_exists == 'true' }}
+        if: ${{ env.is_member == 'true' }}
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TYPE=$(echo "${COMMENT_BODY}" | awk '{ print $1 }' | sed -e 's_/__')
           echo "Type: ${TYPE}" >> $GITHUB_STEP_SUMMARY
           echo "type=${TYPE}" >> $GITHUB_ENV
           TARGET_BRANCH=$(echo "${COMMENT_BODY}" | awk '{ print $3 }')
-          echo "Target brach: ${TARGET_BRANCH}" >> $GITHUB_STEP_SUMMARY
+          echo "Target branch: ${TARGET_BRANCH}" >> $GITHUB_STEP_SUMMARY
           echo "target_branch=${TARGET_BRANCH}" >> $GITHUB_ENV
           if gh api repos/${GITHUB_REPOSITORY}/branches --paginate | jq -e --arg TARGET_BRANCH "$TARGET_BRANCH" '.[] | select(.name == $TARGET_BRANCH)' > /dev/null; then
               echo "target_branch_exists=true" >> $GITHUB_ENV
           else
+              gh issue comment -R ${GITHUB_REPOSITORY} ${ORIGINAL_ISSUE_NUMBER} --body "Not creating port issue, target ${TARGET_BRANCH} does not exist"
               echo "target_branch_exists=false" >> $GITHUB_ENV
           fi
       - name: Checkout
-        if: ${{ env.is_member == 'true' }} && ${{ env.milestone_exists == 'true' }} && ${{ env.target_branch_exists == 'true' }}
+        if: ${{ env.is_member == 'true' && env.target_branch_exists == 'true' }}
         uses: actions/checkout@v4
         with:
           ref: ${{ env.target_branch }}
           fetch-depth: '0'
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Port PR
-        if: ${{ env.is_member == 'true' }} && ${{ env.milestone_exists == 'true' }} && ${{ env.target_branch_exists == 'true' }}
+        if: ${{ env.is_member == 'true' && env.target_branch_exists == 'true' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ORIGINAL_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TYPE: ${{ env.type }}
           TARGET_BRANCH: ${{ env.target_branch }}
           MILESTONE: ${{ env.milestone }}
@@ -115,6 +132,10 @@ jobs:
                       additional_cmd+=("${NEW_ASSIGNEES}")
                   fi
               fi
-              NEW_PR=$(gh pr create --title="[${TYPE} ${MILESTONE}] ${ORIGINAL_TITLE}" --body-file="${BODY}" --head "${BRANCH}" --base "${TARGET_BRANCH}" --milestone "${MILESTONE}" "${additional_cmd[@]}")
+              NAMED_TARGET=${MILESTONE}
+              if [ -z "${MILESTONE}" ]; then
+                NAMED_TARGET="${TARGET_BRANCH}"
+              fi
+              NEW_PR=$(gh pr create --title="[${TYPE} ${NAMED_TARGET}] ${ORIGINAL_TITLE}" --body-file="${BODY}" --head "${BRANCH}" --base "${TARGET_BRANCH}" --milestone "${MILESTONE}" "${additional_cmd[@]}")
               echo "Port PR created: ${NEW_PR}" >> $GITHUB_STEP_SUMMARY
           fi
