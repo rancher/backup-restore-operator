@@ -1,0 +1,41 @@
+# Make sure to check the documentation at https://goreleaser.com
+before:
+  hooks:
+    - go mod tidy
+builds:
+    - id: backup-restore-operator
+      main: ./main.go
+      goos:
+        - linux
+      goarch:
+        - amd64
+        - arm64
+      binary: backup-restore-operator
+      ldflags:
+        - -extldflags
+        - -static
+        - -s
+        - -X main.Version={{.Version}} -X main.GitCommit={{.Commit}}
+      flags:
+        - -trimpath
+      env:
+        - CGO_ENABLED=0
+archives:
+    - id: backup-restore-operator
+      builds:
+        - backup-restore-operator 
+      name_template: '{{ .Binary }}-{{ .Arch }}'
+release:
+  prerelease: auto
+  extra_files:
+    - glob : ./build/artifacts/*.tgz
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
