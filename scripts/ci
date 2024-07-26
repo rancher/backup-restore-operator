@@ -3,11 +3,9 @@ set -e
 
 cd $(dirname $0)
 
-./build
 ./test
 ./validate
 ./validate-ci
 ./package
 ./chart/test
 ./hull
-./integration

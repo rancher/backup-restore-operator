@@ -1,0 +1,81 @@
+name : Publish Images & artifacts (via goreleaser)
+
+on:
+  push:
+    tags:
+      - "*"
+
+env:
+  REGISTRY: docker.io
+  REPO : rancher
+
+permissions:
+  contents: write
+
+jobs:
+  ci :
+    uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@release/v5.0
+    permissions:
+      contents: read
+  goreleaser:
+    needs: [
+      ci
+    ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.22
+      - name : Package release helm charts
+        run : make package-helm
+      - run : mkdir -p ./build/artifacts/ && mv -v ./dist/artifacts/ ./build/
+      - uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+  push:
+    needs : [
+      ci
+    ]
+    permissions:
+      contents : read
+      id-token: write
+    name : Build and push BRO images
+    runs-on : ubuntu-latest
+    steps:
+      - name : "Read vault secrets"
+        uses : rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD
+      - name : Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3 
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+        # setup tag name
+      - if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          echo TAG_NAME=$(echo $GITHUB_REF | sed -e "s|refs/tags/||") >> $GITHUB_ENV
+      - name: Build and push BRO image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./package/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPO }}/backup-restore-operator:${{ env.TAG_NAME }}
+          platforms: linux/amd64,linux/arm64
