@@ -18,8 +18,8 @@ if [[ ${USE_DOCKER_BUILDX} -eq 1 ]]; then
 else
     docker build -f ${DOCKERFILE} -t ${IMAGE} .
 fi
-echo Built ${IMAGE}
 
-docker image save rancher/backup-restore-operator:$TAG -o ./dist/artifacts/backup-restore-operator.img
+echo Built ${IMAGE}
+docker image save ${IMAGE} -o ./dist/artifacts/backup-restore-operator.img
 
 ./scripts/package-helm
