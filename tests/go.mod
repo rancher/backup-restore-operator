@@ -1,14 +1,14 @@
 module github.com/rancher/backup-restore-operator/tests
 
-go 1.21
+go 1.22.0
 
 toolchain go1.22.5
 
 require (
 	github.com/rancher/hull v0.0.0-20230424152137-627ef5347afd
 	github.com/stretchr/testify v1.9.0
-	k8s.io/api v0.29.3
-	k8s.io/apimachinery v0.29.3
+	k8s.io/api v0.30.3
+	k8s.io/apimachinery v0.30.3
 )
 
 require (
