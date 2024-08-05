@@ -63,7 +63,3 @@
       - key: "resources.cattle.io/backup"
         operator: "In"
         values: ["true"]
-- apiVersion: catalog.cattle.io/v1
-  kindsRegexp: ^UIPlugin$
-  namespaces:
-  - cattle-ui-plugin-system
