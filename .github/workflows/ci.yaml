@@ -32,8 +32,9 @@ jobs:
           ubuntu-latest
           # org-rancher-arm64-containers
           ]
+        arch: [amd64, arm64]
     name : CI
-    runs-on : ${{ matrix.os }}
+    runs-on : ${{ matrix.os.arch }}
     outputs:
       k3sversions: ${{ steps.support.outputs.k3sversions }}
     steps:
@@ -57,13 +58,14 @@ jobs:
     needs : [
       build
     ]
-    runs-on : ${{ matrix.os }}
+    runs-on : ${{ matrix.os.arch }}
     strategy:
       matrix:
         os : [ 
           ubuntu-latest
           # org-rancher-arm64-containers,
          ]
+        arch: [amd64, arm64]
         K3S_VERSION : ${{ fromJSON(needs.build.outputs.k3sversions) }}
     steps:
       - name : Checkout repository
