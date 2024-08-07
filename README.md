@@ -20,10 +20,15 @@ What the Backup Restore Operator is not:
 - Configured to back up user-created resources on the Rancher cluster.
 
 ### Branches and Releases
+This is the current branch strategy for `rancher/shell`, it may change in the future.
 
-*  the tag `v5.x.x` is cut from the `release/v5.0` branch for the Rancher v2.9.x line
-*  the tag `v4.x.x` is cut from the `release/v4.0` branch for the Rancher v2.8.x line
-*  the tag `v3.x.x` is cut from the `release/v3.0` branch for the Rancher v2.7.x line
+| Branch         | Tag      | Rancher                |
+|----------------|----------|------------------------|
+| `main`         | `head`   | `main` branch (`head`) |
+| `release/v5.0` | `v5.x.x` | `v2.9.x`               |
+| `release/v4.0` | `v4.x.x` | `v2.8.x`               |
+| `release/v3.0` | `v3.x.x` | `v2.7.x`               |
+
 ----
 
 ## Quickstart
