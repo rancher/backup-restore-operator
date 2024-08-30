@@ -7,6 +7,7 @@ on:
   workflow_call:
   push:
     branches:
+      - main
       - release/v5.0
       - release/v4.0
       - release/v3.0
@@ -28,12 +29,11 @@ jobs:
   build:
     strategy:
       matrix:
-        os : [ 
-          ubuntu-latest
-          # org-rancher-arm64-containers
-          ]
+        arch:
+          - x64
+          - arm64
     name : CI
-    runs-on : ${{ matrix.os }}
+    runs-on : runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     outputs:
       k3sversions: ${{ steps.support.outputs.k3sversions }}
     steps:
@@ -49,7 +49,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bro-build-artifacts-${{ matrix.os }}
+          name: bro-build-artifacts-${{ matrix.arch }}
           path: ./dist/artifacts
         
   test:
@@ -57,13 +57,12 @@ jobs:
     needs : [
       build
     ]
-    runs-on : ${{ matrix.os }}
+    runs-on : runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     strategy:
       matrix:
-        os : [ 
-          ubuntu-latest
-          # org-rancher-arm64-containers,
-         ]
+        arch:
+          - x64
+          - arm64
         K3S_VERSION : ${{ fromJSON(needs.build.outputs.k3sversions) }}
     steps:
       - name : Checkout repository
@@ -71,7 +70,7 @@ jobs:
       - name : Fetch build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: bro-build-artifacts-${{ matrix.os }}
+          name: bro-build-artifacts-${{ matrix.arch }}
           path: ./dist/artifacts/
       - name : Debug
         run : ls -R ./dist/artifacts
@@ -79,9 +78,13 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - name : Load backup-restore-operator image
         run : docker image load -i ./dist/artifacts/backup-restore-operator.img
-      - name : Setup up K3d
+      - name: Install go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22
+      - name : Install k3d
         run : ./.github/workflows/scripts/install-k3d.sh
-      - name : Setup up mc
+      - name : Install minio client
         run : ./.github/workflows/scripts/install-mc.sh
       - name : Setup k3d cluster
         run : CLUSTER_NAME=backup-restore K3S_VERSION=${{ matrix.K3S_VERSION }} ./.github/workflows/scripts/setup-cluster.sh
