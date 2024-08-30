@@ -1,4 +1,9 @@
 FROM registry.suse.com/bci/golang:1.22 AS builder
+
+ARG TAG=''
+ARG REPO=''
+ENV TAG=$TAG REPO=$REPO
+
 WORKDIR /usr/src/app
 COPY go.mod go.sum ./
 RUN go mod download
