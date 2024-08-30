@@ -49,7 +49,7 @@ jobs:
       contents : read
       id-token: write
     name : Build and push BRO images
-    runs-on : ubuntu-latest
+    runs-on : runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     steps:
       - name : "Read vault secrets"
         uses : rancher-eio/read-vault-secrets@main
