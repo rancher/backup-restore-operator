@@ -55,7 +55,7 @@ wait_for_nodes(){
 }
 
 k3d cluster delete $CLUSTER_NAME || true
-k3d cluster create $CLUSTER_NAME --image "docker.io/rancher/k3s:${K3S_VERSION}"
+k3d cluster create -v $CLUSTER_NAME --image "docker.io/rancher/k3s:${K3S_VERSION}"
 
 wait_for_nodes
 
