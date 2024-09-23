@@ -1,8 +1,6 @@
 module github.com/rancher/backup-restore-operator
 
-go 1.22.0
-
-toolchain go1.22.6
+go 1.23.0
 
 replace (
 	github.com/imdario/mergo => dario.cat/mergo v0.3.16
