@@ -1,8 +1,6 @@
 module github.com/rancher/backup-restore-operator/tests
 
-go 1.22.0
-
-toolchain go1.22.6
+go 1.23.0
 
 require (
 	github.com/rancher/hull v0.0.0-20230424152137-627ef5347afd

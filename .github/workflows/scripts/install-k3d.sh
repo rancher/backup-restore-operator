@@ -4,7 +4,7 @@ set -e
 set -x
 
 K3D_URL=https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh
-DEFAULT_K3D_VERSION=v5.4.6
+DEFAULT_K3D_VERSION=v5.7.4
 
 install_k3d(){
   local k3dVersion=${K3D_VERSION:-${DEFAULT_K3D_VERSION}}

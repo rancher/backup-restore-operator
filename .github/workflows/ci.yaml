@@ -81,7 +81,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.22
+          go-version: 1.23
       - name : Install k3d
         run : ./.github/workflows/scripts/install-k3d.sh
       - name : Install minio client
