@@ -4,12 +4,12 @@ go 1.23.0
 
 replace (
 	github.com/imdario/mergo => dario.cat/mergo v0.3.16
-	golang.org/x/crypto => golang.org/x/crypto v0.26.0
-	google.golang.org/grpc => google.golang.org/grpc v1.65.0
+	golang.org/x/crypto => golang.org/x/crypto v0.27.0
+	google.golang.org/grpc => google.golang.org/grpc v1.67.1
 )
 
 require (
-	github.com/minio/minio-go/v7 v7.0.76
+	github.com/minio/minio-go/v7 v7.0.77
 	github.com/rancher/lasso v0.0.0-20240923125127-ae858d002589
 	github.com/rancher/wrangler/v3 v3.0.0
 	github.com/robfig/cron/v3 v3.0.1
