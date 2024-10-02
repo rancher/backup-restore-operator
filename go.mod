@@ -2,16 +2,16 @@ module github.com/rancher/backup-restore-operator
 
 go 1.22.0
 
-toolchain go1.22.6
+toolchain go1.22.8
 
 replace (
 	github.com/imdario/mergo => dario.cat/mergo v0.3.16
-	golang.org/x/crypto => golang.org/x/crypto v0.26.0
-	google.golang.org/grpc => google.golang.org/grpc v1.65.0
+	golang.org/x/crypto => golang.org/x/crypto v0.27.0
+	google.golang.org/grpc => google.golang.org/grpc v1.67.1
 )
 
 require (
-	github.com/minio/minio-go/v7 v7.0.74
+	github.com/minio/minio-go/v7 v7.0.77
 	github.com/rancher/lasso v0.0.0-20240705194423-b2a060d103c1
 	github.com/rancher/wrangler/v3 v3.0.0
 	github.com/robfig/cron/v3 v3.0.1
@@ -28,7 +28,7 @@ require (
 )
 
 require (
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240528184218-531527333157 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 	k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70 // indirect
 )
 
@@ -73,7 +73,7 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.53.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rs/xid v1.5.0 // indirect
+	github.com/rs/xid v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.52.0 // indirect
@@ -84,19 +84,19 @@ require (
 	go.opentelemetry.io/otel/sdk v1.27.0 // indirect
 	go.opentelemetry.io/otel/trace v1.27.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.2.0 // indirect
-	golang.org/x/crypto v0.24.0 // indirect
+	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240531132922-fd00a4e0eefc // indirect
 	golang.org/x/mod v0.17.0 // indirect
-	golang.org/x/net v0.26.0 // indirect
-	golang.org/x/oauth2 v0.20.0 // indirect
-	golang.org/x/sys v0.23.0 // indirect
-	golang.org/x/term v0.23.0 // indirect
-	golang.org/x/text v0.17.0 // indirect
+	golang.org/x/net v0.28.0 // indirect
+	golang.org/x/oauth2 v0.22.0 // indirect
+	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/term v0.24.0 // indirect
+	golang.org/x/text v0.18.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240528184218-531527333157 // indirect
-	google.golang.org/grpc v1.64.0 // indirect
-	google.golang.org/protobuf v1.34.1 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 // indirect
+	google.golang.org/grpc v1.64.1 // indirect
+	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
