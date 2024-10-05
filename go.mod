@@ -4,7 +4,7 @@ go 1.23.0
 
 replace (
 	github.com/imdario/mergo => dario.cat/mergo v0.3.16
-	golang.org/x/crypto => golang.org/x/crypto v0.27.0
+	golang.org/x/crypto => golang.org/x/crypto v0.28.0
 	google.golang.org/grpc => google.golang.org/grpc v1.67.1
 )
 
