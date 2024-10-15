@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,8 +144,8 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	logrus.Infof("For backup CR %v, filename: %v", backup.Name, backupFileName)
 
 	// create a temp dir to write all backup files to, delete this before returning.
-	// empty dir param in ioutil.TempDir defaults to os.TempDir
-	tmpBackupPath, err := ioutil.TempDir("", backupFileName)
+	// empty dir param in os.MkdirTemp. defaults to os.TempDir
+	tmpBackupPath, err := os.MkdirTemp("", backupFileName)
 	if err != nil {
 		return h.setReconcilingCondition(backup, fmt.Errorf("error creating temp dir: %v", err))
 	}
@@ -259,7 +258,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(filepath.Join(filtersPath, "filters.json"), filters, os.ModePerm)
+	err = os.WriteFile(filepath.Join(filtersPath, "filters.json"), filters, os.ModePerm)
 	if err != nil {
 		return err
 	}

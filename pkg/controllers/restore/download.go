@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
@@ -66,7 +65,7 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 		if tarContent.Typeflag != tar.TypeReg {
 			continue
 		}
-		readData, err := ioutil.ReadAll(tarball)
+		readData, err := io.ReadAll(tarball)
 		if err != nil {
 			return err
 		}

@@ -3,7 +3,6 @@ package util
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 
@@ -36,7 +35,7 @@ func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core
 	if !ok {
 		return nil, fmt.Errorf("no encryptionConfig provided")
 	}
-	err = ioutil.WriteFile(encryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
+	err = os.WriteFile(encryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
 	defer os.Remove(encryptionProviderConfigKey)
 
 	if err != nil {

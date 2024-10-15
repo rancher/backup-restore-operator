@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +16,7 @@ import (
 )
 
 func (h *handler) uploadToS3(backup *v1.Backup, objectStore *v1.S3ObjectStore, tmpBackupPath, gzipFile string) error {
-	tmpBackupGzipFilepath, err := ioutil.TempDir("", "uploadpath")
+	tmpBackupGzipFilepath, err := os.MkdirTemp("", "uploadpath")
 	if err != nil {
 		return err
 	}

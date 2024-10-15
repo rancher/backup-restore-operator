@@ -8,7 +8,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -266,7 +265,7 @@ func readS3EndpointCA(endpointCA string) ([]byte, error) {
 	if err == nil {
 		log.Info("reading s3-endpoint-ca as a base64 string")
 	} else {
-		ca, err = ioutil.ReadFile(endpointCA)
+		ca, err = os.ReadFile(endpointCA)
 		log.Infof("reading s3-endpoint-ca from [%v]", endpointCA)
 	}
 	return ca, err
