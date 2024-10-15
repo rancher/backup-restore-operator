@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
@@ -108,7 +109,7 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 
 	var staticTransformers encryptionconfig.StaticTransformers = transformerMap
 	decryptionTransformer := staticTransformers.TransformerForResource(gvr.GroupResource())
-	if decryptionTransformer != nil {
+	if !reflect.ValueOf(decryptionTransformer).IsZero() {
 		var encryptedBytes []byte
 		if err := json.Unmarshal(readData, &encryptedBytes); err != nil {
 			logrus.Errorf("Error unmarshaling encrypted data for resource [%v]: %v", gvr.GroupResource(), err)
