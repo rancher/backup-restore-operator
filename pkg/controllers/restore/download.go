@@ -105,9 +105,9 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 
 	gvrStr := splitPath[0]
 	gvr := getGVR(gvrStr)
+
 	var staticTransformers encryptionconfig.StaticTransformers = transformerMap
 	decryptionTransformer := staticTransformers.TransformerForResource(gvr.GroupResource())
-
 	if decryptionTransformer != nil {
 		var encryptedBytes []byte
 		if err := json.Unmarshal(readData, &encryptedBytes); err != nil {
