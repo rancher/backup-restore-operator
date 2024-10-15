@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
@@ -101,10 +102,12 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 		namespace = splitPath[1]
 		additionalAuthenticatedData = fmt.Sprintf("%s#%s", namespace, name)
 	}
+
 	gvrStr := splitPath[0]
 	gvr := getGVR(gvrStr)
+	var staticTransformers encryptionconfig.StaticTransformers = transformerMap
+	decryptionTransformer := staticTransformers.TransformerForResource(gvr.GroupResource())
 
-	decryptionTransformer := transformerMap[gvr.GroupResource()]
 	if decryptionTransformer != nil {
 		var encryptedBytes []byte
 		if err := json.Unmarshal(readData, &encryptedBytes); err != nil {
