@@ -1,7 +1,6 @@
 package resourcesets
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -436,16 +436,15 @@ func writeToBackup(ctx context.Context, resource map[string]interface{}, backupP
 	if err != nil {
 		return fmt.Errorf("error converting resource to JSON: %v", err)
 	}
-	if transformer != nil {
+	if transformer != nil && !util.IsDefaultEncryptionTransformer(transformer) {
 		encrypted, err := transformer.TransformToStorage(ctx, resourceBytes, value.DefaultContext(additionalAuthenticatedData))
 		if err != nil {
 			return fmt.Errorf("error converting resource to JSON: %v", err)
 		}
-		if !bytes.Equal(resourceBytes, encrypted) {
-			resourceBytes, err = json.Marshal(encrypted)
-			if err != nil {
-				return fmt.Errorf("error converting encrypted resource to JSON: %v", err)
-			}
+
+		resourceBytes, err = json.Marshal(encrypted)
+		if err != nil {
+			return fmt.Errorf("error converting encrypted resource to JSON: %v", err)
 		}
 	}
 	if _, err := f.Write(resourceBytes); err != nil {

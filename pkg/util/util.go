@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/apiserver/pkg/storage/value"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 )
 
 const (
@@ -57,6 +58,10 @@ func GetObjectQueue(l interface{}, capacity int) chan interface{} {
 		c <- s.Index(i).Interface()
 	}
 	return c
+}
+
+func IsDefaultEncryptionTransformer(transformer value.Transformer) bool {
+	return transformer == identity.NewEncryptCheckTransformer()
 }
 
 func ErrList(e []error) error {
