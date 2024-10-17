@@ -10,11 +10,13 @@ import (
 	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -387,7 +389,8 @@ func (h *ResourceHandler) WriteBackupObjects(backupPath string) error {
 			}
 
 			gr := schema.ParseGroupResource(gvResource.Name + "." + gv.Group)
-			encryptionTransformer := h.TransformerMap[gr]
+			var staticTransformers encryptionconfig.StaticTransformers = h.TransformerMap
+			encryptionTransformer := staticTransformers.TransformerForResource(gr)
 			additionalAuthenticatedData := objName
 			if gvResource.Namespaced {
 				additionalAuthenticatedData = fmt.Sprintf("%s#%s", metadata["namespace"].(string), additionalAuthenticatedData)
@@ -433,11 +436,12 @@ func writeToBackup(ctx context.Context, resource map[string]interface{}, backupP
 	if err != nil {
 		return fmt.Errorf("error converting resource to JSON: %v", err)
 	}
-	if transformer != nil {
+	if transformer != nil && !util.IsDefaultEncryptionTransformer(transformer) {
 		encrypted, err := transformer.TransformToStorage(ctx, resourceBytes, value.DefaultContext(additionalAuthenticatedData))
 		if err != nil {
 			return fmt.Errorf("error converting resource to JSON: %v", err)
 		}
+
 		resourceBytes, err = json.Marshal(encrypted)
 		if err != nil {
 			return fmt.Errorf("error converting encrypted resource to JSON: %v", err)

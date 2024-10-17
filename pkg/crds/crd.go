@@ -3,7 +3,7 @@ package crds
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	resources "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
@@ -42,7 +42,7 @@ func WriteCRD() error {
 		}
 
 		filename := fmt.Sprintf("./charts/rancher-backup-crd/templates/%s.yaml", strings.ToLower(crd.Spec.Names.Kind))
-		err = ioutil.WriteFile(filename, yamlBytes, 0644)
+		err = os.WriteFile(filename, yamlBytes, 0644)
 		if err != nil {
 			return err
 		}

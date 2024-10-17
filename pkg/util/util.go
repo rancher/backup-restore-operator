@@ -3,7 +3,6 @@ package util
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 
@@ -13,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/apiserver/pkg/storage/value"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 )
 
 const (
@@ -36,7 +36,7 @@ func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core
 	if !ok {
 		return nil, fmt.Errorf("no encryptionConfig provided")
 	}
-	err = ioutil.WriteFile(encryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
+	err = os.WriteFile(encryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
 	defer os.Remove(encryptionProviderConfigKey)
 
 	if err != nil {
@@ -58,6 +58,10 @@ func GetObjectQueue(l interface{}, capacity int) chan interface{} {
 		c <- s.Index(i).Interface()
 	}
 	return c
+}
+
+func IsDefaultEncryptionTransformer(transformer value.Transformer) bool {
+	return transformer == identity.NewEncryptCheckTransformer()
 }
 
 func ErrList(e []error) error {

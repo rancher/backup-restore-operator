@@ -6,15 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/objectstore"
+	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
@@ -64,7 +65,7 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 		if tarContent.Typeflag != tar.TypeReg {
 			continue
 		}
-		readData, err := ioutil.ReadAll(tarball)
+		readData, err := io.ReadAll(tarball)
 		if err != nil {
 			return err
 		}
@@ -101,11 +102,13 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 		namespace = splitPath[1]
 		additionalAuthenticatedData = fmt.Sprintf("%s#%s", namespace, name)
 	}
+
 	gvrStr := splitPath[0]
 	gvr := getGVR(gvrStr)
 
-	decryptionTransformer := transformerMap[gvr.GroupResource()]
-	if decryptionTransformer != nil {
+	var staticTransformers encryptionconfig.StaticTransformers = transformerMap
+	decryptionTransformer := staticTransformers.TransformerForResource(gvr.GroupResource())
+	if decryptionTransformer != nil && !util.IsDefaultEncryptionTransformer(decryptionTransformer) {
 		var encryptedBytes []byte
 		if err := json.Unmarshal(readData, &encryptedBytes); err != nil {
 			logrus.Errorf("Error unmarshaling encrypted data for resource [%v]: %v", gvr.GroupResource(), err)
