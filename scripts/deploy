@@ -229,7 +229,6 @@ spec:
       insecureTLSSkipVerify: true
   resourceSetName: rancher-resource-set
   encryptionConfigSecretName: encryptionconfig
-  retentionCount: 2
 EOF
   else
     ${KUBECTL_CMD} create -f - <<EOF
