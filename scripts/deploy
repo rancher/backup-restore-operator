@@ -10,6 +10,29 @@ check_kubeconfig() {
   kubectl get nodes -o wide
 }
 
+deploy_encryption_configuration() {
+  KUBECTL_CMD="kubectl"
+  check_kubeconfig
+  
+  local ENCRYPTION_CONFIG
+  ENCRYPTION_CONFIG=$(cat <<EOF
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+  - resources:
+      - "*.*"
+    providers:
+      - secretbox:
+          keys:
+            - name: key1
+              secret: YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=
+EOF
+  )
+
+  echo "Creating EncryptionProvider secret"
+  ${KUBECTL_CMD} -n cattle-resources-system create secret generic encryptionconfig --from-literal=encryption-provider-config.yaml="$ENCRYPTION_CONFIG"
+}
+
 deploy_minio() {
   local PUBLIC_CRT
   PUBLIC_CRT=$(cat <<EOF
@@ -53,7 +76,7 @@ EOF
   ${KUBECTL_CMD} -n minio create secret generic tls-ssl-minio --from-literal=private.key="$PRIVATE_KEY" --from-literal=public.crt="$PUBLIC_CRT"
 
   echo "Installing Minio"
-  helm install --namespace minio --set rootUser=inspectorgadget,rootPassword=gogadgetgo --set tls.enabled=true,tls.certSecret=tls-ssl-minio --set replicas=1 --set resources.requests.memory=2Gi --set persistence.enabled=false --set drivesPerNode=0 --set pools=0 --set mode=standalone --set buckets[0].name=rancherbackups --set buckets[1].name=rancherbackups-insecure --set buckets[0].policy=none --set buckets[1].policy=none --set buckets[0].purge=true --set buckets[1].purge=true minio minio/minio
+  helm install --namespace minio --set rootUser=inspectorgadget,rootPassword=gogadgetgo --set tls.enabled=true,tls.certSecret=tls-ssl-minio --set replicas=1 --set resources.requests.memory=2Gi --set persistence.enabled=false --set drivesPerNode=0 --set pools=0 --set mode=standalone --set buckets[0].name=rancherbackups --set buckets[1].name=rancherbackups-insecure --set buckets[2].name=rancherbackups-encrypted --set buckets[0].policy=none --set buckets[1].policy=none --set buckets[2].policy=none --set buckets[0].purge=true --set buckets[1].purge=true minio minio/minio
 
   while ! (${KUBECTL_CMD} --namespace minio rollout status --timeout 15s deploy/minio 2>/dev/null); do sleep 5; done
 
@@ -190,6 +213,25 @@ spec:
   schedule: "@every 30s"
   retentionCount: 2
 EOF
+  elif [[ "$1" = "encrypted" ]]; then
+    ${KUBECTL_CMD} create -f - <<EOF
+apiVersion: resources.cattle.io/v1
+kind: Backup
+metadata:
+  name: s3-backup-encrypted
+spec:
+  storageLocation:
+    s3:
+      credentialSecretName: miniocreds
+      credentialSecretNamespace: default
+      bucketName: rancherbackups-encrypted
+      endpoint: minio.minio.svc.cluster.local:9000
+      insecureTLSSkipVerify: true
+  resourceSetName: rancher-resource-set
+  encryptionConfigSecretName: encryptionconfig
+  schedule: "@every 30s"
+  retentionCount: 2
+EOF
   else
     ${KUBECTL_CMD} create -f - <<EOF
 apiVersion: resources.cattle.io/v1
@@ -319,6 +361,10 @@ case $1 in
       retag_and_push
     ;;
 
+    encryption_config)
+      deploy_encryption_configuration
+    ;;
+
     minio)
       deploy_minio
     ;;
@@ -358,6 +404,10 @@ case $1 in
 
     create-backup-insecure)
       create_backup insecure
+    ;;
+
+    create-backup-encrypted)
+      create_backup encrypted
     ;;
 
     create-restore)
