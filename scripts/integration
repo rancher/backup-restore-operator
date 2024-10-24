@@ -182,7 +182,7 @@ done
 cd ./tests/files/encrypted-resources
 tar cvzf /tmp/encrypted-resources -- *
 cd -
-mc cp --quiet --no-color /tmp/encrypted.tar.gz miniolocal/rancherbackups
+mc cp --quiet --no-color /tmp/encrypted-resources.tar.gz miniolocal/rancherbackups
 
 mc ls --quiet --no-color miniolocal/rancherbackups
 
