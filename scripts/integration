@@ -35,8 +35,11 @@ if [ "$ARCH" = "s390x" ]; then
     exit 0
 fi
 
-#Deploy Minio
+# Deploy Minio
 ./scripts/deploy minio
+
+# Deploy EcryptionConfig resources to be used by encrypted Backups
+./scripts/deploy encryption_config
 
 export POD_NAME=$(kubectl get pods --namespace minio -l "release=minio" -o jsonpath="{.items[0].metadata.name}")
 kubectl port-forward $POD_NAME 9000 --namespace minio &
@@ -65,41 +68,49 @@ EOF
 echo "$PUBLIC_CRT" > $HOME/.mc/certs/CAs/public.crt
 export MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@localhost:9000
 
+# Backup resource with encryption enabled
+./scripts/deploy create-backup-encrypted
+
+time timeout 180 bash -c 'while ! (kubectl wait --for condition=ready backup.resources.cattle.io/s3-backup-encrypted 2>/dev/null); do kubectl get backup.resources.cattle.io -A; kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=-1; sleep 2; done'
+
+kubectl delete "backup.resources.cattle.io/s3-backup-encrypted"
+
+# Backup resources with a recurring schedule
 for BACKUP in rancherbackups-insecure rancherbackups; do
 
     if [[ $BACKUP = "rancherbackups-insecure" ]]; then
         # Backup without CA / insecure TLS configured
         ./scripts/deploy create-backup-insecure
 
-        BACKUPRS_NAME="s3-recurring-backup-insecure"
+        BACKUP_NAME="s3-recurring-backup-insecure"
     else
         ./scripts/deploy create-backup
-        BACKUPRS_NAME="s3-recurring-backup"
+        BACKUP_NAME="s3-recurring-backup"
     fi
 
-    time timeout 60 bash -c 'while ! (kubectl wait --for condition=ready backup.resources.cattle.io/'"${BACKUPRS_NAME}"' 2>/dev/null); do kubectl get backup.resources.cattle.io -A; kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=-1; sleep 2; done'
+    time timeout 60 bash -c 'while ! (kubectl wait --for condition=ready backup.resources.cattle.io/'"${BACKUP_NAME}"' 2>/dev/null); do kubectl get backup.resources.cattle.io -A; kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=-1; sleep 2; done'
 
     mc ls --quiet --no-color "miniolocal/${BACKUP}"
-    FIRSTBACKUP=$(mc ls --quiet --no-color miniolocal/${BACKUP} | awk '{ print $NF }')
-    if [[ $FIRSTBACKUP != ${BACKUPRS_NAME}* ]]; then
-        echo_with_time "$FIRSTBACKUP does not start with [${BACKUPRS_NAME}]"
+    FIRST_BACKUP=$(mc ls --quiet --no-color miniolocal/${BACKUP} | awk '{ print $NF }')
+    if [[ $FIRST_BACKUP != ${BACKUP_NAME}* ]]; then
+        echo_with_time "$FIRST_BACKUP does not start with [${BACKUP_NAME}]"
         exit 1
     fi
     sleep 90
-    for BACKUPFILE in $(mc ls --quiet --no-color miniolocal/${BACKUP} | awk '{ print $NF }'); do
-        echo_with_time $BACKUPFILE
-        if [[ $BACKUPFILE != ${BACKUPRS_NAME}* ]]; then
-            echo_with_time "$BACKUPFILE does not start with [${BACKUPRS_NAME}]"
+    for BACKUP_FILE in $(mc ls --quiet --no-color miniolocal/${BACKUP} | awk '{ print $NF }'); do
+        echo_with_time $BACKUP_FILE
+        if [[ $BACKUP_FILE != ${BACKUP_NAME}* ]]; then
+            echo_with_time "$BACKUP_FILE does not start with [${BACKUP_NAME}]"
             exit 1
         fi
 
-        if [ "${BACKUPFILE}" = "${FIRSTBACKUP}" ]; then
+        if [ "${BACKUP_FILE}" = "${FIRST_BACKUP}" ]; then
             echo_with_time "First was not removed!"
             exit 1
         fi
     done
     # Disable the recurring back-ups by deleting the backup CRD
-    kubectl delete "backup.resources.cattle.io/${BACKUPRS_NAME}"
+    kubectl delete "backup.resources.cattle.io/${BACKUP_NAME}"
 done
 
 # Restore resource with spec.preserveUnknownFields
@@ -165,3 +176,32 @@ EOF
     time timeout 60 bash -c 'while ! (kubectl wait --for condition=ready restore.resources.cattle.io/restore-deletion-grace-period-seconds 2>/dev/null); do kubectl get restore.resources.cattle.io -A; kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=15; sleep 5; done'
     kubectl delete restore.resources.cattle.io/restore-deletion-grace-period-seconds
 done
+
+# Restore encrypted resource with wildcard setting
+# https://github.com/rancher/backup-restore-operator/issues/602
+cd ./tests/files/encrypted-resources
+tar cvzf /tmp/encrypted-resources.tar.gz -- *
+cd -
+mc cp --quiet --no-color /tmp/encrypted-resources.tar.gz miniolocal/rancherbackups
+
+mc ls --quiet --no-color miniolocal/rancherbackups
+
+kubectl create -f - <<EOF
+apiVersion: resources.cattle.io/v1
+kind: Restore
+metadata:
+  name: restore-encrypted-resources
+spec:
+  backupFilename: encrypted-resources.tar.gz
+  encryptionConfigSecretName: encryptionconfig
+  prune: false
+  storageLocation:
+    s3:
+      credentialSecretName: miniocreds
+      credentialSecretNamespace: default
+      bucketName: rancherbackups
+      endpoint: minio.minio.svc.cluster.local:9000
+      endpointCA: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUNTVENDQWUrZ0F3SUJBZ0lRV2dVVldDaVpkeU9HcnVOZTZtNGlXakFLQmdncWhrak9QUVFEQWpCTU1Sd3cKR2dZRFZRUUtFeE5EWlhKMFoyVnVJRVJsZG1Wc2IzQnRaVzUwTVN3d0tnWURWUVFMRENObGJHbDVZVzFzWlhaNQpRRVZzYVhsaGJYTXRUVUpRTG1GMGRHeHZZMkZzTG01bGREQWVGdzB5TWpBMU1URXhOREF4TWpCYUZ3MHpNakExCk1URXdNakF4TWpCYU1Fd3hIREFhQmdOVkJBb1RFME5sY25SblpXNGdSR1YyWld4dmNHMWxiblF4TERBcUJnTlYKQkFzTUkyVnNhWGxoYld4bGRubEFSV3hwZVdGdGN5MU5RbEF1WVhSMGJHOWpZV3d1Ym1WME1Ga3dFd1lIS29aSQp6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVGSDhVUENsL3ZBSGtNYlRGM0U4eWhTZExOSDJYdWVLVUhucytPNEZSCmhuMDk2T0pLbkdaRmIvSGlXOWlKV2hqNENKNEx1YlN2c2laSlo3WXVEbE05ZmFPQnNqQ0JyekFPQmdOVkhROEIKQWY4RUJBTUNBcVF3RXdZRFZSMGxCQXd3Q2dZSUt3WUJCUVVIQXdFd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBZApCZ05WSFE0RUZnUVVJbWpyZXNxbDc4ZkJwd1NWN2xwNGZUNCtObnd3V0FZRFZSMFJCRkV3VDRJRmJXbHVhVytDCkMyMXBibWx2TG0xcGJtbHZnZzl0YVc1cGJ5NXRhVzVwYnk1emRtT0NIVzFwYm1sdkxtMXBibWx2TG5OMll5NWoKYkhWemRHVnlMbXh2WTJGc2dnbHNiMk5oYkdodmMzUXdDZ1lJS29aSXpqMEVBd0lEU0FBd1JRSWdXVDRDVTVpYgpMTmVYSm1oMmxucUV2YWVLZ3FMSFBGZ01PUWcrNFR5Tyt1UUNJUUNJNVdYMUU4NEIrejZ5WDdXS0lCWUpJanRvClJqUWk3NVFuaUYxMHBpMmpLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+EOF
+
+time timeout 60 bash -c 'while ! (kubectl wait --for condition=ready restore.resources.cattle.io/restore-encrypted-resources 2>/dev/null); do kubectl get restore.resources.cattle.io -A; kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=15; sleep 5; done'
