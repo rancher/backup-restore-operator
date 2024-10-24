@@ -73,6 +73,8 @@ export MC_HOST_miniolocal=https://inspectorgadget:gogadgetgo@localhost:9000
 
 time timeout 180 bash -c 'while ! (kubectl wait --for condition=ready backup.resources.cattle.io/s3-backup-encrypted 2>/dev/null); do kubectl get backup.resources.cattle.io -A; kubectl -n cattle-resources-system logs -l app.kubernetes.io/name=rancher-backup --tail=-1; sleep 2; done'
 
+kubectl delete "backup.resources.cattle.io/s3-backup-encrypted"
+
 # Backup resources with a recurring schedule
 for BACKUP in rancherbackups-insecure rancherbackups; do
 

@@ -229,7 +229,6 @@ spec:
       insecureTLSSkipVerify: true
   resourceSetName: rancher-resource-set
   encryptionConfigSecretName: encryptionconfig
-  schedule: "@every 30s"
   retentionCount: 2
 EOF
   else
