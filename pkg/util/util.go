@@ -42,8 +42,12 @@ func GetEncryptionTransformersFromSecret(encryptionConfigSecretName string, secr
 	if err != nil {
 		return nil, err
 	}
+	return PrepareEncryptionTransformersFromConfig(context.Background(), encryptionProviderConfigKey)
+}
+
+func PrepareEncryptionTransformersFromConfig(ctx context.Context, encryptionProviderPath string) (map[schema.GroupResource]value.Transformer, error) {
 	apiServerID := ""
-	encryptionConfig, err := encryptionconfig.LoadEncryptionConfig(context.Background(), encryptionProviderConfigKey, false, apiServerID)
+	encryptionConfig, err := encryptionconfig.LoadEncryptionConfig(ctx, encryptionProviderPath, false, apiServerID)
 	if err != nil {
 		return nil, err
 	}

@@ -24,12 +24,12 @@ var deploymentGVR = schema.GroupVersionResource{
 
 func TestIsDefaultEncryptionTransformer_Wildcard(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-wildcard.yaml")
-	encryptionConfig, err := encryptionconfig.LoadEncryptionConfig(context.Background(), encryptionConfigFilepath, false, "")
+	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
 	if err != nil {
 		return
 	}
 
-	var staticTransformers encryptionconfig.StaticTransformers = encryptionConfig.Transformers
+	var staticTransformers encryptionconfig.StaticTransformers = transformers
 	serviceAccountTransformer := staticTransformers.TransformerForResource(serviceAccountGVR.GroupResource())
 	deploymentTransformer := staticTransformers.TransformerForResource(deploymentGVR.GroupResource())
 
@@ -39,12 +39,12 @@ func TestIsDefaultEncryptionTransformer_Wildcard(t *testing.T) {
 
 func TestIsDefaultEncryptionTransformer_PartialWildcard(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-partial-wildcard.yaml")
-	encryptionConfig, err := encryptionconfig.LoadEncryptionConfig(context.Background(), encryptionConfigFilepath, false, "")
+	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
 	if err != nil {
 		return
 	}
 
-	var staticTransformers encryptionconfig.StaticTransformers = encryptionConfig.Transformers
+	var staticTransformers encryptionconfig.StaticTransformers = transformers
 	serviceAccountTransformer := staticTransformers.TransformerForResource(serviceAccountGVR.GroupResource())
 	deploymentTransformer := staticTransformers.TransformerForResource(deploymentGVR.GroupResource())
 
@@ -54,12 +54,12 @@ func TestIsDefaultEncryptionTransformer_PartialWildcard(t *testing.T) {
 
 func TestIsDefaultEncryptionTransformer_SpecificResource(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-specific-resource.yaml")
-	encryptionConfig, err := encryptionconfig.LoadEncryptionConfig(context.Background(), encryptionConfigFilepath, false, "")
+	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
 	if err != nil {
 		return
 	}
 
-	var staticTransformers encryptionconfig.StaticTransformers = encryptionConfig.Transformers
+	var staticTransformers encryptionconfig.StaticTransformers = transformers
 	serviceAccountTransformer := staticTransformers.TransformerForResource(serviceAccountGVR.GroupResource())
 	deploymentTransformer := staticTransformers.TransformerForResource(deploymentGVR.GroupResource())
 
