@@ -24,7 +24,7 @@ const (
 
 var ChartNamespace string
 
-func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core.SecretController) (map[schema.GroupResource]value.Transformer, error) {
+func GetEncryptionTransformersFromSecret(encryptionConfigSecretName string, secrets v1core.SecretController) (map[schema.GroupResource]value.Transformer, error) {
 	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
 	// kubectl create secret generic test-encryptionconfig --from-file=./encryption-provider-config.yaml
 	logrus.Infof("Get encryption config from namespace %v", ChartNamespace)
@@ -42,8 +42,12 @@ func GetEncryptionTransformers(encryptionConfigSecretName string, secrets v1core
 	if err != nil {
 		return nil, err
 	}
+	return PrepareEncryptionTransformersFromConfig(context.Background(), encryptionProviderConfigKey)
+}
+
+func PrepareEncryptionTransformersFromConfig(ctx context.Context, encryptionProviderPath string) (map[schema.GroupResource]value.Transformer, error) {
 	apiServerID := ""
-	encryptionConfig, err := encryptionconfig.LoadEncryptionConfig(context.Background(), encryptionProviderConfigKey, false, apiServerID)
+	encryptionConfig, err := encryptionconfig.LoadEncryptionConfig(ctx, encryptionProviderPath, false, apiServerID)
 	if err != nil {
 		return nil, err
 	}
