@@ -3,13 +3,13 @@ package util
 import (
 	"context"
 	"fmt"
-	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 )
 
 var serviceAccountGVR = schema.GroupVersionResource{
