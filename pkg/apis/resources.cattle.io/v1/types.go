@@ -6,13 +6,14 @@ import (
 )
 
 var (
-	BackupConditionReady        = "Ready"
-	BackupConditionUploaded     = "Uploaded"
-	BackupConditionReconciling  = "Reconciling"
-	BackupConditionStalled      = "Stalled"
-	RestoreConditionReconciling = "Reconciling"
-	RestoreConditionStalled     = "Stalled"
-	RestoreConditionReady       = "Ready"
+	BackupConditionReady         = "Ready"
+	BackupConditionUploaded      = "Uploaded"
+	BackupConditionReconciling   = "Reconciling"
+	BackupConditionClusterOrigin = "ClusterOrigin"
+	BackupConditionStalled       = "Stalled"
+	RestoreConditionReconciling  = "Reconciling"
+	RestoreConditionStalled      = "Stalled"
+	RestoreConditionReady        = "Ready"
 )
 
 const (
