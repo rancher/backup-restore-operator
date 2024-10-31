@@ -6,9 +6,13 @@ import (
 	"os"
 	"reflect"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsClientSetv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
+
 	v1core "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/apiserver/pkg/storage/value"
@@ -82,4 +86,39 @@ func FetchClusterUID(namespaces v1core.NamespaceController) (string, error) {
 	}
 
 	return string(kubesystemNamespace.UID), nil
+}
+
+// Define the GroupVersionResource for CRDs
+var crdGVR = schema.GroupVersionResource{
+	Group:    "apiextensions.k8s.io",
+	Version:  "v1",
+	Resource: "customresourcedefinitions",
+}
+
+func getCRDDefinition(dynamicClient apiextensionsClientSetv1.ApiextensionsV1Interface, crdName string) (*apiextensionsv1.CustomResourceDefinition, error) {
+	crd, err := dynamicClient.CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return crd, nil
+}
+
+func VerifyBackupCrdHasClusterStatus(client apiextensionsClientSetv1.ApiextensionsV1Interface) bool {
+	crdName := "backups.resources.cattle.io"
+
+	crd, err := getCRDDefinition(client, crdName)
+	if err != nil {
+		logrus.Infof("Error fetching CRD: %v", err)
+		return false
+	}
+
+	// Inspect the status schema, for example
+	_, found := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["status"].Properties["originCluster"]
+	if found {
+		logrus.Debugf("Status schema contains `originCluster` on CRD `%s`.\n", crdName)
+		return true
+	}
+
+	logrus.Debugf("`originCluster` not found on status schema for CRD `%s`.\n", crdName)
+	return false
 }

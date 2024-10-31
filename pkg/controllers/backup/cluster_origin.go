@@ -27,10 +27,10 @@ func newBackupClusterOriginConditionMeta(controllerClusterID string, backup *v1.
 		currentInPlaceRestoreCondition: false,
 	}
 
-	originAnnotationValue, ok := backup.GetAnnotations()[v1.BackupClusterOriginIndex]
-	conditionMeta.hasClusterOriginID = ok && originAnnotationValue != ""
+	originalValue := backup.Status.OriginCluster
+	conditionMeta.hasClusterOriginID = originalValue != ""
 	if conditionMeta.hasClusterOriginID {
-		conditionMeta.clusterOriginID = originAnnotationValue
+		conditionMeta.clusterOriginID = originalValue
 	}
 
 	currentOriginConditionString := condition.Cond(v1.BackupConditionClusterOrigin).GetStatus(backup)
@@ -55,6 +55,23 @@ func newBackupClusterOriginConditionMeta(controllerClusterID string, backup *v1.
 // prepareClusterOriginConditions helps set the cluster origin conditions and reports if anything changed in this part of status.
 func (h *handler) prepareClusterOriginConditions(backup *v1.Backup) bool {
 	conditionChanged := false
+	if !h.canUseClusterOriginStatus {
+		currentOriginConditionString := condition.Cond(v1.BackupConditionClusterOrigin).GetStatus(backup)
+		if currentOriginConditionString != "False" {
+			condition.Cond(v1.BackupConditionClusterOrigin).SetStatusBool(backup, false)
+			condition.Cond(v1.BackupConditionClusterOrigin).Message(backup, "CRD not updated to include cluster UID yet.")
+			conditionChanged = true
+		}
+		currentInPlaceRestoreString := condition.Cond(v1.BackupConditionInPlaceRestore).GetStatus(backup)
+		if currentInPlaceRestoreString != "False" {
+			condition.Cond(v1.BackupConditionInPlaceRestore).SetStatusBool(backup, false)
+			condition.Cond(v1.BackupConditionInPlaceRestore).Message(backup, "Cannot determine if in-place Restore is viable.")
+			conditionChanged = true
+		}
+
+		return conditionChanged
+	}
+
 	conditionMeta := newBackupClusterOriginConditionMeta(h.kubeSystemNS, backup)
 
 	// Fist pass we only care to set BackupConditionClusterOrigin based on if the context is there

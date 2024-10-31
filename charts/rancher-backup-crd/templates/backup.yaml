@@ -127,6 +127,9 @@ spec:
                 type: string
               observedGeneration:
                 type: integer
+              originCluster:
+                nullable: true
+                type: string
               storageLocation:
                 nullable: true
                 type: string

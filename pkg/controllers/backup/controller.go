@@ -40,7 +40,8 @@ type handler struct {
 	defaultBackupMountPath  string
 	defaultS3BackupLocation *v1.S3ObjectStore
 	// TODO: rename to kubeSystemNamespaceUID; nit to improve clarity, it's not the string representation nor the NS resource
-	kubeSystemNS string
+	kubeSystemNS              string
+	canUseClusterOriginStatus bool
 }
 
 const DefaultRetentionCount = 10
@@ -57,15 +58,16 @@ func Register(
 	defaultS3 *v1.S3ObjectStore) {
 
 	controller := &handler{
-		ctx:                     ctx,
-		backups:                 backups,
-		resourceSets:            resourceSets,
-		secrets:                 secrets,
-		namespaces:              namespaces,
-		discoveryClient:         clientSet.Discovery(),
-		dynamicClient:           dynamicInterface,
-		defaultBackupMountPath:  defaultLocalBackupLocation,
-		defaultS3BackupLocation: defaultS3,
+		ctx:                       ctx,
+		backups:                   backups,
+		resourceSets:              resourceSets,
+		secrets:                   secrets,
+		namespaces:                namespaces,
+		discoveryClient:           clientSet.Discovery(),
+		dynamicClient:             dynamicInterface,
+		defaultBackupMountPath:    defaultLocalBackupLocation,
+		defaultS3BackupLocation:   defaultS3,
+		canUseClusterOriginStatus: util.VerifyBackupCrdHasClusterStatus(clientSet.ApiextensionsV1()),
 	}
 	if controller.defaultBackupMountPath != "" {
 		logrus.Infof("Default location for storing backups is %v", controller.defaultBackupMountPath)
@@ -185,14 +187,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		}
 	}
 
-	backupAnnotations := backup.GetAnnotations()
-	if backupAnnotations == nil {
-		backupAnnotations = map[string]string{}
-	}
-	backupAnnotations[v1.BackupClusterOriginIndex] = h.kubeSystemNS
-	backup.SetAnnotations(backupAnnotations)
-	_, err = h.backups.Update(backup)
-
 	storageLocationType := backup.Status.StorageLocation
 	updateErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
@@ -200,6 +194,8 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		if err != nil {
 			return err
 		}
+		// Set the Cluster origin reference on backup
+		backup.Status.OriginCluster = h.kubeSystemNS
 		// reset conditions to remove the reconciling condition, because as per kstatus lib its presence is considered an error
 		backup.Status.Conditions = []genericcondition.GenericCondition{}
 

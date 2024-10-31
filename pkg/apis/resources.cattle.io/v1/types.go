@@ -17,10 +17,6 @@ var (
 	RestoreConditionReady         = "Ready"
 )
 
-const (
-	BackupClusterOriginIndex = "field.cattle.io/originClusterId"
-)
-
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -43,6 +39,7 @@ type BackupSpec struct {
 
 type BackupStatus struct {
 	Conditions         []genericcondition.GenericCondition `json:"conditions"`
+	OriginCluster      string                              `json:"originCluster,omitempty"`
 	LastSnapshotTS     string                              `json:"lastSnapshotTs"`
 	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
 	ObservedGeneration int64                               `json:"observedGeneration"`
