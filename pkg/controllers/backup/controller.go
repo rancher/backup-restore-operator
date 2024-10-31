@@ -123,6 +123,9 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return backup, nil
 		}
 		if backup.Status.NextSnapshotAt != "" {
+			// TODO: Verify how recurring backups work after a migration today
+			//       Then decide how/where to call prepareClusterOriginConditions for that.
+
 			currTime := time.Now().Format(time.RFC3339)
 			logrus.Infof("Next snapshot is scheduled for: %v, current time: %v", backup.Status.NextSnapshotAt, currTime)
 
