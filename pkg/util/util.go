@@ -74,3 +74,12 @@ func ErrList(e []error) error {
 	}
 	return nil
 }
+
+func FetchClusterUid(namespaces v1core.NamespaceController) (string, error) {
+	kubesystemNamespace, err := namespaces.Get("kube-system", k8sv1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	return string(kubesystemNamespace.UID), nil
+}

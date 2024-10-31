@@ -75,13 +75,13 @@ func Register(
 	}
 
 	// Use the kube-system NS.UID as the unique ID for a cluster
-	kubeSystemNS, err := controller.namespaces.Get("kube-system", k8sv1.GetOptions{})
+	kubeSystemNamespaceUID, err := util.FetchClusterUid(namespaces)
 	if err != nil {
 		// fatal log here, because we need the kube-system ns UID while creating any backup file
 		logrus.Fatalf("Error getting namespace kube-system %v", err)
 	}
-	// TODO: rename to kubeSystemNamespaceUID; nit to improve clarity, it's not the string representation nor the NS resource
-	controller.kubeSystemNS = string(kubeSystemNS.UID)
+	// TODO: rename to kubeSystemNamespaceUID
+	controller.kubeSystemNS = kubeSystemNamespaceUID
 	// Register handlers
 	backups.OnChange(ctx, "backups", controller.OnBackupChange)
 }
@@ -176,6 +176,15 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return h.setReconcilingCondition(backup, err)
 		}
 	}
+
+	backupAnnotations := backup.GetAnnotations()
+	if backupAnnotations == nil {
+		backupAnnotations = map[string]string{}
+	}
+	backupAnnotations[v1.BackupClusterOriginIndex] = h.kubeSystemNS
+	backup.SetAnnotations(backupAnnotations)
+	_, err = h.backups.Update(backup)
+
 	storageLocationType := backup.Status.StorageLocation
 	updateErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
