@@ -39,7 +39,8 @@ type handler struct {
 	dynamicClient           dynamic.Interface
 	defaultBackupMountPath  string
 	defaultS3BackupLocation *v1.S3ObjectStore
-	kubeSystemNS            string
+	// TODO: rename to kubeSystemNamespaceUID; nit to improve clarity, it's not the string representation nor the NS resource
+	kubeSystemNS string
 }
 
 const DefaultRetentionCount = 10
@@ -79,6 +80,7 @@ func Register(
 		// fatal log here, because we need the kube-system ns UID while creating any backup file
 		logrus.Fatalf("Error getting namespace kube-system %v", err)
 	}
+	// TODO: rename to kubeSystemNamespaceUID; nit to improve clarity, it's not the string representation nor the NS resource
 	controller.kubeSystemNS = string(kubeSystemNS.UID)
 	// Register handlers
 	backups.OnChange(ctx, "backups", controller.OnBackupChange)
@@ -94,6 +96,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return h.setReconcilingCondition(backup, err)
 	}
 
+	// Handle updates made on Backup CRs with existing backup files
 	if backup.Status.LastSnapshotTS != "" {
 		if backup.Spec.Schedule == "" {
 			// Backup CR was meant for one-time backup, and the backup has been completed. Probably here from UpdateStatus call
