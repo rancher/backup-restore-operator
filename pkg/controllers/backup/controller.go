@@ -112,6 +112,11 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 				backup.Status.BackupType = "One-time"
 				shouldUpdateStatus = true
 			}
+			// check if the origin cluster status needs updating
+			clusterOriginChanged := h.prepareClusterOriginConditions(backup)
+			if clusterOriginChanged {
+				shouldUpdateStatus = true
+			}
 			if shouldUpdateStatus {
 				return h.backups.UpdateStatus(backup)
 			}
@@ -198,6 +203,8 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
 		condition.Cond(v1.BackupConditionReady).Message(backup, "Completed")
 		condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
+
+		h.prepareClusterOriginConditions(backup)
 
 		backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
 		if cronSchedule != nil {
