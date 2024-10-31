@@ -16,7 +16,7 @@ type backupClusterOriginConditionMeta struct {
 	currentInPlaceRestoreCondition bool
 }
 
-func newBackupClusterOriginConditionMeta(controllerClusterId string, backup *v1.Backup) backupClusterOriginConditionMeta {
+func newBackupClusterOriginConditionMeta(controllerClusterID string, backup *v1.Backup) backupClusterOriginConditionMeta {
 	conditionMeta := backupClusterOriginConditionMeta{
 		backupName:                     backup.Name,
 		hasClusterOriginID:             false,
@@ -40,7 +40,7 @@ func newBackupClusterOriginConditionMeta(controllerClusterId string, backup *v1.
 	}
 
 	if conditionMeta.hasClusterOriginID {
-		conditionMeta.canInPlaceRestore = conditionMeta.clusterOriginID == controllerClusterId
+		conditionMeta.canInPlaceRestore = conditionMeta.clusterOriginID == controllerClusterID
 	}
 
 	currentInPlaceRestoreString := condition.Cond(v1.BackupConditionInPlaceRestore).GetStatus(backup)
