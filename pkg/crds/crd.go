@@ -59,7 +59,8 @@ func List() []crd.CRD {
 				WithColumn("Latest-Backup", ".status.filename").
 				WithColumn("ResourceSet", ".spec.resourceSetName").
 				WithCustomColumn(apiext.CustomResourceColumnDefinition{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"}).
-				WithColumn("Status", ".status.conditions[?(@.type==\"Ready\")].message")
+				WithColumn("Status", ".status.conditions[?(@.type==\"Ready\")].message").
+				WithColumn("In-Place", ".status.conditions[?(@.type==\"InPlaceRestore\")].status")
 		}),
 		newCRD(&resources.Restore{}, func(c crd.CRD) crd.CRD {
 			return c.

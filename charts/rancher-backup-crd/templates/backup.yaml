@@ -29,6 +29,9 @@ spec:
     - jsonPath: .status.conditions[?(@.type=="Ready")].message
       name: Status
       type: string
+    - jsonPath: .status.conditions[?(@.type=="InPlaceRestore")].status
+      name: In-Place
+      type: string
     name: v1
     schema:
       openAPIV3Schema:
