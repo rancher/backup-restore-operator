@@ -72,6 +72,7 @@ func (h *handler) prepareClusterOriginConditions(backup *v1.Backup) bool {
 		return conditionChanged
 	}
 
+	// TODO: We could add a fallback mode that uses filenames (and/or the annotation) when the CRD is not updated
 	conditionMeta := newBackupClusterOriginConditionMeta(h.kubeSystemNS, backup)
 
 	// Fist pass we only care to set BackupConditionClusterOrigin based on if the context is there
