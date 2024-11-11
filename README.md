@@ -25,9 +25,9 @@ This is the current branch strategy for `rancher/backup-restore-operator`, it ma
 | Branch         | Tag      | Rancher                |
 |----------------|----------|------------------------|
 | `main`         | `head`   | `main` branch (`head`) |
+| `release/v6.0` | `v6.x.x` | `v2.10.x`              |
 | `release/v5.0` | `v5.x.x` | `v2.9.x`               |
 | `release/v4.0` | `v4.x.x` | `v2.8.x`               |
-| `release/v3.0` | `v3.x.x` | `v2.7.x`               |
 
 ----
 
