@@ -5,9 +5,9 @@
   ],
   "baseBranches": [
     "main",
-    "release/v3.0",
-    "release/v4.0",
-    "release/v5.0"
+    "release/v6.0",
+    "release/v5.0",
+    "release/v4.0"
   ],
   "ignoreDeps": [
     "github.com/rancher/hull",
