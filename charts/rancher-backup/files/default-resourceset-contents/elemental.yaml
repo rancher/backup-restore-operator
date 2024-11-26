@@ -30,7 +30,7 @@
   resourceNameRegexp: "elemental.cattle.io$"
 - apiVersion: "elemental.cattle.io/v1beta1"
   kindsRegexp: "."
-  namespaceRegexp: "^cattle-fleet-|^fleet-"
+  namespaceRegexp: "^cattle-fleet-|^fleet-|^cattle-elemental-system$"
 - apiVersion: "rbac.authorization.k8s.io/v1"
   kindsRegexp: "^roles$|^rolebindings$"
   labelSelectors:
