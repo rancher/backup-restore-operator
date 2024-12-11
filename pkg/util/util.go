@@ -19,7 +19,7 @@ const (
 	WorkerThreads               = 25
 	S3Backup                    = "S3"
 	PVBackup                    = "PV"
-	encryptionProviderConfigKey = "encryption-provider-config.yaml"
+	EncryptionProviderConfigKey = "encryption-provider-config.yaml"
 )
 
 var ChartNamespace string
@@ -32,17 +32,17 @@ func GetEncryptionTransformersFromSecret(encryptionConfigSecretName string, secr
 	if err != nil {
 		return nil, err
 	}
-	encryptionConfigBytes, ok := encryptionConfigSecret.Data[encryptionProviderConfigKey]
+	encryptionConfigBytes, ok := encryptionConfigSecret.Data[EncryptionProviderConfigKey]
 	if !ok {
 		return nil, fmt.Errorf("no encryptionConfig provided")
 	}
-	err = os.WriteFile(encryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
-	defer os.Remove(encryptionProviderConfigKey)
+	err = os.WriteFile(EncryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
+	defer os.Remove(EncryptionProviderConfigKey)
 
 	if err != nil {
 		return nil, err
 	}
-	return PrepareEncryptionTransformersFromConfig(context.Background(), encryptionProviderConfigKey)
+	return PrepareEncryptionTransformersFromConfig(context.Background(), EncryptionProviderConfigKey)
 }
 
 func PrepareEncryptionTransformersFromConfig(ctx context.Context, encryptionProviderPath string) (map[schema.GroupResource]value.Transformer, error) {
