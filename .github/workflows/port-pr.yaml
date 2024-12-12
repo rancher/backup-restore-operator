@@ -1,4 +1,4 @@
-# create a backport/forwardport of a PR when "/backport <milestone>" is commented
+# create a backport/forwardport of a PR when "/backport <branch> <milestone: optional>" is commented
 name: Port PR
 run-name: "Port PR ${{ github.event.issue.number }}: ${{ github.event.issue.title }}"
 
@@ -48,7 +48,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          BODY_MILESTONE=$(echo "${COMMENT_BODY}" | awk '{ print $2 }')
+          BODY_MILESTONE=$(echo "${COMMENT_BODY}" | awk '{ print $3 }')
           # Sanitize input
           MILESTONE=${BODY_MILESTONE//[^a-zA-Z0-9\-\.]/}
           if gh api repos/${GITHUB_REPOSITORY}/milestones --paginate | jq -e --arg MILESTONE "$MILESTONE" '.[] | select(.title == $MILESTONE)' > /dev/null; then
@@ -68,7 +68,7 @@ jobs:
           TYPE=$(echo "${COMMENT_BODY}" | awk '{ print $1 }' | sed -e 's_/__')
           echo "Type: ${TYPE}" >> $GITHUB_STEP_SUMMARY
           echo "type=${TYPE}" >> $GITHUB_ENV
-          TARGET_BRANCH=$(echo "${COMMENT_BODY}" | awk '{ print $3 }')
+          TARGET_BRANCH=$(echo "${COMMENT_BODY}" | awk '{ print $2 }')
           echo "Target branch: ${TARGET_BRANCH}" >> $GITHUB_STEP_SUMMARY
           echo "target_branch=${TARGET_BRANCH}" >> $GITHUB_ENV
           if gh api repos/${GITHUB_REPOSITORY}/branches --paginate | jq -e --arg TARGET_BRANCH "$TARGET_BRANCH" '.[] | select(.name == $TARGET_BRANCH)' > /dev/null; then
