@@ -4,18 +4,18 @@ go 1.23.0
 
 replace (
 	github.com/imdario/mergo => dario.cat/mergo v0.3.16
-	golang.org/x/crypto => golang.org/x/crypto v0.27.0
-	google.golang.org/grpc => google.golang.org/grpc v1.67.1
+	golang.org/x/crypto => golang.org/x/crypto v0.31.0
+	google.golang.org/grpc => google.golang.org/grpc v1.68.1
 )
 
 require (
-	github.com/minio/minio-go/v7 v7.0.77
+	github.com/minio/minio-go/v7 v7.0.81
 	github.com/rancher/lasso v0.0.0-20240923125127-ae858d002589
 	github.com/rancher/wrangler/v3 v3.0.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.9.0
-	golang.org/x/sync v0.8.0
+	github.com/stretchr/testify v1.10.0
+	golang.org/x/sync v0.10.0
 	k8s.io/api v0.31.1
 	k8s.io/apiextensions-apiserver v0.31.1
 	k8s.io/apimachinery v0.31.1
