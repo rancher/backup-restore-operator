@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+set -x 
+source $(dirname $0)/version
+
+CLUSTER_NAME=$CLUSTER_NAME K3S_VERSION=$K3S_VERSION ./.github/workflows/scripts/setup-cluster.sh
+k3d kubeconfig get $CLUSTER_NAME > kubeconfig.yaml
+export KUBECONFIG="$(pwd)/kubeconfig.yaml"
+helm install rancher-backup-crd ./dist/artifacts/rancher-backup-crd-$HELM_VERSION_DEV.tgz -n cattle-resources-system --create-namespace --wait
