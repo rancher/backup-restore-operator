@@ -210,7 +210,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		backupSource = util.S3Backup
 	}
 	if !foundBackup {
-		return h.setReconcilingCondition(restore, fmt.Errorf("Backup location not specified on the restore CR, and not configured at the operator level"))
+		return h.setReconcilingCondition(restore, fmt.Errorf("backup location not specified on the restore CR, and not configured at the operator level"))
 	}
 
 	// first stop the controllers
@@ -835,7 +835,7 @@ func (h *handler) Lock(restore *v1.Restore) error {
 		lease = &coordinationv1.Lease{
 			ObjectMeta: k8sv1.ObjectMeta{
 				Name:      leaseName,
-				Namespace: util.ChartNamespace,
+				Namespace: util.GetChartNamespace(),
 			},
 			Spec: coordinationv1.LeaseSpec{
 				HolderIdentity: leaseHolderName(restore),

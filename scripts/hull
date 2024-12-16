@@ -2,7 +2,7 @@
 set -e
 
 function extract_version() {
-    artifact_dir="../dist/artifacts"
+    artifact_dir="$(dirname $0)/../dist/artifacts"
     crdfilename=$( ls $artifact_dir | grep rancher-backup-crd )
     regex="backup-crd-(.*)\\.tgz"
     if [[ $crdfilename =~ $regex ]]

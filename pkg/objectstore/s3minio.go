@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -22,8 +23,20 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/util"
 	log "github.com/sirupsen/logrus"
 )
+
+type ObjectStore struct {
+	Endpoint                  string `json:"endpoint"`
+	EndpointCA                string `json:"endpointCA"`
+	InsecureTLSSkipVerify     string `json:"insecureTLSSkipVerify"`
+	CredentialSecretName      string `json:"credentialSecretName"`
+	CredentialSecretNamespace string `json:"credentialSecretNamespace"`
+	BucketName                string `json:"bucketName"`
+	Region                    string `json:"region"`
+	Folder                    string `json:"folder"`
+}
 
 // Almost everything in this file is from rke-tools with some modifications https://github.com/rancher/rke-tools/blob/master/main.go
 
@@ -134,8 +147,11 @@ func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClie
 		secretKey = string(secretKeyBytes)
 		log.Tracef("Found secretKey [%s] in secret [%s] in namespace [%s]", secretKey, secretName, secretNs)
 	}
+	ctxca, caT := context.WithTimeout(ctx, 5*time.Millisecond)
+	defer caT()
+	devMode := util.DevModeContext(ctxca)
 	// if no s3 credentials are provided, use IAM profile, this means passing empty access and secret keys to the SetS3Service call
-	s3Client, err := SetS3Service(objectStore, accessKey, secretKey, true)
+	s3Client, err := SetS3Service(objectStore, accessKey, secretKey, !devMode)
 	if err != nil {
 		return &minio.Client{}, err
 	}
@@ -277,8 +293,5 @@ func isValidCertificate(c []byte) bool {
 		return false
 	}
 	_, err := x509.ParseCertificates(p.Bytes)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
