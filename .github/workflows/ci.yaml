@@ -24,13 +24,25 @@ on:
     - 'CODEOWNERS'
     - 'LICENSE'
 jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.62.2
   build:
     strategy:
       matrix:
         arch:
           - x64
           - arm64
-    name : CI
+    name : build
     runs-on : runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     outputs:
       k3sversions: ${{ steps.support.outputs.k3sversions }}
@@ -39,52 +51,44 @@ jobs:
         uses : actions/checkout@v4
         with :
           fetch-depth : 0
-      - name: Set K3s support output
-        id : support
-        run: ./.github/workflows/scripts/supported-versions.sh | awk '{print "k3sversions="$0}' >> $GITHUB_OUTPUT
+      - name: Install go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name : Install helm
+        run : ./.github/workflows/scripts/install-helm.sh
       - name : CI
         run : make ci
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: bro-build-artifacts-${{ matrix.arch }}
-          path: ./dist/artifacts
-        
   test:
     name : integration-test
-    needs : [
-      build
-    ]
     runs-on : runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     strategy:
       matrix:
         arch:
           - x64
           - arm64
-        K3S_VERSION : ${{ fromJSON(needs.build.outputs.k3sversions) }}
+        #FIXME: temporarily hardcoded
+        K3S_VERSION :
+          - v1.28.1-k3s1 
+          - v1.31.0-k3s1
     steps:
       - name : Checkout repository
         uses : actions/checkout@v4
-      - name : Fetch build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: bro-build-artifacts-${{ matrix.arch }}
-          path: ./dist/artifacts/
-      - name : Debug
-        run : ls -R ./dist/artifacts
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name : Load backup-restore-operator image
-        run : docker image load -i ./dist/artifacts/backup-restore-operator.img
       - name: Install go
         uses: actions/setup-go@v5
         with:
           go-version: 1.23
+      - name : Install helm 
+        run : ./.github/workflows/scripts/install-helm.sh
+      - name : Setup helm charts
+        run : ./scripts/package-helm
+      - name : Debug
+        run : ls -R ./dist/artifacts
       - name : Install k3d
         run : ./.github/workflows/scripts/install-k3d.sh
-      - name : Install minio client
-        run : ./.github/workflows/scripts/install-mc.sh
-      - name : Setup k3d cluster
-        run : CLUSTER_NAME=backup-restore K3S_VERSION=${{ matrix.K3S_VERSION }} ./.github/workflows/scripts/setup-cluster.sh
-      - name : Run integration tests
-        run : ./scripts/integration
+      - name : Run e2e tests
+        run :
+          CLUSTER_NAME=backup-restore K3S_VERSION=${{ matrix.K3S_VERSION }} ./scripts/testenv 
+          cd e2e && KUBECONFIG=$KUBECONFIG CHART_NAMESPACE=cattle-resources-system go test -v -timeout 10m -count=1 ./...

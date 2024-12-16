@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# !! Deprecated, but kept for reference and for manual testing
+
 set -ex
 function echo_with_time {
     echo "$(date --utc +%Y-%m-%dT%H:%M:%SZ) $*"
