@@ -70,7 +70,7 @@ func Register(
 		logrus.Infof("Default location for storing backups is %v", controller.defaultBackupMountPath)
 	} else if controller.defaultS3BackupLocation != nil {
 		logrus.Infof("Default s3 location for storing backups is %v", controller.defaultS3BackupLocation)
-		logrus.Infof("If credentials are used for default s3, the secret containing creds must exist in chart's namespace %v", util.ChartNamespace)
+		logrus.Infof("If credentials are used for default s3, the secret containing creds must exist in chart's namespace %v", util.GetChartNamespace())
 	}
 
 	// Use the kube-system NS.UID as the unique ID for a cluster
