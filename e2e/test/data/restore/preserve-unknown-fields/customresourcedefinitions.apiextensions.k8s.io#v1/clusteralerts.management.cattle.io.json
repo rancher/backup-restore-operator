@@ -1,0 +1,134 @@
+{
+    "apiVersion": "apiextensions.k8s.io/v1",
+    "kind": "CustomResourceDefinition",
+    "metadata": {
+        "generation": 1,
+        "managedFields": [
+            {
+                "apiVersion": "apiextensions.k8s.io/v1beta1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                    "f:spec": {
+                        "f:conversion": {
+                            ".": {},
+                            "f:strategy": {}
+                        },
+                        "f:group": {},
+                        "f:names": {
+                            "f:kind": {},
+                            "f:listKind": {},
+                            "f:plural": {},
+                            "f:singular": {}
+                        },
+                        "f:preserveUnknownFields": {},
+                        "f:scope": {},
+                        "f:version": {},
+                        "f:versions": {}
+                    }
+                },
+                "manager": "rancher",
+                "operation": "Update",
+                "time": "2022-06-10T14:24:07Z"
+            },
+            {
+                "apiVersion": "apiextensions.k8s.io/v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                    "f:status": {
+                        "f:acceptedNames": {
+                            "f:kind": {},
+                            "f:listKind": {},
+                            "f:plural": {},
+                            "f:singular": {}
+                        },
+                        "f:conditions": {
+                            "k:{\"type\":\"Established\"}": {
+                                ".": {},
+                                "f:lastTransitionTime": {},
+                                "f:message": {},
+                                "f:reason": {},
+                                "f:status": {},
+                                "f:type": {}
+                            },
+                            "k:{\"type\":\"NamesAccepted\"}": {
+                                ".": {},
+                                "f:lastTransitionTime": {},
+                                "f:message": {},
+                                "f:reason": {},
+                                "f:status": {},
+                                "f:type": {}
+                            },
+                            "k:{\"type\":\"NonStructuralSchema\"}": {
+                                ".": {},
+                                "f:lastTransitionTime": {},
+                                "f:message": {},
+                                "f:reason": {},
+                                "f:status": {},
+                                "f:type": {}
+                            }
+                        }
+                    }
+                },
+                "manager": "k3s",
+                "operation": "Update",
+                "time": "2022-06-10T14:24:08Z"
+            }
+        ],
+        "name": "clusteralerts.management.cattle.io"
+    },
+    "spec": {
+        "conversion": {
+            "strategy": "None"
+        },
+        "group": "management.cattle.io",
+        "names": {
+            "kind": "ClusterAlert",
+            "listKind": "ClusterAlertList",
+            "plural": "clusteralerts",
+            "singular": "clusteralert"
+        },
+        "preserveUnknownFields": true,
+        "scope": "Namespaced",
+        "versions": [
+            {
+                "name": "v3",
+                "served": true,
+                "storage": true
+            }
+        ]
+    },
+    "status": {
+        "acceptedNames": {
+            "kind": "ClusterAlert",
+            "listKind": "ClusterAlertList",
+            "plural": "clusteralerts",
+            "singular": "clusteralert"
+        },
+        "conditions": [
+            {
+                "lastTransitionTime": "2022-06-10T14:24:07Z",
+                "message": "spec.preserveUnknownFields: Invalid value: true: must be false",
+                "reason": "Violations",
+                "status": "True",
+                "type": "NonStructuralSchema"
+            },
+            {
+                "lastTransitionTime": "2022-06-10T14:24:08Z",
+                "message": "no conflicts found",
+                "reason": "NoConflicts",
+                "status": "True",
+                "type": "NamesAccepted"
+            },
+            {
+                "lastTransitionTime": "2022-06-10T14:24:08Z",
+                "message": "the initial names have been accepted",
+                "reason": "InitialNamesAccepted",
+                "status": "True",
+                "type": "Established"
+            }
+        ],
+        "storedVersions": [
+            "v3"
+        ]
+    }
+}

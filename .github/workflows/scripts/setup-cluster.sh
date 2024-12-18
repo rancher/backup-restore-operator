@@ -65,6 +65,4 @@ kubectl cluster-info --context k3d-${CLUSTER_NAME}
 kubectl config use-context k3d-${CLUSTER_NAME}
 kubectl get nodes -o wide
 
-IMAGE=${REPO}/backup-restore-operator:${TAG}
 
-k3d image import ${IMAGE} -c $CLUSTER_NAME

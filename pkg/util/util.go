@@ -19,30 +19,75 @@ const (
 	WorkerThreads               = 25
 	S3Backup                    = "S3"
 	PVBackup                    = "PV"
-	encryptionProviderConfigKey = "encryption-provider-config.yaml"
+	EncryptionProviderConfigKey = "encryption-provider-config.yaml"
 )
 
-var ChartNamespace string
+var (
+	chartNamespace string
+	devMode        bool
+)
+
+var (
+	initNs  = Initializer{}
+	initDev = Initializer{}
+)
+
+func SetDevMode(enabled bool) {
+	initDev.InitOnce(func() {
+		devMode = enabled
+	})
+}
+
+func DevMode() bool {
+	initDev.WaitForInit()
+	return devMode
+}
+
+func DevModeContext(ctx context.Context) bool {
+	err := initDev.WaitForInitContext(ctx)
+	if err != nil {
+		return false
+	}
+	return devMode
+}
+
+func GetChartNamespaceContext(ctx context.Context) (string, error) {
+	if err := initNs.WaitForInitContext(ctx); err != nil {
+		return "", err
+	}
+	return chartNamespace, nil
+}
+
+func GetChartNamespace() string {
+	initNs.WaitForInit()
+	return chartNamespace
+}
+
+func SetChartNamespace(ns string) {
+	initNs.InitOnce(func() {
+		chartNamespace = ns
+	})
+}
 
 func GetEncryptionTransformersFromSecret(encryptionConfigSecretName string, secrets v1core.SecretController) (map[schema.GroupResource]value.Transformer, error) {
 	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
 	// kubectl create secret generic test-encryptionconfig --from-file=./encryption-provider-config.yaml
-	logrus.Infof("Get encryption config from namespace %v", ChartNamespace)
-	encryptionConfigSecret, err := secrets.Get(ChartNamespace, encryptionConfigSecretName, k8sv1.GetOptions{})
+	logrus.Infof("Get encryption config from namespace %v", GetChartNamespace())
+	encryptionConfigSecret, err := secrets.Get(GetChartNamespace(), encryptionConfigSecretName, k8sv1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
-	encryptionConfigBytes, ok := encryptionConfigSecret.Data[encryptionProviderConfigKey]
+	encryptionConfigBytes, ok := encryptionConfigSecret.Data[EncryptionProviderConfigKey]
 	if !ok {
 		return nil, fmt.Errorf("no encryptionConfig provided")
 	}
-	err = os.WriteFile(encryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
-	defer os.Remove(encryptionProviderConfigKey)
+	err = os.WriteFile(EncryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
+	defer os.Remove(EncryptionProviderConfigKey)
 
 	if err != nil {
 		return nil, err
 	}
-	return PrepareEncryptionTransformersFromConfig(context.Background(), encryptionProviderConfigKey)
+	return PrepareEncryptionTransformersFromConfig(context.Background(), EncryptionProviderConfigKey)
 }
 
 func PrepareEncryptionTransformersFromConfig(ctx context.Context, encryptionProviderPath string) (map[schema.GroupResource]value.Transformer, error) {
