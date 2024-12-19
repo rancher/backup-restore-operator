@@ -5,7 +5,7 @@ before:
     - go mod tidy
 builds:
     - id: backup-restore-operator
-      main: ./main.go
+      main: ./cmd/operator/main.go
       goos:
         - linux
       goarch:
@@ -16,7 +16,7 @@ builds:
         - -extldflags
         - -static
         - -s
-        - -X main.Version={{.Version}} -X main.GitCommit={{.Commit}}
+        - -X github.com/rancher/backup-restore-operator/cmd/operator/main.Version={{.Version}} -X github.com/rancher/backup-restore-operator/cmd/operator/main.GitCommit={{.Commit}}
       flags:
         - -trimpath
       env:

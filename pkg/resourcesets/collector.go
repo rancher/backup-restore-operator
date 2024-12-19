@@ -110,13 +110,13 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 	var resourceList []k8sv1.APIResource
 
 	groupVersion := filter.APIVersion
-	logrus.Infof("Gathering resources for groupVersion: %v", groupVersion)
+	logrus.Debugf("Gathering resources for groupVersion: %v", groupVersion)
 
 	// first list all resources for given groupversion using discovery API
 	resources, err := h.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logrus.Infof("No resources found for groupVersion %v, skipping it", groupVersion)
+			logrus.Debugf("No resources found for groupVersion %v, skipping it", groupVersion)
 			return resourceList, nil
 		}
 		return resourceList, err
