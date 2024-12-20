@@ -8,7 +8,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.81
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.1
-	github.com/rancher/backup-restore-operator v0.0.0
+	github.com/rancher/backup-restore-operator v1.2.1
 	github.com/rancher/wrangler/v3 v3.1.0
 	github.com/samber/lo v1.47.0
 	github.com/testcontainers/testcontainers-go v0.34.0
