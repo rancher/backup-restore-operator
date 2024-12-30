@@ -35,6 +35,7 @@ const (
 
 func isBackupSuccessul(b *backupv1.Backup) error {
 	bD, err := Object(b)()
+
 	if err != nil {
 		return err
 	}
@@ -127,7 +128,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 							InsecureTLSSkipVerify:     true,
 						},
 					},
-					ResourceSetName: "rancher-resource-set",
+					ResourceSetName: "rancher-resource-set-basic",
 				},
 			}
 			o.Add(b)
@@ -181,7 +182,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 							InsecureTLSSkipVerify:     true,
 						},
 					},
-					ResourceSetName: "rancher-resource-set",
+					ResourceSetName: "rancher-resource-set-full",
 				},
 			}
 			o.Add(b)
@@ -236,7 +237,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 							InsecureTLSSkipVerify:     true,
 						},
 					},
-					ResourceSetName: "rancher-resource-set",
+					ResourceSetName: "rancher-resource-set-basic",
 					Schedule:        "@every 5s",
 					RetentionCount:  2,
 				},
@@ -315,7 +316,7 @@ var _ = Describe("Backup e2e local driver", Ordered, Label("integration"), func(
 					Name: nonEncrypedBackup,
 				},
 				Spec: backupv1.BackupSpec{
-					ResourceSetName: "rancher-resource-set",
+					ResourceSetName: "rancher-resource-set-basic",
 				},
 			}
 			o.Add(b)
@@ -344,7 +345,7 @@ var _ = Describe("Backup e2e local driver", Ordered, Label("integration"), func(
 					Name: encryptedBackup,
 				},
 				Spec: backupv1.BackupSpec{
-					ResourceSetName:            "rancher-resource-set",
+					ResourceSetName:            "rancher-resource-set-full",
 					EncryptionConfigSecretName: encSecret,
 				},
 			}

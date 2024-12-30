@@ -1,9 +1,9 @@
 ---
-# Source: rancher-backup/templates/rancher-resourceset.yaml
+# Source: rancher-backup/templates/rancher-resourceset-full.yaml
 apiVersion: resources.cattle.io/v1
 kind: ResourceSet
 metadata:
-  name: rancher-resource-set
+  name: rancher-resource-set-full
 controllerReferences:
   - apiVersion: "apps/v1"
     resource: "deployments"
@@ -96,7 +96,7 @@ resourceSelectors:
         values: ["true"]
     namespaceRegexp: "^cattle-fleet-|^fleet-"
   - apiVersion: "v1"
-    kindsRegexp: "^secrets$|^serviceaccounts$"
+    kindsRegexp: "^serviceaccounts$"
     labelSelectors:
       matchExpressions:
       - key: "elemental.cattle.io/managed"
@@ -114,18 +114,6 @@ resourceSelectors:
         - key: "app.kubernetes.io/managed-by"
           operator: "In"
           values: ["rancher"]
-  - apiVersion: "v1"
-    kindsRegexp: "^secrets$"
-    namespaceRegexp: "^cattle-fleet-|^fleet-"
-    excludeResourceNameRegexp: "^import-token"
-    labelSelectors:
-      matchExpressions:
-        - key: "owner"
-          operator: "NotIn"
-          values: ["helm"]
-        - key: "fleet.cattle.io/managed"
-          operator: "In"
-          values: ["true"]
   - apiVersion: "v1"
     kindsRegexp: "^serviceaccounts$"
     namespaceRegexp: "^cattle-fleet-|^fleet-"
@@ -197,11 +185,6 @@ resourceSelectors:
   - apiVersion: "cluster.x-k8s.io/v1beta1"
     kindsRegexp: "."
   - apiVersion: "v1"
-    kindsRegexp: "^secrets$"
-    resourceNameRegexp: "machine-plan$|rke-state$|machine-state$|machine-driver-secret$|machine-provision$|^harvesterconfig|^registryconfig-auth"
-    namespaces:
-    - "fleet-default"
-  - apiVersion: "v1"
     kindsRegexp: "^configmaps$"
     resourceNames:
       - "provisioning-log"
@@ -241,15 +224,6 @@ resourceSelectors:
     resourceNameRegexp: "^cattle-|^p-|^c-|^user-|^u-"
     resourceNames:
       - "local"
-  - apiVersion: "v1"
-    kindsRegexp: "^secrets$"
-    namespaceRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"
-    labelSelectors:
-      matchExpressions:
-        - key: "owner"
-          operator: "NotIn"
-          values: ["helm"]
-    excludeResourceNameRegexp: "^bootstrap-secret$|^rancher-csp-adapter|^csp-adapter-cache$"
   - apiVersion: "v1"
     kindsRegexp: "^serviceaccounts$"
     namespaceRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"
@@ -293,6 +267,48 @@ resourceSelectors:
     kindsRegexp: "^clusterrepos$"
   - apiVersion: "resources.cattle.io/v1"
     kindsRegexp: "^ResourceSet$"
+  - apiVersion: catalog.cattle.io/v1
+    kindsRegexp: ^UIPlugin$
+    namespaces:
+    - cattle-ui-plugin-system
+  
+  - apiVersion: "v1"
+    kindsRegexp: "^secrets$"
+    labelSelectors:
+      matchExpressions:
+      - key: "elemental.cattle.io/managed"
+        operator: "In"
+        values: ["true"]
+    namespaceRegexp: "^cattle-fleet-|^fleet-"
+  
+  - apiVersion: "v1"
+    kindsRegexp: "^secrets$"
+    namespaceRegexp: "^cattle-fleet-|^fleet-"
+    excludeResourceNameRegexp: "^import-token"
+    labelSelectors:
+      matchExpressions:
+        - key: "owner"
+          operator: "NotIn"
+          values: ["helm"]
+        - key: "fleet.cattle.io/managed"
+          operator: "In"
+          values: ["true"]
+  
+  - apiVersion: "v1"
+    kindsRegexp: "^secrets$"
+    resourceNameRegexp: "machine-plan$|rke-state$|machine-state$|machine-driver-secret$|machine-provision$|^harvesterconfig|^registryconfig-auth"
+    namespaces:
+    - "fleet-default"
+  
+  - apiVersion: "v1"
+    kindsRegexp: "^secrets$"
+    namespaceRegexp: "^cattle-|^p-|^c-|^local$|^user-|^u-"
+    labelSelectors:
+      matchExpressions:
+        - key: "owner"
+          operator: "NotIn"
+          values: ["helm"]
+    excludeResourceNameRegexp: "^bootstrap-secret$|^rancher-csp-adapter|^csp-adapter-cache$"
   - apiVersion: "v1"
     kindsRegexp: "^secrets$"
     namespaceRegexp: "^.*$"
@@ -301,7 +317,3 @@ resourceSelectors:
         - key: "resources.cattle.io/backup"
           operator: "In"
           values: ["true"]
-  - apiVersion: catalog.cattle.io/v1
-    kindsRegexp: ^UIPlugin$
-    namespaces:
-    - cattle-ui-plugin-system
