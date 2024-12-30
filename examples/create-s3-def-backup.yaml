@@ -3,5 +3,5 @@ kind: Backup
 metadata:
   name: test-s3-def-backup
 spec:
-  resourceSetName: rancher-resource-set
+  resourceSetName: rancher-resource-set-full
   encryptionConfigSecretName: test-encryptionconfig

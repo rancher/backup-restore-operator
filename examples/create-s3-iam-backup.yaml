@@ -9,5 +9,5 @@ spec:
       folder: ecm1
       region: us-west-2
       endpoint: s3.us-west-2.amazonaws.com
-  resourceSetName: rancher-resource-set
+  resourceSetName: rancher-resource-set-full
   encryptionConfigSecretName: test-encryptionconfig
