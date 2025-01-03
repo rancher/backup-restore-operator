@@ -6,13 +6,15 @@ import (
 )
 
 var (
-	BackupConditionReady        = "Ready"
-	BackupConditionUploaded     = "Uploaded"
-	BackupConditionReconciling  = "Reconciling"
-	BackupConditionStalled      = "Stalled"
-	RestoreConditionReconciling = "Reconciling"
-	RestoreConditionStalled     = "Stalled"
-	RestoreConditionReady       = "Ready"
+	BackupConditionReady          = "Ready"
+	BackupConditionUploaded       = "Uploaded"
+	BackupConditionReconciling    = "Reconciling"
+	BackupConditionClusterOrigin  = "HasClusterOrigin"
+	BackupConditionInPlaceRestore = "InPlaceRestore"
+	BackupConditionStalled        = "Stalled"
+	RestoreConditionReconciling   = "Reconciling"
+	RestoreConditionStalled       = "Stalled"
+	RestoreConditionReady         = "Ready"
 )
 
 // +genclient
@@ -37,6 +39,7 @@ type BackupSpec struct {
 
 type BackupStatus struct {
 	Conditions         []genericcondition.GenericCondition `json:"conditions"`
+	OriginCluster      string                              `json:"originCluster,omitempty"`
 	LastSnapshotTS     string                              `json:"lastSnapshotTs"`
 	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
 	ObservedGeneration int64                               `json:"observedGeneration"`
