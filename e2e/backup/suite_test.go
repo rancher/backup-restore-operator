@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/rancher/backup-restore-operator/pkg/operator"
@@ -26,6 +25,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	env "github.com/caarlos0/env/v11"
+	"github.com/kralicky/kmatch"
 	. "github.com/kralicky/kmatch"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -60,8 +60,6 @@ func (t *TestSpec) Validate() error {
 	var errs []error
 	if _, err := os.Stat(t.Kubeconfig); err != nil {
 		errs = append(errs, err)
-	}
-	if t.ChartNamespace == "" {
 	}
 	if len(errs) > 0 {
 		return errors.Join(errs...)

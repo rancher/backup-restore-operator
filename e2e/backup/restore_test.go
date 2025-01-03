@@ -65,10 +65,10 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 		It("should upload the required backups to the remote store", func() {
 			Expect(minioClient.MakeBucket(testCtx, insecureBucket, minio.MakeBucketOptions{})).To(Succeed())
 
-			By("uploading the preserve-unkown-fields backup")
+			By("uploading the preserve-unknown-fields backup")
 			ctxCa, caT := context.WithTimeout(testCtx, 10*time.Second)
 			defer caT()
-			preserveData := test.TestData("restore/preserve-unknown-fields.tar.gz")
+			preserveData := test.Data("restore/preserve-unknown-fields.tar.gz")
 			_, err := minioClient.PutObject(
 				ctxCa,
 				insecureBucket,
@@ -80,7 +80,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 			Expect(err).NotTo(HaveOccurred())
 
 			By("uploading deletion grace period backup")
-			deleteData := test.TestData("restore/deletion-grace-period-seconds.tar.gz")
+			deleteData := test.Data("restore/deletion-grace-period-seconds.tar.gz")
 			_, err = minioClient.PutObject(
 				ctxCa,
 				insecureBucket,
@@ -93,7 +93,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 
 			objectInfo := minioClient.ListObjects(ctxCa, insecureBucket, minio.ListObjectsOptions{})
 			i := 0
-			for _ = range objectInfo {
+			for range objectInfo {
 				i++
 			}
 			Expect(i).To(Equal(2))
@@ -159,10 +159,10 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 		It("should upload the test files to the remote store", func() {
 			Expect(minioClient.MakeBucket(testCtx, secureBucket, minio.MakeBucketOptions{})).To(Succeed())
 
-			By("uploading the preserve-unkown-fields backup")
+			By("uploading the preserve-unknown-fields backup")
 			ctxCa, caT := context.WithTimeout(testCtx, 10*time.Second)
 			defer caT()
-			encryptData := test.TestData("restore/encrypted-resources.tar.gz")
+			encryptData := test.Data("restore/encrypted-resources.tar.gz")
 			_, err := minioClient.PutObject(
 				ctxCa,
 				secureBucket,
@@ -174,7 +174,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 			Expect(err).NotTo(HaveOccurred())
 			objectInfo := minioClient.ListObjects(ctxCa, secureBucket, minio.ListObjectsOptions{})
 			i := 0
-			for _ = range objectInfo {
+			for range objectInfo {
 				i++
 			}
 			Expect(i).To(Equal(1))
