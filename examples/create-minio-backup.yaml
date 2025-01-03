@@ -10,5 +10,5 @@ spec:
       bucketName: rancherbackups
       endpoint: minio.xip.io
       endpointCA: LS0tLS1CRUdJTi3VUFNQkl5UUT.....pbEpWaVzNkRS0tLS0t
-  resourceSetName: rancher-resource-set
+  resourceSetName: rancher-resource-set-full
   encryptionConfigSecretName: test-encryptionconfig

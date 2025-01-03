@@ -92,12 +92,13 @@ It installs the following cluster-scoped CRDs:
 #### Restore
   Creating an instance of the Restore CRD lets you restore from a backup file. For help configuring restores, see [this documentation](https://ranchermanager.docs.rancher.com/reference-guides/backup-restore-configuration/restore-configuration).
 #### ResourceSet
-  ResourceSet specifies the Kubernetes core resources and CRDs that need to be backed up. This chart comes with a predetermined ResourceSet to be used for backing up Rancher application
+  ResourceSet specifies the Kubernetes core resources and CRDs that need to be backed up. This chart comes with three predetermined ResourceSets to be used for backing up the Rancher application. For help choosing which ResourceSet to use with your Backups, see [this documentation](https://ranchermanager.docs.rancher.com/reference-guides/backup-restore-configuration/backup-configuration#resourceset).
+  Note the default *rancher-resource-set* option has been deprecated and is currently kept for backwards compatibility only, and will be removed in v8.0.0 in favor of *rancher-resource-set-basic* and *rancher-resource-set-full*.
 
 ----
 
 ### User flow
-1. Create a ResourceSet, that targets all the resources you want to backup. The ResourceSet required for backing up Rancher will be provided and installed by the chart. Refer to the default [rancher-resourceset](https://github.com/rancher/backup-restore-operator/blob/master/charts/rancher-backup/templates/rancher-resourceset.yaml) as an example for creating resourceSets
+1. Create a ResourceSet, that targets all the resources you want to backup. The ResourceSets required for backing up Rancher will be provided and installed by the chart. Refer to the default [rancher-resourceset-basic](https://github.com/rancher/backup-restore-operator/blob/master/charts/rancher-backup/templates/rancher-resourceset-basic.yaml) as an example for creating resourceSets.
 2. Performing a backup: To take a backup, user has to create an instance of the Backup CRD (create a Backup CR). Each Backup CR must reference a ResourceSet. A Backup CR can be used to perform a one-time backup or recurring backups. Refer [examples](https://github.com/rancher/backup-restore-operator/tree/master/examples) folder for sample manifests
 3. Restoring from a backup: To restore from a backup, user has to create an instance of the Restore CRD (create a Restore CR). A Restore CR must contain the exact Backup filename. Refer to the [examples](https://github.com/rancher/backup-restore-operator/tree/master/examples) folder for sample manifests.
 
