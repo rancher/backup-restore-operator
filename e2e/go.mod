@@ -3,12 +3,12 @@ module github.com/rancher/backup-restore-operator/e2e
 go 1.23.0
 
 require (
-	github.com/caarlos0/env/v11 v11.2.2
+	github.com/caarlos0/env/v11 v11.3.1
 	github.com/kralicky/kmatch v0.0.0-20241208031153-01f2c564e46f
-	github.com/minio/minio-go/v7 v7.0.81
-	github.com/onsi/ginkgo/v2 v2.22.0
-	github.com/onsi/gomega v1.36.1
-	github.com/rancher/backup-restore-operator v0.0.0
+	github.com/minio/minio-go/v7 v7.0.82
+	github.com/onsi/ginkgo/v2 v2.22.2
+	github.com/onsi/gomega v1.36.2
+	github.com/rancher/backup-restore-operator v0.0.1
 	github.com/rancher/wrangler/v3 v3.1.0
 	github.com/samber/lo v1.47.0
 	github.com/testcontainers/testcontainers-go v0.34.0
@@ -145,8 +145,8 @@ require (
 
 replace (
 	github.com/imdario/mergo => dario.cat/mergo v0.3.16
-	golang.org/x/crypto => golang.org/x/crypto v0.27.0
-	google.golang.org/grpc => google.golang.org/grpc v1.67.1
+	golang.org/x/crypto => golang.org/x/crypto v0.31.0
+	google.golang.org/grpc => google.golang.org/grpc v1.69.2
 )
 
 replace github.com/rancher/backup-restore-operator => ../
