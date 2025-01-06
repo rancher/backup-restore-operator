@@ -182,7 +182,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 							InsecureTLSSkipVerify:     true,
 						},
 					},
-					ResourceSetName: "rancher-resource-set-full",
+					ResourceSetName: "rancher-resource-set-basic",
 				},
 			}
 			o.Add(b)
@@ -345,7 +345,7 @@ var _ = Describe("Backup e2e local driver", Ordered, Label("integration"), func(
 					Name: encryptedBackup,
 				},
 				Spec: backupv1.BackupSpec{
-					ResourceSetName:            "rancher-resource-set-full",
+					ResourceSetName:            "rancher-resource-set-basic",
 					EncryptionConfigSecretName: encSecret,
 				},
 			}

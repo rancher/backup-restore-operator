@@ -21,7 +21,7 @@ import (
 )
 
 func SetupRancherResourceSet(o *ObjectTracker) {
-	rsc := test.Data("rancher-resource-set.yaml")
+	rsc := test.Data("rancher-resource-set-basic.yaml")
 	rscObj := &backupv1.ResourceSet{}
 	Expect(yaml.Unmarshal(rsc, rscObj)).To(Succeed())
 	o.Add(rscObj)
