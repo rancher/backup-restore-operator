@@ -39,7 +39,9 @@ type handler struct {
 	dynamicClient           dynamic.Interface
 	defaultBackupMountPath  string
 	defaultS3BackupLocation *v1.S3ObjectStore
-	kubeSystemNS            string
+	// TODO: rename to kubeSystemNamespaceUID; nit to improve clarity, it's not the string representation nor the NS resource
+	kubeSystemNS              string
+	canUseClusterOriginStatus bool
 }
 
 const DefaultRetentionCount = 10
@@ -56,15 +58,16 @@ func Register(
 	defaultS3 *v1.S3ObjectStore) {
 
 	controller := &handler{
-		ctx:                     ctx,
-		backups:                 backups,
-		resourceSets:            resourceSets,
-		secrets:                 secrets,
-		namespaces:              namespaces,
-		discoveryClient:         clientSet.Discovery(),
-		dynamicClient:           dynamicInterface,
-		defaultBackupMountPath:  defaultLocalBackupLocation,
-		defaultS3BackupLocation: defaultS3,
+		ctx:                       ctx,
+		backups:                   backups,
+		resourceSets:              resourceSets,
+		secrets:                   secrets,
+		namespaces:                namespaces,
+		discoveryClient:           clientSet.Discovery(),
+		dynamicClient:             dynamicInterface,
+		defaultBackupMountPath:    defaultLocalBackupLocation,
+		defaultS3BackupLocation:   defaultS3,
+		canUseClusterOriginStatus: util.VerifyBackupCrdHasClusterStatus(clientSet.ApiextensionsV1()),
 	}
 	if controller.defaultBackupMountPath != "" {
 		logrus.Infof("Default location for storing backups is %v", controller.defaultBackupMountPath)
@@ -74,12 +77,13 @@ func Register(
 	}
 
 	// Use the kube-system NS.UID as the unique ID for a cluster
-	kubeSystemNS, err := controller.namespaces.Get("kube-system", k8sv1.GetOptions{})
+	kubeSystemNamespaceUID, err := util.FetchClusterUID(namespaces)
 	if err != nil {
 		// fatal log here, because we need the kube-system ns UID while creating any backup file
 		logrus.Fatalf("Error getting namespace kube-system %v", err)
 	}
-	controller.kubeSystemNS = string(kubeSystemNS.UID)
+	// TODO: rename to kubeSystemNamespaceUID
+	controller.kubeSystemNS = kubeSystemNamespaceUID
 	// Register handlers
 	backups.OnChange(ctx, "backups", controller.OnBackupChange)
 }
@@ -94,27 +98,36 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return h.setReconcilingCondition(backup, err)
 	}
 
+	// Handle updates made on Backup CRs with existing backup files
 	if backup.Status.LastSnapshotTS != "" {
 		if backup.Spec.Schedule == "" {
 			// Backup CR was meant for one-time backup, and the backup has been completed. Probably here from UpdateStatus call
 			logrus.Infof("Backup CR %v has been processed for one-time backup, returning", backup.Name)
 			// This could also mean backup CR was updated from recurring to one-time, in which case observedGeneration needs to be updated
-			updBackupStatus := false
+			shouldUpdateStatus := false
 			if backup.Generation != backup.Status.ObservedGeneration {
 				backup.Status.ObservedGeneration = backup.Generation
-				updBackupStatus = true
+				shouldUpdateStatus = true
 			}
 			// check if the backup-type needs to be changed too
 			if backup.Status.BackupType != "One-time" {
 				backup.Status.BackupType = "One-time"
-				updBackupStatus = true
+				shouldUpdateStatus = true
 			}
-			if updBackupStatus {
+			// check if the origin cluster status needs updating
+			clusterOriginChanged := h.prepareClusterOriginConditions(backup)
+			if clusterOriginChanged {
+				shouldUpdateStatus = true
+			}
+			if shouldUpdateStatus {
 				return h.backups.UpdateStatus(backup)
 			}
 			return backup, nil
 		}
 		if backup.Status.NextSnapshotAt != "" {
+			// TODO: Verify how recurring backups work after a migration today
+			//       Then decide how/where to call prepareClusterOriginConditions for that.
+
 			currTime := time.Now().Format(time.RFC3339)
 			logrus.Infof("Next snapshot is scheduled for: %v, current time: %v", backup.Status.NextSnapshotAt, currTime)
 
@@ -173,6 +186,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return h.setReconcilingCondition(backup, err)
 		}
 	}
+
 	storageLocationType := backup.Status.StorageLocation
 	updateErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var err error
@@ -180,12 +194,16 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		if err != nil {
 			return err
 		}
+		// Set the Cluster origin reference on backup
+		backup.Status.OriginCluster = h.kubeSystemNS
 		// reset conditions to remove the reconciling condition, because as per kstatus lib its presence is considered an error
 		backup.Status.Conditions = []genericcondition.GenericCondition{}
 
 		condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
 		condition.Cond(v1.BackupConditionReady).Message(backup, "Completed")
 		condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
+
+		h.prepareClusterOriginConditions(backup)
 
 		backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
 		if cronSchedule != nil {
