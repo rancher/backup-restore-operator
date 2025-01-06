@@ -16,6 +16,12 @@
 	"issues": {
 		"skip-files": [
 			"/zz_generated_"
+		],
+		"exclude-rules": [
+			{
+				"path": "_test.go",
+				"linters": "revive"
+			}
 		]
 	}
 }

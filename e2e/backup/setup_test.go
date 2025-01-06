@@ -21,7 +21,7 @@ import (
 )
 
 func SetupRancherResourceSet(o *ObjectTracker) {
-	rsc := test.TestData("rancher-resource-set.yaml")
+	rsc := test.Data("rancher-resource-set-basic.yaml")
 	rscObj := &backupv1.ResourceSet{}
 	Expect(yaml.Unmarshal(rsc, rscObj)).To(Succeed())
 	o.Add(rscObj)
@@ -42,7 +42,7 @@ func SetupOperator(ctx context.Context, kubeconfig *rest.Config, options operato
 
 func SetupEncryption(o *ObjectTracker) {
 	By("creating a generic secret for encryption configuration")
-	payload := test.TestData("encryption.yaml")
+	payload := test.Data("encryption.yaml")
 	encsecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      encSecret,

@@ -44,8 +44,6 @@ jobs:
           - arm64
     name : build
     runs-on : runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
-    outputs:
-      k3sversions: ${{ steps.support.outputs.k3sversions }}
     steps:
       - name : Checkout repository
         uses : actions/checkout@v4
@@ -69,10 +67,9 @@ jobs:
         arch:
           - x64
           - arm64
-        #FIXME: temporarily hardcoded
         K3S_VERSION :
-          - v1.28.1-k3s1 
-          - v1.31.0-k3s1
+          - v1.28.9-k3s1
+          - v1.31.4-k3s1
     steps:
       - name : Checkout repository
         uses : actions/checkout@v4
@@ -88,7 +85,14 @@ jobs:
         run : ls -R ./dist/artifacts
       - name : Install k3d
         run : ./.github/workflows/scripts/install-k3d.sh
+      - name : Setup test environment
+        run : |
+          CLUSTER_NAME=backup-restore K3S_VERSION=${{ matrix.K3S_VERSION }} ./scripts/testenv
+          k3d kubeconfig get backup-restore > kubeconfig.yaml
+      - name : Debug kubeconfig
+        run : cat kubeconfig.yaml
       - name : Run e2e tests
-        run :
-          CLUSTER_NAME=backup-restore K3S_VERSION=${{ matrix.K3S_VERSION }} ./scripts/testenv 
+        run : |
           cd e2e && KUBECONFIG=$KUBECONFIG CHART_NAMESPACE=cattle-resources-system go test -v -timeout 10m -count=1 ./...
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig.yaml
