@@ -68,8 +68,8 @@ jobs:
           - x64
           - arm64
         K3S_VERSION :
-          - v1.28.1-k3s1 
-          - v1.31.0-k3s1
+          - v1.28.9-k3s1
+          - v1.31.4-k3s1
     steps:
       - name : Checkout repository
         uses : actions/checkout@v4
