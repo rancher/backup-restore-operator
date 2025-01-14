@@ -161,7 +161,13 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	var err error
 	if restore.Spec.EncryptionConfigSecretName != "" {
 		logrus.Infof("Processing encryption config %v for restore CR %v", restore.Spec.EncryptionConfigSecretName, restore.Name)
-		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, restore.Spec.EncryptionConfigSecretName, h.secrets)
+		encryptionConfigSecret, err := encryptionconfig.GetEncryptionConfigSecret(h.secrets, restore.Spec.EncryptionConfigSecretName)
+		if err != nil {
+			logrus.Errorf("Error fetching encryption config secret: %v", err)
+			return h.setReconcilingCondition(restore, err)
+		}
+
+		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, encryptionConfigSecret)
 		if err != nil {
 			logrus.Errorf("Error processing encryption config: %v", err)
 			return h.setReconcilingCondition(restore, err)

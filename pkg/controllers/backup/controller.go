@@ -218,7 +218,12 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	transformerMap := k8sEncryptionconfig.StaticTransformers{}
 	if backup.Spec.EncryptionConfigSecretName != "" {
 		logrus.Infof("Processing encryption config %v for backup CR %v", backup.Spec.EncryptionConfigSecretName, backup.Name)
-		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, backup.Spec.EncryptionConfigSecretName, h.secrets)
+		encryptionConfigSecret, err := encryptionconfig.GetEncryptionConfigSecret(h.secrets, backup.Spec.EncryptionConfigSecretName)
+		if err != nil {
+			return err
+		}
+
+		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, encryptionConfigSecret)
 		if err != nil {
 			return err
 		}
