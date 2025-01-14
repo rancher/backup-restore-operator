@@ -3,6 +3,7 @@ package backup_test
 import (
 	"context"
 	"fmt"
+	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +14,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/rancher/backup-restore-operator/e2e/test"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	backuputil "github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/wrangler/v3/pkg/condition"
 	"github.com/samber/lo"
 	"github.com/testcontainers/testcontainers-go"
@@ -301,7 +301,7 @@ var _ = Describe("Backup e2e local driver", Ordered, Label("integration"), func(
 				Namespace: ts.ChartNamespace,
 			},
 			Data: map[string][]byte{
-				backuputil.EncryptionProviderConfigKey: payload,
+				encryptionconfig.EncryptionProviderConfigKey: payload,
 			},
 		}
 		o.Add(secret)
