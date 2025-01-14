@@ -3,6 +3,7 @@ package backup_test
 import (
 	"context"
 	"fmt"
+
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 
 	. "github.com/kralicky/kmatch"

@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/rancher/backup-restore-operator/pkg/util"
-	"github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
+	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 
 	"github.com/sirupsen/logrus"
 	v1core "k8s.io/api/core/v1"

@@ -3,10 +3,11 @@ package backup_test
 import (
 	"context"
 	"fmt"
-	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 
 	. "github.com/kralicky/kmatch"
 	"github.com/minio/minio-go/v7"
