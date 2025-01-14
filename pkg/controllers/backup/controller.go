@@ -14,6 +14,7 @@ import (
 	backupControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	"github.com/rancher/backup-restore-operator/pkg/util"
+	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 	"github.com/rancher/wrangler/v3/pkg/condition"
 	v1core "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/v3/pkg/genericcondition"
@@ -22,8 +23,7 @@ import (
 
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/storage/value"
+	k8sEncryptionconfig "k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/util/retry"
@@ -215,10 +215,15 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 
 func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName string) error {
 	var err error
-	transformerMap := make(map[schema.GroupResource]value.Transformer)
+	transformerMap := k8sEncryptionconfig.StaticTransformers{}
 	if backup.Spec.EncryptionConfigSecretName != "" {
 		logrus.Infof("Processing encryption config %v for backup CR %v", backup.Spec.EncryptionConfigSecretName, backup.Name)
-		transformerMap, err = util.GetEncryptionTransformersFromSecret(backup.Spec.EncryptionConfigSecretName, h.secrets)
+		encryptionConfigSecret, err := encryptionconfig.GetEncryptionConfigSecret(h.secrets, backup.Spec.EncryptionConfigSecretName)
+		if err != nil {
+			return err
+		}
+
+		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, encryptionConfigSecret)
 		if err != nil {
 			return err
 		}

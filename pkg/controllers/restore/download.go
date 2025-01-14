@@ -10,12 +10,12 @@ import (
 	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
+
 	"github.com/rancher/backup-restore-operator/pkg/objectstore"
-	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
+	k8sEncryptionconfig "k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
@@ -41,7 +41,7 @@ func (h *handler) downloadFromS3(restore *v1.Restore, objStore *v1.S3ObjectStore
 }
 
 // very initial parts: https://medium.com/@skdomino/taring-untaring-files-in-go-6b07cf56bc07
-func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schema.GroupResource]value.Transformer,
+func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap k8sEncryptionconfig.StaticTransformers,
 	cr *ObjectsFromBackupCR) error {
 	r, err := os.Open(tarGzFilePath)
 	if err != nil {
@@ -87,7 +87,7 @@ func (h *handler) LoadFromTarGzip(tarGzFilePath string, transformerMap map[schem
 }
 
 func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
-	transformerMap map[schema.GroupResource]value.Transformer, cr *ObjectsFromBackupCR) error {
+	transformerMap k8sEncryptionconfig.StaticTransformers, cr *ObjectsFromBackupCR) error {
 	var name, namespace, additionalAuthenticatedData string
 
 	cr.resourcesFromBackup[tarContent.Name] = true
@@ -106,9 +106,8 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 	gvrStr := splitPath[0]
 	gvr := getGVR(gvrStr)
 
-	var staticTransformers encryptionconfig.StaticTransformers = transformerMap
-	decryptionTransformer := staticTransformers.TransformerForResource(gvr.GroupResource())
-	if decryptionTransformer != nil && !util.IsDefaultEncryptionTransformer(decryptionTransformer) {
+	decryptionTransformer := transformerMap.TransformerForResource(gvr.GroupResource())
+	if decryptionTransformer != nil && !encryptionconfig.IsDefaultEncryptionTransformer(decryptionTransformer) {
 		var encryptedBytes []byte
 		if err := json.Unmarshal(readData, &encryptedBytes); err != nil {
 			logrus.Errorf("Error unmarshaling encrypted data for resource [%v]: %v", gvr.GroupResource(), err)

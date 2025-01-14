@@ -14,7 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/storage/value"
+	k8sEncryptionconfig "k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/client-go/dynamic"
 )
 
@@ -24,7 +24,7 @@ type pruneResourceInfo struct {
 	gvr       schema.GroupVersionResource
 }
 
-func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap map[schema.GroupResource]value.Transformer,
+func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap k8sEncryptionconfig.StaticTransformers,
 	cr ObjectsFromBackupCR, deleteTimeout int) error {
 	var resourcesToDelete []pruneResourceInfo
 	rh := resourcesets.ResourceHandler{

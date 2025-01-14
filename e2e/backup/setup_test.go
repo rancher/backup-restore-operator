@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
+
 	. "github.com/kralicky/kmatch"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -12,7 +14,6 @@ import (
 	"github.com/rancher/backup-restore-operator/e2e/test"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/operator"
-	backuputil "github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/testcontainers/testcontainers-go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,7 +50,7 @@ func SetupEncryption(o *ObjectTracker) {
 			Namespace: ts.ChartNamespace,
 		},
 		Data: map[string][]byte{
-			backuputil.EncryptionProviderConfigKey: payload,
+			encryptionconfig.EncryptionProviderConfigKey: payload,
 		},
 	}
 	o.Add(encsecret)

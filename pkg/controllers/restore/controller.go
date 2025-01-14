@@ -12,6 +12,7 @@ import (
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	restoreControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/util"
+	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 	lasso "github.com/rancher/lasso/pkg/client"
 	"github.com/rancher/wrangler/v3/pkg/condition"
 	v1core "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
@@ -28,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apiserver/pkg/storage/value"
+	k8sEncryptionconfig "k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	coordinationclientv1 "k8s.io/client-go/kubernetes/typed/coordination/v1"
@@ -156,11 +157,17 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		backupResourceSet:               v1.ResourceSet{},
 	}
 
-	transformerMap := make(map[schema.GroupResource]value.Transformer)
+	transformerMap := k8sEncryptionconfig.StaticTransformers{}
 	var err error
 	if restore.Spec.EncryptionConfigSecretName != "" {
 		logrus.Infof("Processing encryption config %v for restore CR %v", restore.Spec.EncryptionConfigSecretName, restore.Name)
-		transformerMap, err = util.GetEncryptionTransformersFromSecret(restore.Spec.EncryptionConfigSecretName, h.secrets)
+		encryptionConfigSecret, err := encryptionconfig.GetEncryptionConfigSecret(h.secrets, restore.Spec.EncryptionConfigSecretName)
+		if err != nil {
+			logrus.Errorf("Error fetching encryption config secret: %v", err)
+			return h.setReconcilingCondition(restore, err)
+		}
+
+		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, encryptionConfigSecret)
 		if err != nil {
 			logrus.Errorf("Error processing encryption config: %v", err)
 			return h.setReconcilingCondition(restore, err)
