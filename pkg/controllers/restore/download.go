@@ -10,8 +10,6 @@ import (
 	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
-
 	"github.com/rancher/backup-restore-operator/pkg/objectstore"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -107,7 +105,8 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 	gvr := getGVR(gvrStr)
 
 	decryptionTransformer := transformerMap.TransformerForResource(gvr.GroupResource())
-	if decryptionTransformer != nil && !encryptionconfig.IsDefaultEncryptionTransformer(decryptionTransformer) {
+	// TODO: determine if decryptionTransformer is ever nil after 1.32 updates...
+	if decryptionTransformer != nil && readData[0] == 34 {
 		var encryptedBytes []byte
 		if err := json.Unmarshal(readData, &encryptedBytes); err != nil {
 			logrus.Errorf("Error unmarshaling encrypted data for resource [%v]: %v", gvr.GroupResource(), err)
