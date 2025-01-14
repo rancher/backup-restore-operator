@@ -12,8 +12,6 @@ import (
 	v1core "k8s.io/api/core/v1"
 	v2 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sEncryptionconfig "k8s.io/apiserver/pkg/server/options/encryptionconfig"
-	storagevalue "k8s.io/apiserver/pkg/storage/value"
-	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 )
 
 const EncryptionProviderConfigKey = "encryption-provider-config.yaml"
@@ -60,8 +58,4 @@ func PrepareEncryptionTransformersFromConfig(ctx context.Context, encryptionProv
 		return nil, err
 	}
 	return encryptionConfig.Transformers, nil
-}
-
-func IsDefaultEncryptionTransformer(transformer storagevalue.Transformer) bool {
-	return transformer == identity.NewEncryptCheckTransformer()
 }
