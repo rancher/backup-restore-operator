@@ -25,9 +25,7 @@ var deploymentGVR = schema.GroupVersionResource{
 func TestPrepareEncryptionTransformersFromConfig_Wildcard(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-wildcard.yaml")
 	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
-	if err != nil {
-		return
-	}
+	assert.Nil(t, err)
 
 	assert.NotNil(t, transformers.TransformerForResource(serviceAccountGVR.GroupResource()))
 	assert.NotNil(t, transformers.TransformerForResource(deploymentGVR.GroupResource()))
@@ -36,10 +34,9 @@ func TestPrepareEncryptionTransformersFromConfig_Wildcard(t *testing.T) {
 
 func TestPrepareEncryptionTransformersFromConfig_ErrorsWithInvalidConfig(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-invalid.yaml")
-	_, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
-	if err == nil {
-		return
-	}
+	nilTransformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
+	assert.Nil(t, nilTransformers)
+	assert.NotNil(t, err)
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "error while parsing file: error decoding encryption provider configuration file")
@@ -48,9 +45,7 @@ func TestPrepareEncryptionTransformersFromConfig_ErrorsWithInvalidConfig(t *test
 func TestIsDefaultEncryptionTransformer_Wildcard(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-wildcard.yaml")
 	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
-	if err != nil {
-		return
-	}
+	assert.Nil(t, err)
 
 	serviceAccountTransformer := transformers.TransformerForResource(serviceAccountGVR.GroupResource())
 	deploymentTransformer := transformers.TransformerForResource(deploymentGVR.GroupResource())
@@ -62,9 +57,7 @@ func TestIsDefaultEncryptionTransformer_Wildcard(t *testing.T) {
 func TestIsDefaultEncryptionTransformer_PartialWildcard(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-partial-wildcard.yaml")
 	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
-	if err != nil {
-		return
-	}
+	assert.Nil(t, err)
 
 	serviceAccountTransformer := transformers.TransformerForResource(serviceAccountGVR.GroupResource())
 	deploymentTransformer := transformers.TransformerForResource(deploymentGVR.GroupResource())
@@ -76,9 +69,7 @@ func TestIsDefaultEncryptionTransformer_PartialWildcard(t *testing.T) {
 func TestIsDefaultEncryptionTransformer_SpecificResource(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-specific-resource.yaml")
 	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
-	if err != nil {
-		return
-	}
+	assert.Nil(t, err)
 
 	serviceAccountTransformer := transformers.TransformerForResource(serviceAccountGVR.GroupResource())
 	deploymentTransformer := transformers.TransformerForResource(deploymentGVR.GroupResource())
