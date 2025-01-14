@@ -16,7 +16,10 @@ import (
 	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 )
 
-const contextKey = "tmpConfigPath"
+type contextKey string
+
+var tempConfigPathKey = contextKey("tmpConfigPath")
+
 const EncryptionProviderConfigKey = "encryption-provider-config.yaml"
 
 func GetEncryptionConfigSecret(secrets v1.SecretController, encryptionConfigSecretName string) (*v1core.Secret, error) {
@@ -38,7 +41,7 @@ func GetEncryptionTransformersFromSecret(ctx context.Context, encryptionConfigSe
 	if err != nil {
 		return nil, err
 	}
-	ctx = context.WithValue(ctx, contextKey, fileHandle.Name())
+	ctx = context.WithValue(ctx, tempConfigPathKey, fileHandle.Name())
 	return PrepareEncryptionTransformersFromConfig(ctx, EncryptionProviderConfigKey)
 }
 
