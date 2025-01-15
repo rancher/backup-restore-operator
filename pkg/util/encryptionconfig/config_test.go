@@ -54,14 +54,15 @@ func TestPrepareEncryptionConfigSecretTempConfig_ValidSecretKeySillyData(t *test
 			EncryptionProviderConfigKey: []byte(sillyTestData),
 		},
 	}
-	fileHandle, err := PrepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
+	file, err := os.Open(EncryptionProviderConfigKey)
 	defer os.Remove(EncryptionProviderConfigKey)
 	// Assert that no error is returned
 	assert.Nil(t, err)
 
-	// Read the file written by PrepareEncryptionConfigSecretTempConfig
+	// Read the file written by prepareEncryptionConfigSecretTempConfig
 	actualBytes := make([]byte, 1024)
-	n, err := fileHandle.Read(actualBytes)
+	n, err := file.Read(actualBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +73,7 @@ func TestPrepareEncryptionConfigSecretTempConfig_ValidSecretKeySillyData(t *test
 
 func TestPrepareEncryptionConfigSecretTempConfig_EmptySecret(t *testing.T) {
 	testSecret := v1.Secret{}
-	_, err := PrepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
 	assert.NotNil(t, err)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "no encryptionConfig provided")
@@ -86,7 +87,7 @@ func TestPrepareEncryptionConfigSecretTempConfig_IncorrectSecretKey(t *testing.T
 			"key": []byte("value"),
 		},
 	}
-	_, err := PrepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
 	assert.NotNil(t, err)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "no encryptionConfig provided")
