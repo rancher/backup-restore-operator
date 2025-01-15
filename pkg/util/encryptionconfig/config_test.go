@@ -131,8 +131,7 @@ func TestIsDefaultEncryptionTransformer_Wildcard(t *testing.T) {
 
 func TestIsDefaultEncryptionTransformer_PartialWildcard(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-partial-wildcard.yaml")
-	ctx := context.WithValue(context.Background(), tempConfigPathKey, encryptionConfigFilepath)
-	transformers, err := PrepareEncryptionTransformersFromConfig(ctx, encryptionConfigFilepath)
+	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
 	assert.Nil(t, err)
 
 	serviceAccountTransformer := transformers.TransformerForResource(serviceAccountGVR.GroupResource())

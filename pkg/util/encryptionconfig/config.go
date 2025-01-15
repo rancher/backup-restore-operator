@@ -16,10 +16,6 @@ import (
 	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 )
 
-type contextKey string
-
-var tempConfigPathKey = contextKey("tmpConfigPath")
-
 const EncryptionProviderConfigKey = "encryption-provider-config.yaml"
 
 func GetEncryptionConfigSecret(secrets v1.SecretController, encryptionConfigSecretName string) (*v1core.Secret, error) {
