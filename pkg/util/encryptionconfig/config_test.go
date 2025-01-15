@@ -55,10 +55,13 @@ func TestPrepareEncryptionConfigSecretTempConfig_ValidSecretKeySillyData(t *test
 		},
 	}
 	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
-	file, err := os.Open(EncryptionProviderConfigKey)
 	defer os.Remove(EncryptionProviderConfigKey)
 	// Assert that no error is returned
 	assert.Nil(t, err)
+	file, err := os.Open(EncryptionProviderConfigKey)
+	if err != nil {
+		t.FailNow()
+	}
 
 	// Read the file written by prepareEncryptionConfigSecretTempConfig
 	actualBytes := make([]byte, 1024)
