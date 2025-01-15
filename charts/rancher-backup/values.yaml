@@ -38,7 +38,7 @@ persistence:
   size: 2Gi
 
 # Add log level flags to backup-restore
-debug: false
+debug: true
 trace: false
 
 # http[s] proxy server passed to backup client
@@ -79,3 +79,14 @@ imagePullPolicy: "Always"
 ## Optional array of imagePullSecrets containing private registry credentials
 ## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []
+
+monitoring:
+  metrics:
+    enabled: false
+
+  serviceMonitor:
+    enabled: false
+
+    additionalLabels: {}
+    metricRelabelings: []
+    relabelings: []

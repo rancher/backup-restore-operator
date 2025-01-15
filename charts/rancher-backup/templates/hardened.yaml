@@ -117,6 +117,8 @@ metadata:
   namespace: {{ .Release.Namespace }}
 spec:
   podSelector: {}
+  ingress:
+    - {}
   egress:
     - {}
   policyTypes:
