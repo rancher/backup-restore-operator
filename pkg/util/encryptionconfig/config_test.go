@@ -54,14 +54,18 @@ func TestPrepareEncryptionConfigSecretTempConfig_ValidSecretKeySillyData(t *test
 			EncryptionProviderConfigKey: []byte(sillyTestData),
 		},
 	}
-	fileHandle, err := PrepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
 	defer os.Remove(EncryptionProviderConfigKey)
 	// Assert that no error is returned
 	assert.Nil(t, err)
+	file, err := os.Open(EncryptionProviderConfigKey)
+	if err != nil {
+		t.FailNow()
+	}
 
-	// Read the file written by PrepareEncryptionConfigSecretTempConfig
+	// Read the file written by prepareEncryptionConfigSecretTempConfig
 	actualBytes := make([]byte, 1024)
-	n, err := fileHandle.Read(actualBytes)
+	n, err := file.Read(actualBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +76,7 @@ func TestPrepareEncryptionConfigSecretTempConfig_ValidSecretKeySillyData(t *test
 
 func TestPrepareEncryptionConfigSecretTempConfig_EmptySecret(t *testing.T) {
 	testSecret := v1.Secret{}
-	_, err := PrepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
 	assert.NotNil(t, err)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "no encryptionConfig provided")
@@ -86,7 +90,7 @@ func TestPrepareEncryptionConfigSecretTempConfig_IncorrectSecretKey(t *testing.T
 			"key": []byte("value"),
 		},
 	}
-	_, err := PrepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
 	assert.NotNil(t, err)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "no encryptionConfig provided")
@@ -127,8 +131,7 @@ func TestIsDefaultEncryptionTransformer_Wildcard(t *testing.T) {
 
 func TestIsDefaultEncryptionTransformer_PartialWildcard(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-partial-wildcard.yaml")
-	ctx := context.WithValue(context.Background(), tempConfigPathKey, encryptionConfigFilepath)
-	transformers, err := PrepareEncryptionTransformersFromConfig(ctx, encryptionConfigFilepath)
+	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
 	assert.Nil(t, err)
 
 	serviceAccountTransformer := transformers.TransformerForResource(serviceAccountGVR.GroupResource())
