@@ -21,6 +21,7 @@ var (
 	LocalBackupStorageLocation      = "/var/lib/backups" // local within the pod, this is the mountPath for PVC
 	KubeConfig                      string
 	OperatorPVEnabled               string
+	MetricsServerEnabled            string
 	OperatorS3BackupStorageLocation string
 	ChartNamespace                  string
 	Debug                           bool
@@ -36,6 +37,7 @@ func init() {
 	OperatorPVEnabled = os.Getenv("DEFAULT_PERSISTENCE_ENABLED")
 	OperatorS3BackupStorageLocation = os.Getenv("DEFAULT_S3_BACKUP_STORAGE_LOCATION")
 	ChartNamespace = os.Getenv("CHART_NAMESPACE")
+	MetricsServerEnabled = os.Getenv("METRICS_SERVER")
 }
 
 func main() {
@@ -60,6 +62,7 @@ func main() {
 	backuputil.SetDevMode(dm != "")
 	runOptions := operator.RunOptions{
 		OperatorPVCEnabled:              OperatorPVEnabled != "",
+		MetricsServerEnabled:            MetricsServerEnabled != "",
 		OperatorS3BackupStorageLocation: OperatorS3BackupStorageLocation,
 		ChartNamespace:                  ChartNamespace,
 		LocalDriverPath:                 "",
