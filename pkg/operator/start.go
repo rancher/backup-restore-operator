@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/backup-restore-operator/pkg/controllers/backup"
 	"github.com/rancher/backup-restore-operator/pkg/controllers/restore"
 	"github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io"
+	"github.com/rancher/backup-restore-operator/pkg/monitoring"
 	"github.com/rancher/backup-restore-operator/pkg/objectstore"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	lasso "github.com/rancher/lasso/pkg/client"
@@ -33,6 +34,7 @@ var (
 
 type RunOptions struct {
 	OperatorPVCEnabled              bool
+	MetricsServerEnabled            bool
 	OperatorS3BackupStorageLocation string
 	ChartNamespace                  string
 	LocalDriverPath                 string
@@ -60,6 +62,10 @@ func (o *RunOptions) shouldUsePVC() bool {
 
 func (o *RunOptions) shouldUseS3() bool {
 	return o.OperatorS3BackupStorageLocation != ""
+}
+
+func (o *RunOptions) shouldRunMetricsServer() bool {
+	return o.MetricsServerEnabled
 }
 
 type ControllerOptions struct {
@@ -163,6 +169,8 @@ func Run(
 ) error {
 	util.SetChartNamespace(options.ChartNamespace)
 
+	var metricsServerEnabled bool
+
 	var defaultS3 *backupv1.S3ObjectStore
 	var defaultMountPath string
 	if err := options.Validate(); err != nil {
@@ -199,6 +207,13 @@ func Run(
 		defaultS3 = s3details
 	}
 
+	if options.shouldRunMetricsServer() {
+		logrus.Info("Starting metrics server")
+		go monitoring.StartMetricsServer()
+
+		metricsServerEnabled = options.shouldRunMetricsServer()
+	}
+
 	logrus.Infof("Secrets containing encryption config files must be stored in the namespace %v", options.ChartNamespace)
 
 	backup.Register(ctx, c.backupFactory.Resources().V1().Backup(),
@@ -209,6 +224,7 @@ func Run(
 		c.dynamic,
 		defaultMountPath,
 		defaultS3,
+		metricsServerEnabled,
 	)
 	restore.Register(ctx, c.backupFactory.Resources().V1().Restore(),
 		c.backupFactory.Resources().V1().Backup(),
@@ -220,6 +236,7 @@ func Run(
 		c.mapper,
 		defaultMountPath,
 		defaultS3,
+		metricsServerEnabled,
 	)
 
 	if err := start.All(ctx, 2, c.backupFactory); err != nil {

@@ -11,6 +11,7 @@ import (
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	restoreControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/monitoring"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 	lasso "github.com/rancher/lasso/pkg/client"
@@ -64,6 +65,7 @@ type handler struct {
 	defaultBackupMountPath  string
 	defaultS3BackupLocation *v1.S3ObjectStore
 	kubernetesLeaseClient   coordinationclientv1.LeaseInterface
+	metricsServerEnabled    bool
 }
 
 type ObjectsFromBackupCR struct {
@@ -100,7 +102,8 @@ func Register(
 	sharedClientFactory lasso.SharedClientFactory,
 	restmapper meta.RESTMapper,
 	defaultLocalBackupLocation string,
-	defaultS3 *v1.S3ObjectStore) {
+	defaultS3 *v1.S3ObjectStore,
+	metricsServerEnabled bool) {
 
 	controller := &handler{
 		ctx:                     ctx,
@@ -115,6 +118,7 @@ func Register(
 		defaultBackupMountPath:  defaultLocalBackupLocation,
 		defaultS3BackupLocation: defaultS3,
 		kubernetesLeaseClient:   leaseClient,
+		metricsServerEnabled:    metricsServerEnabled,
 	}
 
 	lease, err := leaseClient.Get(ctx, leaseName, k8sv1.GetOptions{})
@@ -127,6 +131,17 @@ func Register(
 }
 
 func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, error) {
+
+	if h.metricsServerEnabled {
+		restoreList, err := h.restores.List(k8sv1.ListOptions{})
+		if err != nil {
+			logrus.Error("Error getting Restore CR list. Failed to update metrics.")
+			return nil, err
+		}
+
+		monitoring.UpdateRestoreMetrics(restoreList)
+	}
+
 	if restore == nil || restore.DeletionTimestamp != nil {
 		return restore, nil
 	}
@@ -293,6 +308,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	if updateErr != nil {
 		return h.setReconcilingCondition(restore, updateErr)
 	}
+
 	logrus.Infof("Done restoring")
 	return restore, err
 }
