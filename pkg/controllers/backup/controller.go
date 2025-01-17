@@ -158,7 +158,9 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return h.setReconcilingCondition(backup, err)
 	}
 	logrus.Infof("For backup CR %v, filename: %v", backup.Name, backupFileName)
-	defer monitoring.UpdateBackupLastProcessedMetrics(&err)
+	if h.metricsServerEnabled {
+		defer monitoring.UpdateBackupLastProcessedMetrics(&err)
+	}
 
 	// create a temp dir to write all backup files to, delete this before returning.
 	// empty dir param in os.MkdirTemp. defaults to os.TempDir
