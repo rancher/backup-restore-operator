@@ -38,7 +38,7 @@ persistence:
   size: 2Gi
 
 # Add log level flags to backup-restore
-debug: true
+debug: false
 trace: false
 
 # http[s] proxy server passed to backup client
