@@ -1,5 +1,4 @@
 #!/bin/bash
-set -x
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     DIRTY="-dirty"
@@ -19,16 +18,28 @@ if [ -z "$ARCH" ]; then
     ARCH=$(go env GOHOSTARCH)
 fi
 
-HELM_TAG_DEV=dev
-HELM_VERSION_DEV=0.0.0-dev
-HELM_TAG=${TAG:-${VERSION}}
-HELM_VERSION=${HELM_TAG/v/}
-
 TAG=${TAG:-${VERSION}}
 REPO=${REPO:-rancher}
 
-if echo $TAG | grep -q dirty; then
-    TAG=dev
-    HELM_TAG=$HELM_TAG_DEV
-    HELM_VERSION=$HELM_VERSION_DEV
+HELM_IMAGE_TAG=${HELM_IMAGE_TAG:-${TAG}}
+if [ "$TAG" == "$COMMIT" ]; then
+  HELM_CHART_VERSION="0.0.0-dev.${COMMIT}"
+else
+  HELM_CHART_VERSION=${HELM_IMAGE_TAG/v/}
 fi
+
+if echo "$TAG" | grep -q dirty; then
+    TAG="v0.0.0-dev.1-${COMMIT}"
+    HELM_IMAGE_TAG=$TAG
+    HELM_CHART_VERSION=${HELM_CHART_VERSION_DEV:-${HELM_IMAGE_TAG/v/}}
+fi
+IMAGE=${IMAGE:-"$REPO/backup-restore-operator:${TAG}"}
+
+function print_version_debug() {
+    echo "DIRTY: $DIRTY"
+    echo "HELM_IMAGE_TAG: $HELM_IMAGE_TAG";
+    echo "HELM_CHART_VERSION: $HELM_CHART_VERSION";
+    echo "REPO: $REPO; TAG: $TAG";
+    echo "IMAGE: $IMAGE";
+}
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then print_version_debug "$1"; fi
