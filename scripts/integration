@@ -13,14 +13,6 @@ echo_with_time "INFO - Running $0"
 
 ls -la ./dist/artifacts
 
-# In case short commit only consists of numbers, it is regarded valid by Helm when packaging
-# Or if a tag is set (if its a (pre) release)
-if [[ $HELM_VERSION =~ ^[0-9]+$ ]] || [[ -n $GIT_TAG ]]; then
-  HELM_CHART_VERSION=$HELM_VERSION
-else
-  HELM_CHART_VERSION=$HELM_VERSION_DEV
-fi
-
 helm install rancher-backup-crd ./dist/artifacts/rancher-backup-crd-$HELM_CHART_VERSION.tgz -n cattle-resources-system --create-namespace --wait
 helm install rancher-backup ./dist/artifacts/rancher-backup-$HELM_CHART_VERSION.tgz -n cattle-resources-system --set image.tag=$TAG --set imagePullPolicy=IfNotPresent
 

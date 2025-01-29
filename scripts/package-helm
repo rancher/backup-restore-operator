@@ -35,10 +35,8 @@ rm -rf build/charts
 mkdir -p build dist/artifacts
 cp -rf charts build/
 
-edit-charts ${HELM_VERSION} ${HELM_TAG}
+edit-charts ${HELM_CHART_VERSION} ${HELM_IMAGE_TAG}
 
 if ! package-charts; then
-    echo "package-chart or package-chart-crd failed: trying with dev variable..."
-    edit-charts ${HELM_VERSION_DEV} ${HELM_TAG_DEV}
-    package-charts
+    echo "Packaging the BRO charts failed!"
 fi

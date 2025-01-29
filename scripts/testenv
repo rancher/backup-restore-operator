@@ -5,4 +5,4 @@ set -x
 source $(dirname $0)/version
 
 CLUSTER_NAME=$CLUSTER_NAME K3S_VERSION=$K3S_VERSION ./.github/workflows/scripts/setup-cluster.sh
-helm install rancher-backup-crd ./dist/artifacts/rancher-backup-crd-$HELM_VERSION_DEV.tgz -n cattle-resources-system --create-namespace --wait
+helm install rancher-backup-crd ./dist/artifacts/rancher-backup-crd-$HELM_CHART_VERSION.tgz -n cattle-resources-system --create-namespace --wait
