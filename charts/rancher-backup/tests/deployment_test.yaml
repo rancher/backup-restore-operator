@@ -200,6 +200,18 @@ tests:
         key: "example-key"
         operator: "Exists"
         effect: "NoSchedule"
+- it: should allow image tag overrides
+  template: deployment.yaml
+  set:
+    image:
+      tag: v1.2.3-abc.42
+  asserts:
+    - matchRegex:
+        path: spec.template.spec.containers[0].image
+        pattern: v1.2.3-abc.42$
+    - notMatchRegex:
+        path: spec.template.spec.containers[0].image
+        pattern: v0.0.0-nope.1$
 - it: should not set default imagePullSecrets
   template: deployment.yaml
   asserts:
