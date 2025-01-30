@@ -16,4 +16,5 @@ if [ -z "$(type -p helm)" ]; then
     exit 1
 fi
 
-helm unittest ./build/charts/rancher-backup
+CHART_PATH=$(realpath $(dirname $0)/../../build/charts/rancher-backup)
+helm unittest $CHART_PATH
