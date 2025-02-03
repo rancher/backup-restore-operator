@@ -19,6 +19,10 @@ spec:
       annotations:
         checksum/s3: {{ include (print $.Template.BasePath "/s3-secret.yaml") . | sha256sum }}
         checksum/pvc: {{ include (print $.Template.BasePath "/pvc.yaml") . | sha256sum }}
+        {{- if .Values.monitoring.metrics.enabled }}
+        prometheus.io/port: "metrics"
+        prometheus.io/scrape: "true"
+        {{ end }}
     spec:
       serviceAccountName: {{ include "backupRestore.serviceAccountName" . }}
       {{- if .Values.imagePullSecrets }}
@@ -32,6 +36,8 @@ spec:
       - name: {{ .Chart.Name }}
         image: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag }}
         imagePullPolicy: {{ default "Always" .Values.imagePullPolicy }}
+        ports:
+        - containerPort: 8080
         args:
 {{- if .Values.debug }}
         - "--debug"
@@ -54,6 +60,10 @@ spec:
         - name: NO_PROXY
           value: {{ .Values.noProxy }}
           {{- end }}
+          {{- if .Values.monitoring.metrics.enabled }}
+        - name: METRICS_SERVER
+          value: "true"
+          {{ end }}
           {{- if .Values.persistence.enabled }}
         - name: DEFAULT_PERSISTENCE_ENABLED
           value: "persistence-enabled"
