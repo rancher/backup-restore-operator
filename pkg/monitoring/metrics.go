@@ -133,7 +133,7 @@ func StartmMetadataMetricsCollection(backups controllers.BackupController, resto
 
 		getBackupsErr := retry.OnError(retry.DefaultRetry,
 			func(err error) bool {
-				logrus.Warn("Retrying listing Backup CRs")
+				logrus.Warnf("Retrying listing Backup CRs: %s", err)
 				return true
 			}, func() error {
 				backupList, err = backups.List(k8sv1.ListOptions{})
@@ -146,7 +146,7 @@ func StartmMetadataMetricsCollection(backups controllers.BackupController, resto
 
 		getRestoresErr := retry.OnError(retry.DefaultRetry,
 			func(err error) bool {
-				logrus.Warn("Retrying listing Restore CRs")
+				logrus.Warn("Retrying listing Restore CRs: %s", err)
 				return true
 			}, func() error {
 				restoreList, err = restores.List(k8sv1.ListOptions{})
