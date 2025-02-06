@@ -209,14 +209,21 @@ func Run(
 
 	if options.shouldRunMetricsServer() {
 		logrus.Info("Starting metrics server")
-		go monitoring.StartMetricsServer()
+		go monitoring.InitMetricsServer()
+
+		logrus.Info("Starting metadata metrics loop")
+		go monitoring.StartmMetadataMetricsCollection(
+			c.backupFactory.Resources().V1().Backup(),
+			c.backupFactory.Resources().V1().Restore(),
+		)
 
 		metricsServerEnabled = options.shouldRunMetricsServer()
 	}
 
 	logrus.Infof("Secrets containing encryption config files must be stored in the namespace %v", options.ChartNamespace)
 
-	backup.Register(ctx, c.backupFactory.Resources().V1().Backup(),
+	backup.Register(ctx,
+		c.backupFactory.Resources().V1().Backup(),
 		c.backupFactory.Resources().V1().ResourceSet(),
 		c.core.Core().V1().Secret(),
 		c.core.Core().V1().Namespace(),
@@ -226,7 +233,8 @@ func Run(
 		defaultS3,
 		metricsServerEnabled,
 	)
-	restore.Register(ctx, c.backupFactory.Resources().V1().Restore(),
+	restore.Register(ctx,
+		c.backupFactory.Resources().V1().Restore(),
 		c.backupFactory.Resources().V1().Backup(),
 		c.core.Core().V1().Secret(),
 		c.k8sClient.CoordinationV1().Leases(options.ChartNamespace),

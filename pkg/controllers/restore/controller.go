@@ -11,7 +11,6 @@ import (
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	restoreControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
-	"github.com/rancher/backup-restore-operator/pkg/monitoring"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 	lasso "github.com/rancher/lasso/pkg/client"
@@ -131,16 +130,6 @@ func Register(
 }
 
 func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, error) {
-
-	if h.metricsServerEnabled {
-		restoreList, err := h.restores.List(k8sv1.ListOptions{})
-		if err != nil {
-			logrus.Error("Error getting Restore CR list. Failed to update metrics.")
-			return nil, err
-		}
-
-		monitoring.UpdateRestoreMetrics(restoreList)
-	}
 
 	if restore == nil || restore.DeletionTimestamp != nil {
 		return restore, nil

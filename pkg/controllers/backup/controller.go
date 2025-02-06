@@ -12,7 +12,6 @@ import (
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	backupControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
-	"github.com/rancher/backup-restore-operator/pkg/monitoring"
 	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
@@ -91,16 +90,6 @@ func Register(
 func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error) {
 	var err error
 
-	if h.metricsServerEnabled {
-		backupList, err := h.backups.List(k8sv1.ListOptions{})
-		if err != nil {
-			logrus.Error("Error getting Backup CR list. Failed to update metrics.")
-			return nil, err
-		}
-
-		monitoring.UpdateBackupMetrics(backupList.Items)
-	}
-
 	if backup == nil || backup.DeletionTimestamp != nil {
 		return backup, nil
 	}
@@ -158,9 +147,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return h.setReconcilingCondition(backup, err)
 	}
 	logrus.Infof("For backup CR %v, filename: %v", backup.Name, backupFileName)
-	if h.metricsServerEnabled {
-		defer monitoring.UpdateBackupLastProcessedMetrics(&err)
-	}
 
 	// create a temp dir to write all backup files to, delete this before returning.
 	// empty dir param in os.MkdirTemp. defaults to os.TempDir
