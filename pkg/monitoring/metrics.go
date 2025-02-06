@@ -128,7 +128,7 @@ func StartmMetadataMetricsCollection(backups controllers.BackupController, resto
 	var err error
 
 	ticker := time.NewTicker(90 * time.Second)
-	for _ = range ticker.C {
+	for range ticker.C {
 		logrus.Debugf("Collecting metadata to populate metrics")
 
 		getBackupsErr := retry.OnError(retry.DefaultRetry,
@@ -146,7 +146,7 @@ func StartmMetadataMetricsCollection(backups controllers.BackupController, resto
 
 		getRestoresErr := retry.OnError(retry.DefaultRetry,
 			func(err error) bool {
-				logrus.Warn("Retrying listing Restore CRs: %s", err)
+				logrus.Warnf("Retrying listing Restore CRs: %s", err)
 				return true
 			}, func() error {
 				restoreList, err = restores.List(k8sv1.ListOptions{})
