@@ -116,39 +116,3 @@ func TestPrepareEncryptionTransformersFromConfig_ErrorsWithInvalidConfig(t *test
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "error while parsing file: error decoding encryption provider configuration file")
 }
-
-func TestIsDefaultEncryptionTransformer_Wildcard(t *testing.T) {
-	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-wildcard.yaml")
-	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
-	assert.Nil(t, err)
-
-	serviceAccountTransformer := transformers.TransformerForResource(serviceAccountGVR.GroupResource())
-	deploymentTransformer := transformers.TransformerForResource(deploymentGVR.GroupResource())
-
-	assert.False(t, IsDefaultEncryptionTransformer(serviceAccountTransformer))
-	assert.False(t, IsDefaultEncryptionTransformer(deploymentTransformer))
-}
-
-func TestIsDefaultEncryptionTransformer_PartialWildcard(t *testing.T) {
-	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-partial-wildcard.yaml")
-	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
-	assert.Nil(t, err)
-
-	serviceAccountTransformer := transformers.TransformerForResource(serviceAccountGVR.GroupResource())
-	deploymentTransformer := transformers.TransformerForResource(deploymentGVR.GroupResource())
-
-	assert.True(t, IsDefaultEncryptionTransformer(serviceAccountTransformer))
-	assert.False(t, IsDefaultEncryptionTransformer(deploymentTransformer))
-}
-
-func TestIsDefaultEncryptionTransformer_SpecificResource(t *testing.T) {
-	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-specific-resource.yaml")
-	transformers, err := PrepareEncryptionTransformersFromConfig(context.Background(), encryptionConfigFilepath)
-	assert.Nil(t, err)
-
-	serviceAccountTransformer := transformers.TransformerForResource(serviceAccountGVR.GroupResource())
-	deploymentTransformer := transformers.TransformerForResource(deploymentGVR.GroupResource())
-
-	assert.False(t, IsDefaultEncryptionTransformer(serviceAccountTransformer))
-	assert.True(t, IsDefaultEncryptionTransformer(deploymentTransformer))
-}

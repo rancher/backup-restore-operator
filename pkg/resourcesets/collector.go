@@ -1,6 +1,7 @@
 package resourcesets
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,8 +11,6 @@ import (
 	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
-
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -436,17 +435,21 @@ func writeToBackup(ctx context.Context, resource map[string]interface{}, backupP
 	if err != nil {
 		return fmt.Errorf("error converting resource to JSON: %v", err)
 	}
-	if transformer != nil && !encryptionconfig.IsDefaultEncryptionTransformer(transformer) {
-		encrypted, err := transformer.TransformToStorage(ctx, resourceBytes, value.DefaultContext(additionalAuthenticatedData))
-		if err != nil {
-			return fmt.Errorf("error converting resource to JSON: %v", err)
-		}
 
-		resourceBytes, err = json.Marshal(encrypted)
+	// Since k8s 1.32 we cannot verify a transformer must be run, so it's always run now.
+	maybeEncrypted, err := transformer.TransformToStorage(ctx, resourceBytes, value.DefaultContext(additionalAuthenticatedData))
+	if err != nil {
+		return fmt.Errorf("error converting resource to JSON: %v", err)
+	}
+
+	// Verify encrypted bytes are different than resourceBytes
+	if !bytes.Equal(resourceBytes, maybeEncrypted) {
+		resourceBytes, err = json.Marshal(maybeEncrypted)
 		if err != nil {
 			return fmt.Errorf("error converting encrypted resource to JSON: %v", err)
 		}
 	}
+
 	if _, err := f.Write(resourceBytes); err != nil {
 		return fmt.Errorf("error writing JSON to file: %v", err)
 	}
