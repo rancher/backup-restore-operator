@@ -141,7 +141,7 @@ func StartmMetadataMetricsCollection(backups controllers.BackupController, resto
 			})
 
 		if getBackupsErr != nil {
-			logrus.Error("Failed collecting backup metadata to populate metrics: %s", getBackupsErr)
+			logrus.Errorf("Failed collecting backup metadata to populate metrics: %s", getBackupsErr)
 		}
 
 		getRestoresErr := retry.OnError(retry.DefaultRetry,
