@@ -12,6 +12,7 @@ import (
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	backupControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/monitoring"
 	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
@@ -141,6 +142,12 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			logrus.Infof("Processing recurring backup CR %v ", backup.Name)
 		}
 	}
+
+	backupStartTS := time.Now()
+	defer func() {
+		backupDoneTS := time.Now()
+		monitoring.UpdateTimeSensitiveBackupMetrics(backup.Name, backupDoneTS.Unix(), backupDoneTS.Sub(backupStartTS).Milliseconds())
+	}()
 
 	backupFileName, err := h.generateBackupFilename(backup)
 	if err != nil {

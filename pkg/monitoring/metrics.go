@@ -22,7 +22,6 @@ var (
 		prometheus.GaugeOpts{
 			Name: "rancher_backup",
 			Help: "Details on a specific Rancher Backup CR",
-			// add labels showing encryption type and current status
 		}, []string{"name", "resourceSetName", "retentionCount", "backupType", "filename", "storageLocation", "nextSnapshot", "lastSnapshot"},
 	)
 
@@ -49,8 +48,9 @@ var (
 
 	backupDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "rancher_backup_duration_ms",
-			Help: "Duration of each backup processed by this operator",
+			Name:    "rancher_backup_duration_ms",
+			Help:    "Duration of each backup processed by this operator in ms",
+			Buckets: []float64{50, 75, 100, 150, 200, 220, 240, 260, 280, 300, 320, 340, 370, 400, 420, 440, 480, 500, 550, 600, 750, 900, 1000},
 		}, []string{"name"},
 	)
 
@@ -121,6 +121,11 @@ func updateRestoreMetrics(restores []v1.Restore) {
 	}
 }
 
+func UpdateTimeSensitiveBackupMetrics(backup string, endTime int64, totalTime int64) {
+	backupDuration.WithLabelValues(backup).Observe(float64(totalTime))
+	backupLastProcessed.WithLabelValues(backup).Set(float64(endTime))
+}
+
 func StartmMetadataMetricsCollection(backups controllers.BackupController, restores controllers.RestoreController) {
 	var backupList *v1.BackupList
 	var restoreList *v1.RestoreList
@@ -129,7 +134,7 @@ func StartmMetadataMetricsCollection(backups controllers.BackupController, resto
 
 	ticker := time.NewTicker(90 * time.Second)
 	for range ticker.C {
-		logrus.Debugf("Collecting metadata to populate metrics")
+		logrus.Debug("Collecting metadata to populate metrics")
 
 		getBackupsErr := retry.OnError(retry.DefaultRetry,
 			func(err error) bool {
