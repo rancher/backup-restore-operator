@@ -121,6 +121,14 @@ func updateRestoreMetrics(restores []v1.Restore) {
 	}
 }
 
+func UpdateProcessedBackupMetrics(backup string, err *error) {
+	backupsAttempted.WithLabelValues(backup).Inc()
+
+	if *err != nil {
+		backupsFailed.WithLabelValues(backup).Inc()
+	}
+}
+
 func UpdateTimeSensitiveBackupMetrics(backup string, endTime int64, totalTime int64) {
 	backupDuration.WithLabelValues(backup).Observe(float64(totalTime))
 	backupLastProcessed.WithLabelValues(backup).Set(float64(endTime))
