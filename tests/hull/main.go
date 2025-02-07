@@ -726,11 +726,15 @@ var suite = test.Suite{
 				checker.PerResource[*monitoringv1.ServiceMonitor](func(tc *checker.TestContext, sm *monitoringv1.ServiceMonitor) {
 					smEnabled := checker.MustRenderValue[bool](tc, ".Values.monitoring.serviceMonitor.enabled")
 					smAdditionalLabels := checker.MustRenderValue[map[string]string](tc, ".Values.monitoring.serviceMonitor.additionalLabels")
-					//smMetricRelabelings := checker.MustRenderValue[[]string](tc, ".Values.monitoring.serviceMonitor.metricRelabelings")
-					//smRelabelings := checker.MustRenderValue[[]string](tc, ".Values.monitoring.serviceMonitor.relabelings")
+
+					relabelings := []monitoringv1.RelabelConfig{}
+					metricRelabelings := []monitoringv1.RelabelConfig{}
+
 					if smEnabled {
 						assert.Equal(tc.T, DefaultReleaseName, sm.Name, "ServiceMonitor %s/%s has incorrect name configuration", sm.Namespace, sm.Name)
 						assert.Contains(tc.T, sm.Labels, smAdditionalLabels, "ServiceMonitor %s/%s does not contain the additional labels set ", sm.Namespace, sm.Name)
+						assert.Equal(tc.T, sm.Spec.Endpoints[0].RelabelConfigs, relabelings, "ServiceMonitor %s/%s has relabel name configuration", sm.Namespace, sm.Name)
+						assert.Equal(tc.T, sm.Spec.Endpoints[0].MetricRelabelConfigs, metricRelabelings, "ServiceMonitor %s/%s has relabel name configuration", sm.Namespace, sm.Name)
 					}
 				}),
 			},
