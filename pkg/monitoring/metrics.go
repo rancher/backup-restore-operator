@@ -50,7 +50,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "rancher_backup_duration_ms",
 			Help:    "Duration of each backup processed by this operator in ms",
-			Buckets: []float64{50, 75, 100, 150, 200, 220, 240, 260, 280, 300, 320, 340, 370, 400, 420, 440, 480, 500, 550, 600, 750, 900, 1000},
+			Buckets: []float64{500, 750, 1000, 1500, 2000, 2200, 2400, 2600, 2800, 3000, 3200, 3400, 3700, 4000, 4200, 4400, 4800, 5000, 5500, 6000, 7500, 9000, 10000},
 		}, []string{"name"},
 	)
 

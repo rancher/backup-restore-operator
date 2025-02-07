@@ -143,6 +143,13 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		}
 	}
 
+	backupStartTS := time.Now()
+	defer func() {
+		backupDoneTS := time.Now()
+		monitoring.UpdateTimeSensitiveBackupMetrics(backup.Name, backupDoneTS.Unix(), backupDoneTS.Sub(backupStartTS).Milliseconds())
+		monitoring.UpdateProcessedBackupMetrics(backup.Name, &err)
+	}()
+
 	backupFileName, err := h.generateBackupFilename(backup)
 	if err != nil {
 		return h.setReconcilingCondition(backup, err)
