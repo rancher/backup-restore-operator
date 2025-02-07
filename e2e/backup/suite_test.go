@@ -164,7 +164,10 @@ var _ = BeforeSuite(func() {
 	SetupRancherResourceSet(o)
 
 	errC, ca := SetupOperator(testCtx, restConfig, operator.RunOptions{
-		ChartNamespace: ts.ChartNamespace,
+		ChartNamespace:       ts.ChartNamespace,
+		MetricsServerEnabled: true,
+		MetricsPort:          8080,
+		MetricsInterval:      5,
 	})
 
 	DeferCleanup(func() {

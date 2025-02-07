@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,7 +24,7 @@ var (
 		prometheus.GaugeOpts{
 			Name: "rancher_backup",
 			Help: "Details on a specific Rancher Backup CR",
-		}, []string{"name", "resourceSetName", "retentionCount", "backupType", "filename", "storageLocation", "nextSnapshot", "lastSnapshot"},
+		}, []string{"name", "status", "resourceSetName", "retentionCount", "backupType", "filename", "storageLocation", "nextSnapshot", "lastSnapshot"},
 	)
 
 	backupCount = promauto.NewGauge(
@@ -65,7 +67,7 @@ var (
 		prometheus.GaugeOpts{
 			Name: "rancher_restore",
 			Help: "Details on a specific Rancher Restore CR",
-		}, []string{"name", "fileName", "prune", "storageLocation", "restoreTime"},
+		}, []string{"name", "status", "fileName", "prune", "storageLocation", "restoreTime"},
 	)
 
 	restoreCount = promauto.NewGauge(
@@ -82,7 +84,7 @@ func updateBackupMetrics(backups []v1.Backup) {
 
 	backup.Reset()
 
-	var backupType, backupNextSnapshot string
+	var backupType, backupNextSnapshot, backupMessage string
 	for _, b := range backups {
 		backupType = b.Status.BackupType
 		if backupType == "One-time" {
@@ -91,8 +93,13 @@ func updateBackupMetrics(backups []v1.Backup) {
 			backupNextSnapshot = b.Status.NextSnapshotAt
 		}
 
+		if len(b.Status.Conditions) > 0 {
+			backupMessage = b.Status.Conditions[0].Message
+		}
+
 		backup.WithLabelValues(
 			b.Name,
+			backupMessage,
 			b.Spec.ResourceSetName,
 			strconv.Itoa(int(b.Spec.RetentionCount)),
 			backupType,
@@ -110,9 +117,16 @@ func updateRestoreMetrics(restores []v1.Restore) {
 
 	restore.Reset()
 
+	var restoreMessage string
 	for _, r := range restores {
+
+		if len(r.Status.Conditions) > 0 {
+			restoreMessage = r.Status.Conditions[0].Message
+		}
+
 		restore.WithLabelValues(
 			r.Name,
+			restoreMessage,
 			r.Spec.BackupFilename,
 			strconv.FormatBool(*r.Spec.Prune),
 			r.Status.BackupSource,
@@ -123,6 +137,7 @@ func updateRestoreMetrics(restores []v1.Restore) {
 
 func UpdateProcessedBackupMetrics(backup string, err *error) {
 	backupsAttempted.WithLabelValues(backup).Inc()
+	backupsFailed.WithLabelValues(backup)
 
 	if *err != nil {
 		backupsFailed.WithLabelValues(backup).Inc()
@@ -134,15 +149,49 @@ func UpdateTimeSensitiveBackupMetrics(backup string, endTime int64, totalTime in
 	backupLastProcessed.WithLabelValues(backup).Set(float64(endTime))
 }
 
-func StartmMetadataMetricsCollection(backups controllers.BackupController, restores controllers.RestoreController) {
-	var backupList *v1.BackupList
-	var restoreList *v1.RestoreList
+func StartRestoreMetricsCollection(
+	_ context.Context,
+	restores controllers.RestoreController,
+	interval int,
+) {
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+	defer ticker.Stop()
 
 	var err error
-
-	ticker := time.NewTicker(90 * time.Second)
+	var restoreList *v1.RestoreList
 	for range ticker.C {
-		logrus.Debug("Collecting metadata to populate metrics")
+		logrus.Debug("Collecting restore metadata to populate metrics")
+
+		getRestoresErr := retry.OnError(retry.DefaultRetry,
+			func(err error) bool {
+				logrus.Warnf("Retrying listing Backup CRs: %s", err)
+				return true
+			}, func() error {
+				restoreList, err = restores.List(k8sv1.ListOptions{})
+				return err
+			})
+		if getRestoresErr != nil {
+			logrus.Errorf("Failed collecting restore metadata to populate metrics: %s", getRestoresErr)
+		}
+
+		updateRestoreMetrics(restoreList.Items)
+	}
+
+	logrus.Info("shutting down restore metrics metadata collection...")
+}
+
+func StartBackupMetricsCollection(
+	_ context.Context,
+	backups controllers.BackupController,
+	interval int,
+) {
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+	defer ticker.Stop()
+
+	var err error
+	var backupList *v1.BackupList
+	for range ticker.C {
+		logrus.Debug("Collecting backup metadata to populate metrics")
 
 		getBackupsErr := retry.OnError(retry.DefaultRetry,
 			func(err error) bool {
@@ -152,30 +201,17 @@ func StartmMetadataMetricsCollection(backups controllers.BackupController, resto
 				backupList, err = backups.List(k8sv1.ListOptions{})
 				return err
 			})
-
 		if getBackupsErr != nil {
 			logrus.Errorf("Failed collecting backup metadata to populate metrics: %s", getBackupsErr)
 		}
 
-		getRestoresErr := retry.OnError(retry.DefaultRetry,
-			func(err error) bool {
-				logrus.Warnf("Retrying listing Restore CRs: %s", err)
-				return true
-			}, func() error {
-				restoreList, err = restores.List(k8sv1.ListOptions{})
-				return err
-			})
-
-		if getRestoresErr != nil {
-			logrus.Errorf("Failed collecting restore metadata to populate metrics: %s", getRestoresErr)
-		}
-
 		updateBackupMetrics(backupList.Items)
-		updateRestoreMetrics(restoreList.Items)
 	}
+
+	logrus.Info("shutting down backup metrics metadata collection...")
 }
 
-func InitMetricsServer() {
+func InitMetricsServer(port int) {
 	metrics.Registry.MustRegister(
 		backup,
 		backupCount,
@@ -186,5 +222,9 @@ func InitMetricsServer() {
 	)
 
 	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":8080", nil)
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
+		logrus.Fatalf("failed to start metrics server : %s", err)
+	}
+
+	logrus.Info("Shutting down prometheus metrics server")
 }

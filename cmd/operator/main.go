@@ -63,6 +63,8 @@ func main() {
 	runOptions := operator.RunOptions{
 		OperatorPVCEnabled:              OperatorPVEnabled != "",
 		MetricsServerEnabled:            MetricsServerEnabled != "",
+		MetricsPort:                     8080,
+		MetricsInterval:                 60,
 		OperatorS3BackupStorageLocation: OperatorS3BackupStorageLocation,
 		ChartNamespace:                  ChartNamespace,
 		LocalDriverPath:                 "",

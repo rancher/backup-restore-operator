@@ -35,6 +35,8 @@ var (
 type RunOptions struct {
 	OperatorPVCEnabled              bool
 	MetricsServerEnabled            bool
+	MetricsPort                     int
+	MetricsInterval                 int
 	OperatorS3BackupStorageLocation string
 	ChartNamespace                  string
 	LocalDriverPath                 string
@@ -48,6 +50,14 @@ func (o *RunOptions) Validate() error {
 	if o.OperatorPVCEnabled && o.OperatorS3BackupStorageLocation == "" && !util.DevMode() {
 		logrus.Infof("No PVC or S3 details provided for storing backups by default. User must specify storageLocation" +
 			" on each Backup CR")
+	}
+
+	if o.MetricsServerEnabled && o.MetricsPort <= 0 {
+		return fmt.Errorf("invalid port metrics port : %d", o.MetricsPort)
+	}
+
+	if o.MetricsServerEnabled && o.MetricsInterval <= 0 {
+		return fmt.Errorf("invalid metrics interval : %d", o.MetricsInterval)
 	}
 	return nil
 }
@@ -209,13 +219,11 @@ func Run(
 
 	if options.shouldRunMetricsServer() {
 		logrus.Info("Starting metrics server")
-		go monitoring.InitMetricsServer()
+		go monitoring.InitMetricsServer(options.MetricsPort)
 
 		logrus.Info("Starting metadata metrics loop")
-		go monitoring.StartmMetadataMetricsCollection(
-			c.backupFactory.Resources().V1().Backup(),
-			c.backupFactory.Resources().V1().Restore(),
-		)
+		go monitoring.StartBackupMetricsCollection(context.TODO(), c.backupFactory.Resources().V1().Backup(), options.MetricsInterval)
+		go monitoring.StartRestoreMetricsCollection(context.TODO(), c.backupFactory.Resources().V1().Restore(), options.MetricsInterval)
 
 		metricsServerEnabled = options.shouldRunMetricsServer()
 	}
