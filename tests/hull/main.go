@@ -4,12 +4,12 @@ import (
 	"strconv"
 	"strings"
 
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/rancher/hull/pkg/chart"
 	"github.com/rancher/hull/pkg/checker"
 	"github.com/rancher/hull/pkg/test"
 	"github.com/rancher/hull/pkg/utils"
 	"github.com/stretchr/testify/assert"
-
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 
@@ -19,7 +19,6 @@ import (
 )
 
 var ChartPath = utils.MustGetPathFromModuleRoot("..", "dist", "artifacts", GetChartVersionFromEnv())
-
 var (
 	DefaultReleaseName = "rancher-backup"
 	DefaultNamespace   = "cattle-resources-system"
@@ -686,6 +685,52 @@ var suite = test.Suite{
 					})
 					for _, container := range podTemplateSpec.Spec.Containers {
 						assert.Equal(tc.T, envVar, container.Env, "container %s in Deployment %s/%s does not have correct Proxy image env variables", container.Name, obj.GetNamespace(), obj.GetName())
+					}
+				}),
+			},
+		},
+		{ // With metrics
+			Name: "With metrics",
+
+			Covers: []string{
+				".Values.monitoring.metrics.enabled",
+				".Values.monitoring.serviceMonitor.enabled",
+				".Values.monitoring.serviceMonitor.additionalLabels",
+				".Values.monitoring.serviceMonitor.metricRelabelings",
+				".Values.monitoring.serviceMonitor.relabelings",
+			},
+			Checks: test.Checks{
+				checker.PerWorkload(func(tc *checker.TestContext, obj metav1.Object, podTemplateSpec corev1.PodTemplateSpec) {
+					metricsServer, _ := checker.RenderValue[string](tc, ".Values.monitoring.metrics.enabled")
+					if metricsServer == "" {
+						return
+					}
+					envVar := []corev1.EnvVar([]corev1.EnvVar{
+						corev1.EnvVar{
+							Name:      "METRICS_SERVER",
+							Value:     metricsServer,
+							ValueFrom: (*corev1.EnvVarSource)(nil),
+						},
+					})
+					for _, container := range podTemplateSpec.Spec.Containers {
+						assert.Equal(tc.T, envVar, container.Env, "container %s in Deployment %s/%s does not have correct metrics server image env variables", container.Name, obj.GetNamespace(), obj.GetName())
+					}
+
+					annotations := map[string]string{
+						"prometheus.io/port":   "metrics",
+						"prometheus.io/scrape": "true",
+					}
+					assert.Contains(tc.T, podTemplateSpec.ObjectMeta.Annotations, annotations, "Deployment %s/%s has incorrect annotations", podTemplateSpec.Namespace, podTemplateSpec.Name)
+				}),
+
+				checker.PerResource[*monitoringv1.ServiceMonitor](func(tc *checker.TestContext, sm *monitoringv1.ServiceMonitor) {
+					smEnabled := checker.MustRenderValue[bool](tc, ".Values.monitoring.serviceMonitor.enabled")
+					smAdditionalLabels := checker.MustRenderValue[map[string]string](tc, ".Values.monitoring.serviceMonitor.additionalLabels")
+					//smMetricRelabelings := checker.MustRenderValue[[]string](tc, ".Values.monitoring.serviceMonitor.metricRelabelings")
+					//smRelabelings := checker.MustRenderValue[[]string](tc, ".Values.monitoring.serviceMonitor.relabelings")
+					if smEnabled {
+						assert.Equal(tc.T, DefaultReleaseName, sm.Name, "ServiceMonitor %s/%s has incorrect name configuration", sm.Namespace, sm.Name)
+						assert.Contains(tc.T, sm.Labels, smAdditionalLabels, "ServiceMonitor %s/%s does not contain the additional labels set ", sm.Namespace, sm.Name)
 					}
 				}),
 			},
