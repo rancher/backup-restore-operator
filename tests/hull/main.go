@@ -272,6 +272,45 @@ var suite = test.Suite{
 					"global.cattle.psp.enabled", "false",
 				),
 		},
+		{
+			Name: "Disable monitoring metrics",
+
+			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
+				SetValue(
+					"monitoring.metrics", "false",
+				),
+		},
+		{
+			Name: "Enable monitoring metrics without serviceMonitor",
+
+			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
+				SetValue(
+					"monitoring.metrics.enabled", "true",
+				).
+				SetValue(
+					"monitoring.serviceMonitor.enabled", "false",
+				),
+		},
+		{
+			Name: "Enable monitoring metrics with serviceMonitor",
+
+			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
+				SetValue(
+					"monitoring.metrics.enabled", "true",
+				).
+				SetValue(
+					"monitoring.serviceMonitor.enabled", "true",
+				).
+				Set(
+					"monitoring.serviceMonitor.additionalLabels", map[string]string{},
+				).
+				Set(
+					"monitoring.serviceMonitor.metricRelabelings", []string{},
+				).
+				Set(
+					"monitoring.serviceMonitor.relabelings", []string{},
+				),
+		},
 	},
 
 	NamedChecks: []test.NamedCheck{
