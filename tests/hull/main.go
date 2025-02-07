@@ -276,7 +276,7 @@ var suite = test.Suite{
 
 			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
 				SetValue(
-					"monitoring.metrics", "false",
+					"monitoring.metrics.enabled", "false",
 				),
 		},
 		{
@@ -301,13 +301,23 @@ var suite = test.Suite{
 					"monitoring.serviceMonitor.enabled", "true",
 				).
 				Set(
-					"monitoring.serviceMonitor.additionalLabels", map[string]string{},
+					"monitoring.serviceMonitor.additionalLabels", map[string]string{
+						"test": "label",
+					},
 				).
 				Set(
-					"monitoring.serviceMonitor.metricRelabelings", []string{},
+					"monitoring.serviceMonitor.metricRelabelings", []map[string]string{
+						map[string]string{
+							"action": "replace",
+						},
+					},
 				).
 				Set(
-					"monitoring.serviceMonitor.relabelings", []string{},
+					"monitoring.serviceMonitor.relabelings", []map[string]string{
+						map[string]string{
+							"action": "replace",
+						},
+					},
 				),
 		},
 	},
@@ -727,11 +737,19 @@ var suite = test.Suite{
 					smEnabled := checker.MustRenderValue[bool](tc, ".Values.monitoring.serviceMonitor.enabled")
 					smAdditionalLabels := checker.MustRenderValue[map[string]string](tc, ".Values.monitoring.serviceMonitor.additionalLabels")
 
-					relabelings := []monitoringv1.RelabelConfig{}
-					metricRelabelings := []monitoringv1.RelabelConfig{}
+					relabelings := []monitoringv1.RelabelConfig{
+						monitoringv1.RelabelConfig{
+							Action: "replace",
+						},
+					}
+					metricRelabelings := []monitoringv1.RelabelConfig{
+						monitoringv1.RelabelConfig{
+							Action: "replace",
+						},
+					}
 
 					if smEnabled {
-						assert.Equal(tc.T, DefaultReleaseName, sm.Name, "ServiceMonitor %s/%s has incorrect name configuration", sm.Namespace, sm.Name)
+						assert.Equal(tc.T, "DefaultReleaseName", sm.Name, "ServiceMonitor %s/%s has incorrect name configuration", sm.Namespace, sm.Name)
 						assert.Contains(tc.T, sm.Labels, smAdditionalLabels, "ServiceMonitor %s/%s does not contain the additional labels set ", sm.Namespace, sm.Name)
 						assert.Equal(tc.T, sm.Spec.Endpoints[0].RelabelConfigs, relabelings, "ServiceMonitor %s/%s has relabel name configuration", sm.Namespace, sm.Name)
 						assert.Equal(tc.T, sm.Spec.Endpoints[0].MetricRelabelConfigs, metricRelabelings, "ServiceMonitor %s/%s has relabel name configuration", sm.Namespace, sm.Name)
