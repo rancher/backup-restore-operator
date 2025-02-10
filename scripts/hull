@@ -9,7 +9,8 @@ if [[ ! -d ./dist/artifacts ]] || [[ ! -f "./dist/artifacts/rancher-backup-${HEL
 fi
 
 cd tests
-echo "Running Hull Tests on Chart Version: $HELM_CHART_VERSION"
+export CHART_VERSION=$HELM_CHART_VERSION
+echo "Running Hull Tests on Chart Version: $CHART_VERSION"
 go test -race -timeout 30s -run ^TestChart$ github.com/rancher/backup-restore-operator/tests/hull
 
 cd ..
