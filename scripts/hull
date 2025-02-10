@@ -1,26 +1,15 @@
 #!/bin/bash
 set -e
 
-function extract_version() {
-    artifact_dir="$(dirname $0)/../dist/artifacts"
-    if [ ! -d "$artifact_dir" ]; then
-      $(dirname $0)/package-helm
-    fi
-
-    crdfilename=$( ls $artifact_dir | grep rancher-backup-crd )
-    regex="backup-crd-(.*)\\.tgz"
-    if [[ $crdfilename =~ $regex ]]
-    then
-        version="${BASH_REMATCH[1]}"
-        export CHART_VERSION=$version
-    fi
-}
-
-extract_version
-
 cd $(dirname $0)/..
+source ./scripts/version
+
+if [[ ! -d ./dist/artifacts ]] || [[ ! -f "./dist/artifacts/rancher-backup-${HELM_CHART_VERSION}.tgz" ]]; then
+  ./scripts/package-helm
+fi
 
 cd tests
+export CHART_VERSION=$HELM_CHART_VERSION
 echo "Running Hull Tests on Chart Version: $CHART_VERSION"
 go test -race -timeout 30s -run ^TestChart$ github.com/rancher/backup-restore-operator/tests/hull
 
