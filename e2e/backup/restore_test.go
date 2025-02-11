@@ -12,6 +12,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rancher/backup-restore-operator/e2e/test"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/wrangler/v3/pkg/condition"
@@ -25,6 +26,44 @@ const (
 	deletionGraceBackup    = "deletion-grace-backup.tar.gz"
 	encryptedRestoreBackup = "encrypted-resources.tar.gz"
 )
+
+func formatRestoreMetrics(restores []string) string {
+	var metrics string
+
+	rancherRestoreCountHeader := fmt.Sprintf(`
+	# HELP rancher_restore_count Number of existing Rancher Restore CRs
+	# TYPE rancher_restore_count gauge
+	`)
+
+	metrics += rancherRestoreCountHeader
+	metrics += fmt.Sprintf("rancher_restore_count %d", len(restores))
+
+	return metrics + "\n"
+}
+
+func formatRestoreMetadataMetrics(restores []backupv1.Restore) string {
+	var metrics string
+
+	rancherRestoreHeader := fmt.Sprintf(`
+	# HELP rancher_restore Details on a specific Rancher Restore CR
+	# TYPE rancher_restore gauge
+	`)
+
+	metrics += rancherRestoreHeader
+
+	var restoreMessage string
+	for _, r := range restores {
+		if len(r.Status.Conditions) > 0 {
+			restoreMessage = r.Status.Conditions[0].Message
+		}
+
+		metrics += fmt.Sprintf(`
+		rancher_restore{fileName="%s",name="%s",prune="%t",restoreTime="%s",status="%s",storageLocation="%s"} 1
+		`, r.Spec.BackupFilename, r.Name, *r.Spec.Prune, r.Status.RestoreCompletionTS, restoreMessage, r.Status.BackupSource)
+	}
+
+	return metrics
+}
 
 func isRestoreSuccessful(b *backupv1.Restore) error {
 	bD, err := Object(b)()
@@ -126,6 +165,17 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 			}).Should(Succeed())
 
 		})
+		Specify("ensure collected metrics match expected", func() {
+			Eventually(func() error {
+				expected := formatRestoreMetrics([]string{
+					"s3-restore-preserve-unknown-fields",
+				})
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_restore_count",
+				)
+			}).WithTimeout(60 * time.Second).Should(Succeed())
+		})
 
 		It("should preserve deletion grace periods", func() {
 			r := &backupv1.Restore{
@@ -152,6 +202,18 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 			Eventually(func() error {
 				return isRestoreSuccessful(r)
 			}).Should(Succeed())
+		})
+		Specify("ensure collected metrics match expected", func() {
+			Eventually(func() error {
+				expected := formatRestoreMetrics([]string{
+					"s3-restore-preserve-unknown-fields",
+					"s3-deletion-grace-period",
+				})
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_restore_count",
+				)
+			}).WithTimeout(60 * time.Second).Should(Succeed())
 		})
 	})
 
@@ -203,6 +265,35 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 			Eventually(func() error {
 				return isRestoreSuccessful(r)
 			}).Should(Succeed())
+		})
+		Specify("ensure collected metrics match expected", func() {
+			Eventually(func() error {
+				expected := formatRestoreMetrics([]string{
+					"s3-restore-preserve-unknown-fields",
+					"s3-deletion-grace-period",
+					"s3-encrypted",
+				})
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_restore_count",
+				)
+			}).WithTimeout(60 * time.Second).Should(Succeed())
+		})
+	})
+
+	When("we're done with all test restores", func() {
+		Specify("we should eventually have the correct restore metadata metrics", func() {
+
+			Eventually(func() error {
+				var restores backupv1.RestoreList
+
+				Expect(k8sClient.List(testCtx, &restores)).To(Succeed())
+				expected := formatRestoreMetadataMetrics(restores.Items)
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_restore",
+				)
+			}).WithTimeout(60 * time.Second).Should(Succeed())
 		})
 	})
 })
