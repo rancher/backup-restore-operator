@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 
 	. "github.com/kralicky/kmatch"
@@ -25,13 +26,18 @@ import (
 
 const (
 	encSecret                = "encryption-config"
-	nonEncrypedBackup        = "local-driver-non-encrypted"
-	encryptedBackup          = "local-driver-encrypted"
+	s3Recurring              = "s3-recurring"
+	s3NonEncryptedBackup     = "s3-insecure"
+	s3EncryptedBackup        = "s3-secure"
+	localNonEncrypedBackup   = "local-driver-non-encrypted"
+	localEncryptedBackup     = "local-driver-encrypted"
 	localCattleDevDriverPath = "../../backups"
 
 	insecureBucket  = "rancherbackups-insecure"
 	secureBucket    = "rancherbackups-secure"
 	recurringBucket = "rancherbackups-recurring"
+
+	metricsURL = "http://localhost:8080/metrics"
 )
 
 func isBackupSuccessul(b *backupv1.Backup) error {
@@ -60,6 +66,75 @@ const (
 	credentialSecretName = "s3config"
 )
 
+func formatBackupMetrics(backups []string) string {
+	var metrics string
+
+	rancherBackupCountHeader := fmt.Sprint(`
+	# HELP rancher_backup_count Number of existing Rancher Backup CRs
+	# TYPE rancher_backup_count gauge
+	`)
+
+	metrics += rancherBackupCountHeader
+	metrics += fmt.Sprintf("rancher_backup_count %d", len(backups))
+
+	rancherBackupsAttemptedHeader := fmt.Sprint(`
+	# HELP rancher_backups_attempted Number of Rancher Backups processed by this operator
+	# TYPE rancher_backups_attempted counter
+	`)
+
+	metrics += rancherBackupsAttemptedHeader
+	for _, b := range backups {
+		if b == s3Recurring {
+			metrics += fmt.Sprintf("rancher_backups_attempted{name=\"%s\"} 2\n", b)
+		} else {
+			metrics += fmt.Sprintf("rancher_backups_attempted{name=\"%s\"} 1\n", b)
+		}
+	}
+
+	rancherBackupsFailedHeader := fmt.Sprint(`
+	# HELP rancher_backups_failed Number of failed Rancher Backups processed by this operator
+	# TYPE rancher_backups_failed counter
+	`)
+
+	metrics += rancherBackupsFailedHeader
+	for _, b := range backups {
+		metrics += fmt.Sprintf("rancher_backups_failed{name=\"%s\"} 0\n", b)
+	}
+
+	return metrics + "\n"
+}
+
+func formatBackupMetadataMetrics(backups []backupv1.Backup) string {
+	var metrics string
+
+	rancherBackupHeader := fmt.Sprint(`
+	# HELP rancher_backup Details on a specific Rancher Backup CR
+	# TYPE rancher_backup gauge
+	`)
+
+	metrics += rancherBackupHeader
+
+	var backupType, backupNextSnapshot, backupMessage string
+	for _, b := range backups {
+		backupType = b.Status.BackupType
+		if backupType == "One-time" {
+			backupNextSnapshot = "N/A - One-time Backup"
+		} else {
+			backupNextSnapshot = b.Status.NextSnapshotAt
+		}
+
+		if len(b.Status.Conditions) > 0 {
+			backupMessage = b.Status.Conditions[0].Message
+		}
+
+		metrics += fmt.Sprintf(`
+		rancher_backup{backupType="%s",filename="%s",lastSnapshot="%s",name="%s",nextSnapshot="%s",resourceSetName="%s",retentionCount="%d",status="%s",storageLocation="%s"} 1
+		`, backupType, b.Status.Filename, b.Status.LastSnapshotTS, b.Name, backupNextSnapshot, b.Spec.ResourceSetName, b.Spec.RetentionCount, backupMessage, b.Status.StorageLocation)
+	}
+
+	return metrics
+}
+
 var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 	var o *ObjectTracker
 
@@ -78,6 +153,94 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 		SetupEncryption(o)
 		By("deploying minio locally")
 		minioClient, minioEndpoint = SetupMinio(o)
+	})
+
+	When("we take a non-encrypted backup", func() {
+		It("should create a backup CRD", func() {
+			b := &backupv1.Backup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: localNonEncrypedBackup,
+				},
+				Spec: backupv1.BackupSpec{
+					ResourceSetName: "rancher-resource-set-basic",
+				},
+			}
+			o.Add(b)
+
+			Expect(k8sClient.Create(testCtx, b)).To(Succeed())
+			Eventually(Object(b)).Should(Exist())
+
+		})
+
+		Specify("the backup should be successful", func() {
+			Eventually(func() error {
+				return isBackupSuccessul(&backupv1.Backup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: localNonEncrypedBackup,
+					},
+				})
+			}).Should(Succeed())
+		})
+
+		Specify("ensure collected metrics match expected", func() {
+
+			Eventually(func() error {
+				expected := formatBackupMetrics([]string{
+					localNonEncrypedBackup,
+				})
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_backup_count",
+					"rancher_backups_attempted",
+					"rancher_backups_failed",
+				)
+			}).Should(Succeed())
+		})
+	})
+
+	When("we take an encrypted backup", func() {
+		It("should be able to create an encrypted backup configuration", func() {
+			b := &backupv1.Backup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: localEncryptedBackup,
+				},
+				Spec: backupv1.BackupSpec{
+					ResourceSetName:            "rancher-resource-set-basic",
+					EncryptionConfigSecretName: encSecret,
+				},
+			}
+			o.Add(b)
+
+			Expect(k8sClient.Create(testCtx, b)).To(Succeed())
+			By("verifying the backup resource exists")
+			Eventually(Object(b)).Should(Exist())
+		})
+
+		Specify("the backup should be successful", func() {
+			Eventually(func() error {
+				return isBackupSuccessul(&backupv1.Backup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: localEncryptedBackup,
+					},
+				})
+			}).Should(Succeed())
+		})
+
+		Specify("ensure collected metrics match expected", func() {
+
+			Eventually(func() error {
+				expected := formatBackupMetrics([]string{
+					localNonEncrypedBackup,
+					localEncryptedBackup,
+				})
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_backup_count",
+					"rancher_backups_attempted",
+					"rancher_backups_failed",
+				)
+			}).Should(Succeed())
+		})
 	})
 
 	When("we take a non-encrypted backup", func() {
@@ -117,7 +280,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 		Specify("we should be able to create the backup spec", func() {
 			b := &backupv1.Backup{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "s3-insecure",
+					Name: s3NonEncryptedBackup,
 				},
 				Spec: backupv1.BackupSpec{
 					StorageLocation: &backupv1.StorageLocation{
@@ -142,9 +305,26 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 			Eventually(func() error {
 				return isBackupSuccessul(&backupv1.Backup{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "s3-insecure",
+						Name: s3NonEncryptedBackup,
 					},
 				})
+			}).Should(Succeed())
+		})
+
+		Specify("ensure collected metrics match expected", func() {
+
+			Eventually(func() error {
+				expected := formatBackupMetrics([]string{
+					localNonEncrypedBackup,
+					localEncryptedBackup,
+					s3NonEncryptedBackup,
+				})
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_backup_count",
+					"rancher_backups_attempted",
+					"rancher_backups_failed",
+				)
 			}).Should(Succeed())
 		})
 
@@ -160,7 +340,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 				lo.Map(retObj, func(info minio.ObjectInfo, _ int) string {
 					return info.Key
 				}), func(key string, _ int) bool {
-					return strings.HasPrefix(key, "s3-insecure")
+					return strings.HasPrefix(key, s3NonEncryptedBackup)
 				})
 			Expect(keys).To(HaveLen(1))
 		})
@@ -170,7 +350,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 		Specify("it should successfully create the backup spec", func() {
 			b := &backupv1.Backup{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "s3-secure",
+					Name: s3EncryptedBackup,
 				},
 				Spec: backupv1.BackupSpec{
 					EncryptionConfigSecretName: encSecret,
@@ -187,6 +367,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 				},
 			}
 			o.Add(b)
+
 			err := k8sClient.Create(testCtx, b)
 			Expect(err).To(Succeed())
 			Eventually(Object(b)).Should(Exist())
@@ -196,9 +377,27 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 			Eventually(func() error {
 				return isBackupSuccessul(&backupv1.Backup{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "s3-secure",
+						Name: s3EncryptedBackup,
 					},
 				})
+			}).Should(Succeed())
+		})
+
+		Specify("ensure collected metrics match expected", func() {
+
+			Eventually(func() error {
+				expected := formatBackupMetrics([]string{
+					localNonEncrypedBackup,
+					localEncryptedBackup,
+					s3NonEncryptedBackup,
+					s3EncryptedBackup,
+				})
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_backup_count",
+					"rancher_backups_attempted",
+					"rancher_backups_failed",
+				)
 			}).Should(Succeed())
 		})
 
@@ -215,7 +414,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 				lo.Map(retObj, func(info minio.ObjectInfo, _ int) string {
 					return info.Key
 				}), func(key string, _ int) bool {
-					return strings.HasPrefix(key, "s3-secure")
+					return strings.HasPrefix(key, s3EncryptedBackup)
 				})
 			Expect(keys).To(HaveLen(1))
 		})
@@ -226,7 +425,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 		Specify("It should create the backup spec", func() {
 			recBackup := &backupv1.Backup{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "s3-recurring",
+					Name: s3Recurring,
 				},
 				Spec: backupv1.BackupSpec{
 					StorageLocation: &backupv1.StorageLocation{
@@ -244,17 +443,37 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 				},
 			}
 			o.Add(recBackup)
+
 			Expect(k8sClient.Create(testCtx, recBackup)).To(Succeed())
 			Eventually(Object(recBackup)).Should(Exist())
 		})
 
-		Specify("the backup should succced", func() {
+		Specify("the backup should succeed", func() {
 			Eventually(func() error {
 				return isBackupSuccessul(&backupv1.Backup{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "s3-recurring",
+						Name: s3Recurring,
 					},
 				})
+			}).Should(Succeed())
+		})
+
+		Specify("ensure collected metrics match expected", func() {
+
+			Eventually(func() error {
+				expected := formatBackupMetrics([]string{
+					localNonEncrypedBackup,
+					localEncryptedBackup,
+					s3NonEncryptedBackup,
+					s3EncryptedBackup,
+					s3Recurring,
+				})
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_backup_count",
+					"rancher_backups_attempted",
+					"rancher_backups_failed",
+				)
 			}).Should(Succeed())
 		})
 
@@ -273,11 +492,26 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 					lo.Map(retObj, func(info minio.ObjectInfo, _ int) string {
 						return info.Key
 					}), func(key string, _ int) bool {
-						return strings.HasPrefix(key, "s3-recurring")
+						return strings.HasPrefix(key, s3Recurring)
 					})
 				return len(keys)
 			}).Should(BeNumerically(">=", 2))
+		})
+	})
 
+	When("we're done with all test backups", func() {
+		Specify("we should eventually have the correct backup metadata metrics", func() {
+
+			Eventually(func() error {
+				var backups backupv1.BackupList
+
+				Expect(k8sClient.List(testCtx, &backups)).To(Succeed())
+				expected := formatBackupMetadataMetrics(backups.Items)
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_backup",
+				)
+			}).Should(Succeed())
 		})
 	})
 })
@@ -306,64 +540,8 @@ var _ = Describe("Backup e2e local driver", Ordered, Label("integration"), func(
 			},
 		}
 		o.Add(secret)
+
 		Expect(k8sClient.Create(testCtx, secret)).To(Succeed())
 		Eventually(secret).Should(Exist())
-	})
-
-	When("we take a non-encrypted backup", func() {
-		It("should create a backup CRD", func() {
-			b := &backupv1.Backup{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: nonEncrypedBackup,
-				},
-				Spec: backupv1.BackupSpec{
-					ResourceSetName: "rancher-resource-set-basic",
-				},
-			}
-			o.Add(b)
-
-			Expect(k8sClient.Create(testCtx, b)).To(Succeed())
-			Eventually(Object(b)).Should(Exist())
-
-		})
-
-		Specify("the backup should be successful", func() {
-			Eventually(func() error {
-				return isBackupSuccessul(&backupv1.Backup{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: nonEncrypedBackup,
-					},
-				})
-			}).Should(Succeed())
-
-		})
-	})
-
-	When("we take an encrypted backup", func() {
-		It("should be able to create an encrypted backup configuration", func() {
-			b := &backupv1.Backup{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: encryptedBackup,
-				},
-				Spec: backupv1.BackupSpec{
-					ResourceSetName:            "rancher-resource-set-basic",
-					EncryptionConfigSecretName: encSecret,
-				},
-			}
-			o.Add(b)
-			Expect(k8sClient.Create(testCtx, b)).To(Succeed())
-			By("verifying the backup resource exists")
-			Eventually(Object(b)).Should(Exist())
-		})
-
-		Specify("the backup should be successful", func() {
-			Eventually(func() error {
-				return isBackupSuccessul(&backupv1.Backup{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: encryptedBackup,
-					},
-				})
-			}).Should(Succeed())
-		})
 	})
 })

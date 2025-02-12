@@ -12,6 +12,7 @@ import (
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	backupControllers "github.com/rancher/backup-restore-operator/pkg/generated/controllers/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/monitoring"
 	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
@@ -40,6 +41,7 @@ type handler struct {
 	defaultBackupMountPath  string
 	defaultS3BackupLocation *v1.S3ObjectStore
 	kubeSystemNS            string
+	metricsServerEnabled    bool
 }
 
 const DefaultRetentionCount = 10
@@ -53,7 +55,8 @@ func Register(
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface,
 	defaultLocalBackupLocation string,
-	defaultS3 *v1.S3ObjectStore) {
+	defaultS3 *v1.S3ObjectStore,
+	metricsServerEnabled bool) {
 
 	controller := &handler{
 		ctx:                     ctx,
@@ -65,6 +68,7 @@ func Register(
 		dynamicClient:           dynamicInterface,
 		defaultBackupMountPath:  defaultLocalBackupLocation,
 		defaultS3BackupLocation: defaultS3,
+		metricsServerEnabled:    metricsServerEnabled,
 	}
 	if controller.defaultBackupMountPath != "" {
 		logrus.Infof("Default location for storing backups is %v", controller.defaultBackupMountPath)
@@ -85,12 +89,14 @@ func Register(
 }
 
 func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error) {
+	var err error
+
 	if backup == nil || backup.DeletionTimestamp != nil {
 		return backup, nil
 	}
 	logrus.Infof("Processing backup %v", backup.Name)
 
-	if err := h.validateBackupSpec(backup); err != nil {
+	if err = h.validateBackupSpec(backup); err != nil {
 		return h.setReconcilingCondition(backup, err)
 	}
 
@@ -137,6 +143,15 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		}
 	}
 
+	if h.metricsServerEnabled {
+		backupStartTS := time.Now()
+		defer func() {
+			backupDoneTS := time.Now()
+			monitoring.UpdateTimeSensitiveBackupMetrics(backup.Name, backupDoneTS.Unix(), backupDoneTS.Sub(backupStartTS).Milliseconds())
+			monitoring.UpdateProcessedBackupMetrics(backup.Name, &err)
+		}()
+	}
+
 	backupFileName, err := h.generateBackupFilename(backup)
 	if err != nil {
 		return h.setReconcilingCondition(backup, err)
@@ -151,7 +166,8 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 	logrus.Infof("Temporary backup path for storing all contents for backup CR %v is %v", backup.Name, tmpBackupPath)
 
-	if err := h.performBackup(backup, tmpBackupPath, backupFileName); err != nil {
+	if err = h.performBackup(backup, tmpBackupPath, backupFileName); err != nil {
+		fmt.Println(err.Error())
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
 			return h.setReconcilingCondition(backup, errors.New(err.Error()+removeDirErr.Error()))
@@ -209,12 +225,14 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if updateErr != nil {
 		return h.setReconcilingCondition(backup, updateErr)
 	}
+
 	logrus.Infof("Done with backup")
 	return backup, err
 }
 
 func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName string) error {
 	var err error
+
 	transformerMap := k8sEncryptionconfig.StaticTransformers{}
 	if backup.Spec.EncryptionConfigSecretName != "" {
 		logrus.Infof("Processing encryption config %v for backup CR %v", backup.Spec.EncryptionConfigSecretName, backup.Name)

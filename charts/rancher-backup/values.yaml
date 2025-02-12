@@ -79,3 +79,14 @@ imagePullPolicy: "Always"
 ## Optional array of imagePullSecrets containing private registry credentials
 ## Ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []
+
+monitoring:
+  metrics:
+    enabled: false
+
+  serviceMonitor:
+    enabled: false
+
+    additionalLabels: {}
+    metricRelabelings: []
+    relabelings: []
