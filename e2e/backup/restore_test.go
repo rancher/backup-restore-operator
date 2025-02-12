@@ -30,7 +30,7 @@ const (
 func formatRestoreMetrics(restores []string) string {
 	var metrics string
 
-	rancherRestoreCountHeader := fmt.Sprintf(`
+	rancherRestoreCountHeader := fmt.Sprint(`
 	# HELP rancher_restore_count Number of existing Rancher Restore CRs
 	# TYPE rancher_restore_count gauge
 	`)
@@ -44,7 +44,7 @@ func formatRestoreMetrics(restores []string) string {
 func formatRestoreMetadataMetrics(restores []backupv1.Restore) string {
 	var metrics string
 
-	rancherRestoreHeader := fmt.Sprintf(`
+	rancherRestoreHeader := fmt.Sprint(`
 	# HELP rancher_restore Details on a specific Rancher Restore CR
 	# TYPE rancher_restore gauge
 	`)

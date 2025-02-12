@@ -69,7 +69,7 @@ const (
 func formatBackupMetrics(backups []string) string {
 	var metrics string
 
-	rancherBackupCountHeader := fmt.Sprintf(`
+	rancherBackupCountHeader := fmt.Sprint(`
 	# HELP rancher_backup_count Number of existing Rancher Backup CRs
 	# TYPE rancher_backup_count gauge
 	`)
@@ -77,7 +77,7 @@ func formatBackupMetrics(backups []string) string {
 	metrics += rancherBackupCountHeader
 	metrics += fmt.Sprintf("rancher_backup_count %d", len(backups))
 
-	rancherBackupsAttemptedHeader := fmt.Sprintf(`
+	rancherBackupsAttemptedHeader := fmt.Sprint(`
 	# HELP rancher_backups_attempted Number of Rancher Backups processed by this operator
 	# TYPE rancher_backups_attempted counter
 	`)
@@ -91,7 +91,7 @@ func formatBackupMetrics(backups []string) string {
 		}
 	}
 
-	rancherBackupsFailedHeader := fmt.Sprintf(`
+	rancherBackupsFailedHeader := fmt.Sprint(`
 	# HELP rancher_backups_failed Number of failed Rancher Backups processed by this operator
 	# TYPE rancher_backups_failed counter
 	`)
@@ -107,7 +107,7 @@ func formatBackupMetrics(backups []string) string {
 func formatBackupMetadataMetrics(backups []backupv1.Backup) string {
 	var metrics string
 
-	rancherBackupHeader := fmt.Sprintf(`
+	rancherBackupHeader := fmt.Sprint(`
 	# HELP rancher_backup Details on a specific Rancher Backup CR
 	# TYPE rancher_backup gauge
 	`)
