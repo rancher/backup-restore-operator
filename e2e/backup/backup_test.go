@@ -194,7 +194,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 					"rancher_backups_attempted",
 					"rancher_backups_failed",
 				)
-			}).WithTimeout(60 * time.Second).Should(Succeed())
+			}).Should(Succeed())
 		})
 	})
 
@@ -239,7 +239,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 					"rancher_backups_attempted",
 					"rancher_backups_failed",
 				)
-			}).WithTimeout(60 * time.Second).Should(Succeed())
+			}).Should(Succeed())
 		})
 	})
 
@@ -325,7 +325,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 					"rancher_backups_attempted",
 					"rancher_backups_failed",
 				)
-			}).WithTimeout(60 * time.Second).Should(Succeed())
+			}).Should(Succeed())
 		})
 
 		Specify("the backup should exist in the remote store", func() {
@@ -398,7 +398,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 					"rancher_backups_attempted",
 					"rancher_backups_failed",
 				)
-			}).WithTimeout(60 * time.Second).Should(Succeed())
+			}).Should(Succeed())
 		})
 
 		Specify("the backup should exist in the remote store", func() {
@@ -474,7 +474,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 					"rancher_backups_attempted",
 					"rancher_backups_failed",
 				)
-			}).WithTimeout(60 * time.Second).Should(Succeed())
+			}).Should(Succeed())
 		})
 
 		Specify("we should eventually have two backups in the remote store", func() {
@@ -511,7 +511,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
 					"rancher_backup",
 				)
-			}).WithTimeout(60 * time.Second).Should(Succeed())
+			}).Should(Succeed())
 		})
 	})
 })

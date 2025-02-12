@@ -43,7 +43,7 @@ var (
 )
 
 func TestTests(t *testing.T) {
-	SetDefaultEventuallyTimeout(10 * time.Second)
+	SetDefaultEventuallyTimeout(20 * time.Second)
 	SetDefaultEventuallyPollingInterval(50 * time.Millisecond)
 	SetDefaultConsistentlyDuration(10 * time.Second)
 	SetDefaultConsistentlyPollingInterval(50 * time.Millisecond)
@@ -164,10 +164,10 @@ var _ = BeforeSuite(func() {
 	SetupRancherResourceSet(o)
 
 	errC, ca := SetupOperator(testCtx, restConfig, operator.RunOptions{
-		ChartNamespace:       ts.ChartNamespace,
-		MetricsServerEnabled: true,
-		MetricsPort:          8080,
-		MetricsInterval:      5,
+		ChartNamespace:         ts.ChartNamespace,
+		MetricsServerEnabled:   true,
+		MetricsPort:            8080,
+		MetricsIntervalSeconds: 1,
 	})
 
 	DeferCleanup(func() {

@@ -64,7 +64,7 @@ func main() {
 		OperatorPVCEnabled:              OperatorPVEnabled != "",
 		MetricsServerEnabled:            MetricsServerEnabled != "",
 		MetricsPort:                     8080,
-		MetricsInterval:                 60,
+		MetricsIntervalSeconds:          60,
 		OperatorS3BackupStorageLocation: OperatorS3BackupStorageLocation,
 		ChartNamespace:                  ChartNamespace,
 		LocalDriverPath:                 "",

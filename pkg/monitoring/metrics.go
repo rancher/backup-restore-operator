@@ -1,7 +1,6 @@
 package monitoring
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -52,7 +51,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "rancher_backup_duration_ms",
 			Help:    "Duration of each backup processed by this operator in ms",
-			Buckets: []float64{500, 1000, 2500, 5000, 7500, 10000},
+			Buckets: []float64{500, 1000, 2500, 5000, 7500, 10000, 30000, 60000, 120000},
 		}, []string{"name"},
 	)
 
@@ -152,7 +151,6 @@ func UpdateTimeSensitiveBackupMetrics(backup string, endTime int64, totalTime in
 }
 
 func StartRestoreMetricsCollection(
-	_ context.Context,
 	restores controllers.RestoreController,
 	interval int,
 ) {
@@ -183,7 +181,6 @@ func StartRestoreMetricsCollection(
 }
 
 func StartBackupMetricsCollection(
-	_ context.Context,
 	backups controllers.BackupController,
 	interval int,
 ) {

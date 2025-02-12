@@ -174,7 +174,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
 					"rancher_restore_count",
 				)
-			}).WithTimeout(60 * time.Second).Should(Succeed())
+			}).Should(Succeed())
 		})
 
 		It("should preserve deletion grace periods", func() {
@@ -213,7 +213,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
 					"rancher_restore_count",
 				)
-			}).WithTimeout(60 * time.Second).Should(Succeed())
+			}).Should(Succeed())
 		})
 	})
 
@@ -277,7 +277,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
 					"rancher_restore_count",
 				)
-			}).WithTimeout(60 * time.Second).Should(Succeed())
+			}).Should(Succeed())
 		})
 	})
 
@@ -293,7 +293,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
 					"rancher_restore",
 				)
-			}).WithTimeout(60 * time.Second).Should(Succeed())
+			}).Should(Succeed())
 		})
 	})
 })
