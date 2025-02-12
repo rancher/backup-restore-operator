@@ -32,6 +32,9 @@ rancher_backup_duration_ms_bucket{name="backup1",le="2500"} 1
 rancher_backup_duration_ms_bucket{name="backup1",le="5000"} 1
 rancher_backup_duration_ms_bucket{name="backup1",le="7500"} 1
 rancher_backup_duration_ms_bucket{name="backup1",le="10000"} 1
+rancher_backup_duration_ms_bucket{name="backup1",le="30000"} 1
+rancher_backup_duration_ms_bucket{name="backup1",le="60000"} 1
+rancher_backup_duration_ms_bucket{name="backup1",le="120000"} 1
 rancher_backup_duration_ms_bucket{name="backup1",le="+Inf"} 1
 rancher_backup_duration_ms_sum{name="backup1"} 1500
 rancher_backup_duration_ms_count{name="backup1"} 1
@@ -79,6 +82,9 @@ rancher_backup_duration_ms_bucket{name="backup2",le="2500"} 1
 rancher_backup_duration_ms_bucket{name="backup2",le="5000"} 2
 rancher_backup_duration_ms_bucket{name="backup2",le="7500"} 2
 rancher_backup_duration_ms_bucket{name="backup2",le="10000"} 2
+rancher_backup_duration_ms_bucket{name="backup2",le="30000"} 2
+rancher_backup_duration_ms_bucket{name="backup2",le="60000"} 2
+rancher_backup_duration_ms_bucket{name="backup2",le="120000"} 2
 rancher_backup_duration_ms_bucket{name="backup2",le="+Inf"} 2
 rancher_backup_duration_ms_sum{name="backup2"} 4200
 rancher_backup_duration_ms_count{name="backup2"} 2
