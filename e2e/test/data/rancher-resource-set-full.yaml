@@ -296,7 +296,7 @@ resourceSelectors:
   
   - apiVersion: "v1"
     kindsRegexp: "^secrets$"
-    resourceNameRegexp: "machine-plan$|rke-state$|machine-state$|machine-driver-secret$|machine-provision$|^harvesterconfig|^registryconfig-auth"
+    resourceNameRegexp: "machine-plan$|rke-state$|machine-state$|machine-driver-secret$|machine-provision$|^harvesterconfig|^registryconfig-auth|^harvester-cloud-provider-config"
     namespaces:
     - "fleet-default"
   
