@@ -59,6 +59,8 @@ jobs:
         uses: azure/setup-helm@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Helm-unittest
+        run: helm plugin install https://github.com/quintush/helm-unittest
       - name: CI
         run: make ci
   test:
@@ -83,6 +85,8 @@ jobs:
         uses: azure/setup-helm@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Helm-unittest
+        run: helm plugin install https://github.com/quintush/helm-unittest
       - name: Setup helm charts
         run: ./scripts/package-helm
       - name: Debug
