@@ -63,7 +63,7 @@ jobs:
         arch:
           - x64
           - arm64
-        K3S_VERSION : ${{ fromJSON(needs.build.outputs.k3sversions) }}
+        K3S_VERSION: ${{ fromJSON(needs.build.outputs.k3sversions) }}
     steps:
       - name : Checkout repository
         uses : actions/checkout@v4
