@@ -7,7 +7,7 @@ set -x
 
 if git merge-base --is-ancestor origin/main HEAD
 then
-  printf '["%s", "%s"]' v1.30.9+k3s1 v1.32.1+k3s1
+  printf '["%s", "%s"]' v1.30.9-k3s1 v1.32.1-k3s1
   exit 0
 elif git merge-base --is-ancestor origin/release/v6.x HEAD
 then
@@ -15,11 +15,11 @@ then
   exit 0
 elif git merge-base --is-ancestor origin/release/v5.0 HEAD
 then
-  printf '["%s", "%s"]' v1.27.16+k3s1 v1.30.9+k3s1
+  printf '["%s", "%s"]' v1.27.16-k3s1 v1.30.9-k3s1
   exit 0
 elif git merge-base --is-ancestor origin/release/v4.0 HEAD
 then
-  printf '["%s", "%s"]' v1.26.15+k3s1 v1.28.15+k3s1
+  printf '["%s", "%s"]' v1.26.15-k3s1 v1.28.15-k3s1
   exit 0
 fi
 
