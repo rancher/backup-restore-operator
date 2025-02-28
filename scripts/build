@@ -7,7 +7,7 @@ cd $(dirname $0)/..
 
 mkdir -p bin
 if [ "$(uname)" = "Linux" ]; then
-    OTHER_LINKFLAGS="-extldflags -static -s"
+    OTHER_LINKFLAGS="-extldflags -static -s -w"
 fi
 
 LINKFLAGS="-X main.Version=$VERSION"
