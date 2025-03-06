@@ -14,7 +14,7 @@ RUN if [ "${ARCH}" == "amd64" ]; then \
     fi
 RUN curl -sL https://get.helm.sh/helm-v3.9.0-linux-${ARCH}.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
 RUN if [ "${ARCH}" != "s390x" ]; then \
-        helm plugin install https://github.com/quintush/helm-unittest; \
+        helm plugin install https://github.com/helm-unittest/helm-unittest; \
     fi
 
 
