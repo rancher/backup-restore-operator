@@ -3,7 +3,7 @@ module github.com/rancher/backup-restore-operator/tests
 go 1.23.0
 
 require (
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.80.0
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.80.1
 	github.com/rancher/hull v0.0.0-20230424152137-627ef5347afd
 	github.com/stretchr/testify v1.10.0
 	k8s.io/api v0.32.1
