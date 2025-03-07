@@ -52,21 +52,21 @@
       "matchPackagePatterns": [
         "kubernetes/kubernetes"
       ],
-      "allowedVersions": "<1.33.0"
+      "allowedVersions": "<1.32.0"
     },
     {
       "matchBaseBranches": ["release/6.x"],
       "matchPackagePatterns": [
         "kubernetes/kubernetes"
       ],
-      "allowedVersions": "<1.32.0"
+      "allowedVersions": "<1.31.0"
     },
     {
       "matchBaseBranches": ["release/5.0"],
       "matchPackagePatterns": [
         "kubernetes/kubernetes"
       ],
-      "allowedVersions": "<1.31.0"
+      "allowedVersions": "<1.30.0"
     }
   ]
 }
