@@ -31,6 +31,21 @@
       "matchManagers": [
         "dockerfile"
       ]
+    },
+    {
+      "matchBaseBranches": ["main"],
+      "constraints": {
+        "go": "<1.24"
+      }
+    },
+    {
+      "matchBaseBranches": [
+        "release/6.x",
+        "release/5.0"
+      ],
+      "constraints": {
+        "go": "<1.23"
+      }
     }
   ]
 }
