@@ -46,6 +46,27 @@
       "constraints": {
         "go": "<1.23"
       }
+    },
+    {
+      "matchBaseBranches": ["main"],
+      "matchPackagePatterns": [
+        "kubernetes/kubernetes"
+      ],
+      "allowedVersions": "<1.33.0"
+    },
+    {
+      "matchBaseBranches": ["release/6.x"],
+      "matchPackagePatterns": [
+        "kubernetes/kubernetes"
+      ],
+      "allowedVersions": "<1.32.0"
+    },
+    {
+      "matchBaseBranches": ["release/5.0"],
+      "matchPackagePatterns": [
+        "kubernetes/kubernetes"
+      ],
+      "allowedVersions": "<1.31.0"
     }
   ]
 }
