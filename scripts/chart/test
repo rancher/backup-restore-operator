@@ -17,7 +17,7 @@ fi
 HELM_PLUGINS=/root/.local/share/helm/plugins/ helm unittest --help >/dev/null 2>&1
 if [[ $? > 0 ]]; then
     echo "helm plugin unittest not found."
-    echo "Run to install plugin: helm plugin install https://github.com/quintush/helm-unittest"
+    echo "Run to install plugin: helm plugin install https://github.com/helm-unittest/helm-unittest"
     exit 1
 fi
 
