@@ -1,4 +1,4 @@
-FROM registry.suse.com/bci/golang:1.22
+FROM registry.suse.com/bci/golang:1.24
 # Add buildx plugin
 COPY --from=docker.io/docker/buildx-bin:0.21.2 /buildx /usr/libexec/docker/cli-plugins/docker-buildx
 
