@@ -31,6 +31,63 @@
       "matchManagers": [
         "dockerfile"
       ]
+    },
+    {
+      "matchBaseBranches": ["main"],
+      "matchPackageNames": [
+        "golang",
+        "go"
+      ],
+      "allowedVersions": "<1.24.0"
+    },
+    {
+      "matchBaseBranches": ["main"],
+      "matchDatasources": [
+        "golang-version"
+      ],
+      "allowedVersions": "<1.24.0"
+    },
+    {
+      "matchBaseBranches": ["main"],
+      "matchPackagePatterns": [
+        "kubernetes/kubernetes"
+      ],
+      "allowedVersions": "<1.32.0"
+    },
+    {
+      "matchBaseBranches": [
+        "release/6.x",
+        "release/5.0"
+      ],
+      "matchPackageNames": [
+        "golang",
+        "go"
+      ],
+      "allowedVersions": "<1.23.0"
+    },
+    {
+      "matchBaseBranches": [
+        "release/6.x",
+        "release/5.0"
+      ],
+      "matchDatasources": [
+        "golang-version"
+      ],
+      "allowedVersions": "<1.23.0"
+    },
+    {
+      "matchBaseBranches": ["release/6.x"],
+      "matchPackagePatterns": [
+        "kubernetes/kubernetes"
+      ],
+      "allowedVersions": "<1.31.0"
+    },
+    {
+      "matchBaseBranches": ["release/5.0"],
+      "matchPackagePatterns": [
+        "kubernetes/kubernetes"
+      ],
+      "allowedVersions": "<1.30.0"
     }
   ]
 }
