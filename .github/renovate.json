@@ -25,7 +25,7 @@
       ]
     },
     {
-      "matchBaseBranches": ["release/v5.0"],
+      "matchBaseBranches": ["release/v6.x", "release/v5.0"],
       "matchPackageNames": [
         "golang",
         "go",
@@ -34,11 +34,22 @@
       "allowedVersions": "<1.23.0"
     },
     {
-      "matchBaseBranches": ["release/v5.0"],
+      "matchBaseBranches": ["release/v6.x", "release/v5.0"],
       "matchDatasources": [
         "golang-version"
       ],
       "allowedVersions": "<1.23.0"
+    },
+    {
+      "matchBaseBranches": ["release/v6.x"],
+      "matchPackageNames": ["kubernetes/kubernetes"],
+      "allowedVersions": "<1.32.0"
+    },
+    {
+      "matchBaseBranches": ["release/v6.x"],
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["/^k8s\\.io\\/.*/"],
+      "allowedVersions": "<0.32.0"
     },
     {
       "matchBaseBranches": ["release/v5.0"],
