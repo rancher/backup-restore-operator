@@ -24,6 +24,33 @@
       "matchManagers": [
         "dockerfile"
       ]
+    },
+    {
+      "matchBaseBranches": ["release/v4.0"],
+      "matchPackageNames": [
+        "golang",
+        "go",
+        "/registry.suse.com/bci/golang/"
+      ],
+      "allowedVersions": "<1.21.0"
+    },
+    {
+      "matchBaseBranches": ["release/v4.0"],
+      "matchDatasources": [
+        "golang-version"
+      ],
+      "allowedVersions": "<1.21.0"
+    },
+    {
+      "matchBaseBranches": ["release/v4.0"],
+      "matchPackageNames": ["kubernetes/kubernetes"],
+      "allowedVersions": "<1.29.0"
+    },
+    {
+      "matchBaseBranches": ["release/v4.0"],
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["/^k8s\\.io\\/.*/"],
+      "allowedVersions": "<0.29.0"
     }
   ]
 }
