@@ -3,6 +3,8 @@
     "github>rancher/renovate-config#release",
     "group:allNonMajor"
   ],
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 20,
   "baseBranches": [
     "main",
     "release/v6.x",
