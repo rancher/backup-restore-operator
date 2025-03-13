@@ -31,7 +31,7 @@
       "matchPackageNames": [
         "golang",
         "go",
-        "/registry.suse.com/bci/golang/"
+        "/registry\\.suse\\.com\\/bci\\/golang/"
       ],
       "allowedVersions": "<1.24.0"
     },
@@ -58,7 +58,7 @@
       "matchPackageNames": [
         "golang",
         "go",
-        "/registry.suse.com/bci/golang/"
+        "/registry\\.suse\\.com\\/bci\\/golang/"
       ],
       "allowedVersions": "<1.23.0"
     },
