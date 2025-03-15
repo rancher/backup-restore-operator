@@ -7,9 +7,7 @@
   "prConcurrentLimit": 20,
   "baseBranches": [
     "main",
-    "release/v7.x",
-    "release/v6.x",
-    "release/v5.0"
+    "release/v7.x"
   ],
   "ignoreDeps": [
     "github.com/rancher/hull",
@@ -21,13 +19,6 @@
   ],
   "packageRules": [
     {
-      "groupName": "Docker File Deps",
-      "groupSlug": "docker-bumps",
-      "matchManagers": [
-        "dockerfile"
-      ]
-    },
-    {
       "matchBaseBranches": ["main", "release/v7.x"],
       "matchDatasources": ["golang-version"],
       "matchManagers": ["gomod"],
@@ -35,13 +26,15 @@
         "golang",
         "go"
       ],
-      "allowedVersions": "<1.24.0"
+      "allowedVersions": "<1.24.0",
+      "groupName": "Go and Kubernetes Updates"
     },
     {
       "matchBaseBranches": ["main", "release/v7.x"],
       "matchManagers": ["gomod"],
       "matchPackageNames": ["k8s.io/**"],
-      "allowedVersions": "<1.33.0"
+      "allowedVersions": "<1.33.0",
+      "groupName": "Go and Kubernetes Updates"
     }
   ]
 }
