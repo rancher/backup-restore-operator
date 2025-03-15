@@ -7,6 +7,7 @@
   "prConcurrentLimit": 20,
   "baseBranches": [
     "main",
+    "release/v7.x",
     "release/v6.x",
     "release/v5.0"
   ],
@@ -28,68 +29,19 @@
     },
     {
       "matchBaseBranches": ["main", "release/v7.x"],
+      "matchDatasources": ["golang-version"],
+      "matchManagers": ["gomod"],
       "matchPackageNames": [
         "golang",
-        "go",
-        "/registry\\.suse\\.com\\/bci\\/golang/"
+        "go"
       ],
       "allowedVersions": "<1.24.0"
     },
     {
       "matchBaseBranches": ["main", "release/v7.x"],
-      "matchDatasources": [
-        "golang-version"
-      ],
-      "allowedVersions": "<1.24.0"
-    },
-    {
-      "matchBaseBranches": ["main", "release/v7.x"],
-      "matchPackageNames": ["kubernetes/kubernetes"],
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["k8s.io/**"],
       "allowedVersions": "<1.33.0"
-    },
-    {
-      "matchBaseBranches": ["main", "release/v7.x"],
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["/^k8s\\.io\\/.*/"],
-      "allowedVersions": "<0.33.0"
-    },
-    {
-      "matchBaseBranches": ["release/v6.x", "release/v5.0"],
-      "matchPackageNames": [
-        "golang",
-        "go",
-        "/registry\\.suse\\.com\\/bci\\/golang/"
-      ],
-      "allowedVersions": "<1.23.0"
-    },
-    {
-      "matchBaseBranches": ["release/v6.x", "release/v5.0"],
-      "matchDatasources": [
-        "golang-version"
-      ],
-      "allowedVersions": "<1.23.0"
-    },
-    {
-      "matchBaseBranches": ["release/v6.x"],
-      "matchPackageNames": ["kubernetes/kubernetes"],
-      "allowedVersions": "<1.32.0"
-    },
-    {
-      "matchBaseBranches": ["release/v6.x"],
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["/^k8s\\.io\\/.*/"],
-      "allowedVersions": "<0.32.0"
-    },
-    {
-      "matchBaseBranches": ["release/v5.0"],
-      "matchPackageNames": ["kubernetes/kubernetes"],
-      "allowedVersions": "<1.31.0"
-    },
-    {
-      "matchBaseBranches": ["release/v5.0"],
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["/^k8s\\.io\\/.*/"],
-      "allowedVersions": "<0.31.0"
     }
   ]
 }
