@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>rancher/renovate-config#rancher-main#main",
+    "github>rancher/renovate-config:rancher-main#main",
     "group:allNonMajor"
   ],
   "prHourlyLimit": 0,
@@ -21,7 +21,7 @@
   "packageRules": [
     {
       "matchBaseBranches": ["main"],
-      "extends": ["github>rancher/renovate-config//rancher-2.10#main"]
+      "extends": ["github>rancher/renovate-config:rancher-2.10#main"]
     }
   ]
 }
