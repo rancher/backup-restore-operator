@@ -1,6 +1,7 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>rancher/renovate-config#release",
+    "github>rancher/renovate-config#main#rancher-presets",
     "group:allNonMajor"
   ],
   "prHourlyLimit": 0,
@@ -19,22 +20,8 @@
   ],
   "packageRules": [
     {
-      "matchBaseBranches": ["main", "release/v7.x"],
-      "matchDatasources": ["golang-version"],
-      "matchManagers": ["gomod"],
-      "matchPackageNames": [
-        "golang",
-        "go"
-      ],
-      "allowedVersions": "<1.24.0",
-      "groupName": "Go and Kubernetes Updates"
-    },
-    {
-      "matchBaseBranches": ["main", "release/v7.x"],
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["k8s.io/**"],
-      "allowedVersions": "<1.33.0",
-      "groupName": "Go and Kubernetes Updates"
+      "matchBaseBranches": ["main"],
+      "extends": ["github>rancher/renovate-config//rancher-2.10#rancher-presets"]
     }
   ]
 }
