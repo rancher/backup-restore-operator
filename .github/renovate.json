@@ -6,8 +6,7 @@
   "baseBranches": [
     "main",
     "release/v6.x",
-    "release/v5.0",
-    "release/v4.0"
+    "release/v5.0"
   ],
   "ignoreDeps": [
     "github.com/rancher/hull",
@@ -18,6 +17,18 @@
     "github.com/imdario/mergo"
   ],
   "packageRules": [
+    {
+      "matchBaseBranches": ["main"],
+      "extends": ["github>rancher/renovate-config:rancher-main#main"]
+    },
+    {
+      "matchBaseBranches": ["release/v6.x"],
+      "extends": ["github>rancher/renovate-config:rancher-2.10#main"]
+    },
+    {
+      "matchBaseBranches": ["release/v5.0"],
+      "extends": ["github>rancher/renovate-config:rancher-2.9#main"]
+    },
     {
       "groupName": "GitHub Workflow Actions",
       "groupSlug": "gha-deps",
