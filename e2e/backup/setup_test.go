@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 
 	. "github.com/kralicky/kmatch"
@@ -117,4 +119,50 @@ func SetupMinio(o *ObjectTracker) (client *minio.Client, minioEndpoint string) {
 	Expect(k8sClient.Create(testCtx, secret)).To(Succeed())
 	Eventually(Object(secret)).Should(Exist())
 	return client, minioEndpoint
+}
+
+func SetupCustomResourceSet(ctx context.Context, o *ObjectTracker, k8sClient client.Client) {
+	// create a resource-set which matches a field selector - in this case only dockerconfigjson
+	rs := &backupv1.ResourceSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "custom-resource-set",
+		},
+		ResourceSelectors: []backupv1.ResourceSelector{
+			{
+				APIVersion:      "v1",
+				KindsRegexp:     "^secrets$",
+				NamespaceRegexp: "default",
+				FieldSelectors: map[string]string{
+					"type": "kubernetes.io/dockerconfigjson",
+				},
+			},
+		},
+	}
+	o.Add(rs)
+	Expect(k8sClient.Create(ctx, rs)).To(Succeed())
+
+	// create some secrets to match that resource-set
+	dockercfg := &corev1.Secret{
+		Type: corev1.SecretTypeDockerConfigJson,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "docker-config-json",
+			Namespace: "default",
+		},
+		StringData: map[string]string{
+			".dockerconfigjson": `{"auths":{"https://index.docker.io/v1/":{"username":"foo","password":"bar"}}}`,
+		},
+	}
+	o.Add(dockercfg)
+	Expect(k8sClient.Create(ctx, dockercfg)).To(Succeed())
+
+	opaque := &corev1.Secret{
+		Type: corev1.SecretTypeOpaque,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "regular",
+			Namespace: "default",
+		},
+		StringData: map[string]string{"some": "data"},
+	}
+	o.Add(opaque)
+	Expect(k8sClient.Create(ctx, opaque)).To(Succeed())
 }
