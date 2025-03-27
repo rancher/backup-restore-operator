@@ -3,6 +3,7 @@ package v1
 import (
 	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 )
 
 var (
@@ -68,6 +69,7 @@ type ResourceSelector struct {
 	Namespaces                []string              `json:"namespaces,omitempty"`
 	NamespaceRegexp           string                `json:"namespaceRegexp,omitempty"`
 	LabelSelectors            *metav1.LabelSelector `json:"labelSelectors,omitempty"`
+	FieldSelectors            fields.Set            `json:"fieldSelectors,omitempty"`
 	ExcludeKinds              []string              `json:"excludeKinds,omitempty"`
 	ExcludeResourceNameRegexp string                `json:"excludeResourceNameRegexp,omitempty"`
 }

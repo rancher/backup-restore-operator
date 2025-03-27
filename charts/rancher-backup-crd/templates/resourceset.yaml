@@ -49,6 +49,12 @@ spec:
                 excludeResourceNameRegexp:
                   nullable: true
                   type: string
+                fieldSelectors:
+                  additionalProperties:
+                    nullable: true
+                    type: string
+                  nullable: true
+                  type: object
                 kinds:
                   items:
                     nullable: true
