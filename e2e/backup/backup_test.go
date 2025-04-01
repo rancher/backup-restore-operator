@@ -1,8 +1,12 @@
 package backup_test
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -25,13 +29,14 @@ import (
 )
 
 const (
-	encSecret                = "encryption-config"
-	s3Recurring              = "s3-recurring"
-	s3NonEncryptedBackup     = "s3-insecure"
-	s3EncryptedBackup        = "s3-secure"
-	localNonEncrypedBackup   = "local-driver-non-encrypted"
-	localEncryptedBackup     = "local-driver-encrypted"
-	localCattleDevDriverPath = "../../backups"
+	encSecret                    = "encryption-config"
+	s3Recurring                  = "s3-recurring"
+	s3NonEncryptedBackup         = "s3-insecure"
+	s3EncryptedBackup            = "s3-secure"
+	localNonEncrypedBackup       = "local-driver-non-encrypted"
+	localEncryptedBackup         = "local-driver-encrypted"
+	localCustomResourceSetBackup = "local-custom-resource-set-backup"
+	localCattleDevDriverPath     = "../../backups"
 
 	insecureBucket  = "rancherbackups-insecure"
 	secureBucket    = "rancherbackups-secure"
@@ -135,6 +140,55 @@ func formatBackupMetadataMetrics(backups []backupv1.Backup) string {
 	return metrics
 }
 
+// extractTarballContents extracts the contents of a tarball from MinIO and returns them as a map of filenames to contents.
+func extractTarballContents(minioClient *minio.Client, bucket, key string) (map[string][]byte, error) {
+	obj, err := minioClient.GetObject(testCtx, bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch tarball from minio: %v", err)
+	}
+	defer obj.Close()
+
+	gzr, err := gzip.NewReader(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %v", err)
+	}
+	defer gzr.Close()
+
+	contents := make(map[string][]byte)
+	tr := tar.NewReader(gzr)
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read tarball: %v", err)
+		}
+
+		switch header.Typeflag {
+		case tar.TypeReg:
+			// file
+			bb := &bytes.Buffer{}
+			if _, err := io.Copy(bb, tr); err != nil {
+				return nil, fmt.Errorf("failed to read file contents: %v", err)
+			}
+
+			contents[header.Name] = bb.Bytes()
+		case tar.TypeDir:
+			// directory
+			contents[header.Name] = nil
+		case tar.TypeSymlink:
+			// symlink
+			contents[header.Name] = []byte(header.Linkname)
+		default:
+			return nil, fmt.Errorf("unsupported tarball entry type: %v", header.Typeflag)
+		}
+	}
+
+	return contents, nil
+}
+
 var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 	var o *ObjectTracker
 
@@ -153,6 +207,9 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 		SetupEncryption(o)
 		By("deploying minio locally")
 		minioClient, minioEndpoint = SetupMinio(o)
+
+		By("creating custom resourceSet")
+		SetupCustomResourceSet(testCtx, o, k8sClient)
 	})
 
 	When("we take a non-encrypted backup", func() {
@@ -514,6 +571,86 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 			}).Should(Succeed())
 		})
 	})
+
+	When("we take a non-encrypted backup with a custom resource-set", func() {
+		It("should create a backup CR", func() {
+			b := &backupv1.Backup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: localCustomResourceSetBackup,
+				},
+				Spec: backupv1.BackupSpec{
+					ResourceSetName: "custom-resource-set",
+					StorageLocation: &backupv1.StorageLocation{
+						S3: &backupv1.S3ObjectStore{
+							CredentialSecretName:      credentialSecretName,
+							CredentialSecretNamespace: ts.ChartNamespace,
+							BucketName:                insecureBucket,
+							Endpoint:                  minioEndpoint,
+							InsecureTLSSkipVerify:     true,
+						},
+					},
+				},
+			}
+			o.Add(b)
+
+			Expect(k8sClient.Create(testCtx, b)).To(Succeed())
+			Eventually(Object(b)).Should(Exist())
+		})
+
+		Specify("the backup should be successful", func() {
+			Eventually(func() error {
+				return isBackupSuccessul(&backupv1.Backup{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: localCustomResourceSetBackup,
+					},
+				})
+			}).Should(Succeed())
+		})
+
+		Specify("ensure the backup contains the single secret", func() {
+			Eventually(func() error {
+				// Fetch the backup object from the cluster
+				backup := &backupv1.Backup{}
+				if err := k8sClient.Get(testCtx, client.ObjectKey{Name: localCustomResourceSetBackup}, backup); err != nil {
+					return err
+				}
+
+				// Ensure the backup status has a filename
+				if backup.Status.Filename == "" {
+					return fmt.Errorf("backup filename is empty")
+				}
+
+				objs := minioClient.ListObjects(testCtx, insecureBucket, minio.ListObjectsOptions{})
+
+				// convert the channel to a slice
+				retObj := make([]minio.ObjectInfo, 2)
+				for obj := range objs {
+					retObj = append(retObj, obj)
+				}
+
+				// filter the slice to only include the keys that contain "custom-resource-set-backup"
+				keys := lo.FilterMap(retObj, func(info minio.ObjectInfo, i int) (string, bool) {
+					return info.Key, strings.Contains(info.Key, "custom-resource-set-backup")
+				})
+				if len(keys) == 0 {
+					return fmt.Errorf("no appropriate backup found in bucket %s", insecureBucket)
+				}
+
+				contents, err := extractTarballContents(minioClient, insecureBucket, keys[0])
+				if err != nil {
+					return fmt.Errorf("failed to extract tarball contents: %s", err)
+				}
+
+				// we backed up the docker-config secret
+				Expect(contents).To(HaveKey("secrets.#v1/default/docker-config-json.json"))
+				// but not the regular secret
+				Expect(contents).NotTo(HaveKey("secrets.#v1/default/regular.json"))
+
+				return nil
+			}).Should(Succeed())
+		})
+	})
+
 })
 
 var _ = Describe("Backup e2e local driver", Ordered, Label("integration"), func() {
