@@ -8,7 +8,6 @@ import (
 
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -162,7 +161,7 @@ func TestUpdateRestoreMetrics(t *testing.T) {
 		{
 			ObjectMeta: k8sv1.ObjectMeta{Name: "restore1"},
 			Status: v1.RestoreStatus{
-				Conditions: []genericcondition.GenericCondition{
+				Conditions: []k8sv1.Condition{
 					{Message: "Restore completed successfully"},
 				},
 				BackupSource:        "s3",
@@ -176,7 +175,7 @@ func TestUpdateRestoreMetrics(t *testing.T) {
 		{
 			ObjectMeta: k8sv1.ObjectMeta{Name: "restore2"},
 			Status: v1.RestoreStatus{
-				Conditions: []genericcondition.GenericCondition{
+				Conditions: []k8sv1.Condition{
 					{Message: "Restore failed"},
 				},
 				BackupSource:        "s3",
@@ -223,7 +222,7 @@ func TestUpdateBackupMetrics(t *testing.T) {
 				Filename:        "backup1.tar.gz",
 				StorageLocation: "s3",
 				LastSnapshotTS:  "1627849200",
-				Conditions: []genericcondition.GenericCondition{
+				Conditions: []k8sv1.Condition{
 					{Message: "Backup completed successfully"},
 				},
 			},
@@ -240,7 +239,7 @@ func TestUpdateBackupMetrics(t *testing.T) {
 				Filename:        "backup2.tar.gz",
 				StorageLocation: "s3",
 				LastSnapshotTS:  "1627849300",
-				Conditions: []genericcondition.GenericCondition{
+				Conditions: []k8sv1.Condition{
 					{Message: "Backup failed"},
 				},
 			},

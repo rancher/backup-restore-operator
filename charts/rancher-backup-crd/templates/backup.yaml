@@ -98,12 +98,11 @@ spec:
                     lastTransitionTime:
                       nullable: true
                       type: string
-                    lastUpdateTime:
-                      nullable: true
-                      type: string
                     message:
                       nullable: true
                       type: string
+                    observedGeneration:
+                      type: integer
                     reason:
                       nullable: true
                       type: string
