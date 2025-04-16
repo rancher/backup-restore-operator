@@ -1,7 +1,6 @@
 package v1
 
 import (
-	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 )
@@ -37,14 +36,19 @@ type BackupSpec struct {
 }
 
 type BackupStatus struct {
-	Conditions         []genericcondition.GenericCondition `json:"conditions"`
-	LastSnapshotTS     string                              `json:"lastSnapshotTs"`
-	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
-	ObservedGeneration int64                               `json:"observedGeneration"`
-	StorageLocation    string                              `json:"storageLocation"`
-	BackupType         string                              `json:"backupType"`
-	Filename           string                              `json:"filename"`
-	Summary            string                              `json:"summary"`
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	// +optional
+	Conditions         []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
+	LastSnapshotTS     string             `json:"lastSnapshotTs"`
+	NextSnapshotAt     string             `json:"nextSnapshotAt"`
+	ObservedGeneration int64              `json:"observedGeneration"`
+	StorageLocation    string             `json:"storageLocation"`
+	BackupType         string             `json:"backupType"`
+	Filename           string             `json:"filename"`
+	Summary            string             `json:"summary"`
 }
 
 // +genclient
@@ -121,9 +125,14 @@ type RestoreSpec struct {
 }
 
 type RestoreStatus struct {
-	Conditions          []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	RestoreCompletionTS string                              `json:"restoreCompletionTs"`
-	ObservedGeneration  int64                               `json:"observedGeneration"`
-	BackupSource        string                              `json:"backupSource"`
-	Summary             string                              `json:"summary"`
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	// +optional
+	Conditions          []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
+	RestoreCompletionTS string             `json:"restoreCompletionTs"`
+	ObservedGeneration  int64              `json:"observedGeneration"`
+	BackupSource        string             `json:"backupSource"`
+	Summary             string             `json:"summary"`
 }

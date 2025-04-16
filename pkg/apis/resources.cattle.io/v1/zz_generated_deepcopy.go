@@ -22,7 +22,6 @@ limitations under the License.
 package v1
 
 import (
-	genericcondition "github.com/rancher/wrangler/v3/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fields "k8s.io/apimachinery/pkg/fields"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -115,8 +114,10 @@ func (in *BackupStatus) DeepCopyInto(out *BackupStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]genericcondition.GenericCondition, len(*in))
-		copy(*out, *in)
+		*out = make([]metav1.Condition, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	return
 }
@@ -358,8 +359,10 @@ func (in *RestoreStatus) DeepCopyInto(out *RestoreStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]genericcondition.GenericCondition, len(*in))
-		copy(*out, *in)
+		*out = make([]metav1.Condition, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	return
 }
