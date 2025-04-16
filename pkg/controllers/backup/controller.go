@@ -16,9 +16,7 @@ import (
 	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
-	"github.com/rancher/wrangler/v3/pkg/condition"
 	v1core "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
-	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 
@@ -197,11 +195,10 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			return err
 		}
 		// reset conditions to remove the reconciling condition, because as per kstatus lib its presence is considered an error
-		backup.Status.Conditions = []genericcondition.GenericCondition{}
+		backup.Status.Conditions = []k8sv1.Condition{}
 
-		condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
-		condition.Cond(v1.BackupConditionReady).Message(backup, "Completed")
-		condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
+		v1.BackupConditionReady.ToFluentBuilder(backup).True().SetMessage("Completed").Apply(backup)
+		v1.BackupConditionUploaded.ToFluentBuilder(backup).True().Apply(backup)
 
 		backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
 		if cronSchedule != nil {
@@ -286,7 +283,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		return err
 	}
 
-	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
+	v1.BackupConditionReady.ToFluentBuilder(backup).True().Apply(backup)
 
 	gzipFile := backupFileName + ".tar.gz"
 	if backup.Spec.EncryptionConfigSecretName != "" {
@@ -343,8 +340,8 @@ func (h *handler) generateBackupFilename(backup *v1.Backup) (string, error) {
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) (*v1.Backup, error) {
-	if !condition.Cond(v1.BackupConditionReconciling).IsUnknown(backup) && condition.Cond(v1.BackupConditionReconciling).GetReason(backup) == "Error" {
-		reconcileMsg := condition.Cond(v1.BackupConditionReconciling).GetMessage(backup)
+	if !v1.BackupConditionReconciling.ToK8sCondition().IsUnknown(backup) && v1.BackupConditionReconciling.ToK8sCondition().GetReason(backup) == "Error" {
+		reconcileMsg := v1.BackupConditionReconciling.ToK8sCondition().GetMessage(backup)
 		if strings.Contains(reconcileMsg, originalErr.Error()) {
 			// no need to update object status again, because if another UpdateStatus is called without needing it, controller will
 			// process the same object immediately without its default backoff
@@ -358,9 +355,8 @@ func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) 
 			return err
 		}
 
-		condition.Cond(v1.BackupConditionReconciling).SetStatusBool(updBackup, true)
-		condition.Cond(v1.BackupConditionReconciling).SetError(updBackup, "", originalErr)
-		condition.Cond(v1.BackupConditionReady).Message(updBackup, "Retrying")
+		v1.BackupConditionReconciling.ToFluentBuilder(updBackup).SetError("", originalErr).Apply(updBackup)
+		v1.BackupConditionReady.ToFluentBuilder(updBackup).SetMessage("Retrying").Apply(updBackup)
 
 		_, err = h.backups.UpdateStatus(updBackup)
 		return err

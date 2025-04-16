@@ -20,7 +20,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/rancher/backup-restore-operator/e2e/test"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/wrangler/v3/pkg/condition"
 	"github.com/samber/lo"
 	"github.com/testcontainers/testcontainers-go"
 	corev1 "k8s.io/api/core/v1"
@@ -52,8 +51,8 @@ func isBackupSuccessul(b *backupv1.Backup) error {
 		return err
 	}
 
-	if !condition.Cond(backupv1.BackupConditionUploaded).IsTrue(bD) {
-		message := condition.Cond(backupv1.BackupConditionReady).GetMessage(bD)
+	if !backupv1.BackupConditionUploaded.ToK8sCondition().IsTrue(bD) {
+		message := backupv1.BackupConditionReady.ToK8sCondition().GetMessage(bD)
 		return fmt.Errorf("backup %s did not upload %s", b.Name, message)
 	}
 	return nil

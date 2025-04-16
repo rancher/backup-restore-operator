@@ -1,18 +1,19 @@
 package v1
 
 import (
+	"github.com/rancher/wrangler/v3/pkg/condition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 )
 
 var (
-	BackupConditionReady        = "Ready"
-	BackupConditionUploaded     = "Uploaded"
-	BackupConditionReconciling  = "Reconciling"
-	BackupConditionStalled      = "Stalled"
-	RestoreConditionReconciling = "Reconciling"
-	RestoreConditionStalled     = "Stalled"
-	RestoreConditionReady       = "Ready"
+	BackupConditionReady        condition.Cond = "Ready"
+	BackupConditionUploaded     condition.Cond = "Uploaded"
+	BackupConditionReconciling  condition.Cond = "Reconciling"
+	BackupConditionStalled      condition.Cond = "Stalled"
+	RestoreConditionReconciling condition.Cond = "Reconciling"
+	RestoreConditionStalled     condition.Cond = "Stalled"
+	RestoreConditionReady       condition.Cond = "Ready"
 )
 
 // +genclient
