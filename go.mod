@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.23.4
 
 replace (
-	github.com/rancher/wrangler/v3 => github.com/mallardduck/rancher-wrangler/v3 v3.0.0-20250416142236-32c91faed148
+	github.com/rancher/wrangler/v3 => github.com/mallardduck/rancher-wrangler/v3 v3.0.0-20250416182731-95ac3d169aa5
 	golang.org/x/crypto => golang.org/x/crypto v0.35.0
 	google.golang.org/grpc => google.golang.org/grpc v1.71.0
 )
@@ -13,7 +13,7 @@ replace (
 require (
 	github.com/minio/minio-go/v7 v7.0.87
 	github.com/rancher/lasso v0.2.1
-	github.com/rancher/wrangler/v3 v3.2.0-rc.2
+	github.com/rancher/wrangler/v3 v3.2.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0

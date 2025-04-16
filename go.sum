@@ -136,8 +136,8 @@ github.com/magiconair/properties v1.8.7 h1:IeQXZAiQcpL9mgcAe1Nu6cX9LLw6ExEHKjN0V
 github.com/magiconair/properties v1.8.7/go.mod h1:Dhd985XPs7jluiymwWYZ0G4Z61jb3vdS329zhj2hYo0=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
-github.com/mallardduck/rancher-wrangler/v3 v3.0.0-20250416142236-32c91faed148 h1:HztCeaFkBlZSHMESJBhGbr15KCQNfRC+MqQ3R6cPLpE=
-github.com/mallardduck/rancher-wrangler/v3 v3.0.0-20250416142236-32c91faed148/go.mod h1:0C5QyvSrQOff8gQQzpB/L/FF03EQycjR3unSJcKCHno=
+github.com/mallardduck/rancher-wrangler/v3 v3.0.0-20250416182731-95ac3d169aa5 h1:c6xTkG++ye/Jg1MdGmlV8We+A7l9dRzffTanehjLXEU=
+github.com/mallardduck/rancher-wrangler/v3 v3.0.0-20250416182731-95ac3d169aa5/go.mod h1:i1BaMZxfmp9wehhGst1Ub9smG28OXF50+8O3S0oNrKk=
 github.com/minio/crc64nvme v1.0.1 h1:DHQPrYPdqK7jQG/Ls5CTBZWeex/2FMS3G5XGkycuFrY=
 github.com/minio/crc64nvme v1.0.1/go.mod h1:eVfm2fAzLlxMdUGc0EEBGSMmPwmXD5XiNRpnu9J3bvg=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
