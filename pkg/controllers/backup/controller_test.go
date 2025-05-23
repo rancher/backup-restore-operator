@@ -7,6 +7,7 @@ import (
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestGenerateBackupFilename(t *testing.T) {
@@ -65,4 +66,47 @@ func TestValidateBackupSpecPass(t *testing.T) {
 	err := mockHandler.validateBackupSpec(backup)
 
 	require.NoError(t, err, "Error when Validating backup spec")
+}
+
+func TestBackupIsSingularAndComplete(t *testing.T) {
+	newInput := func(gen, obvgen int64, backupType string) *v1.Backup {
+		return &v1.Backup{
+			ObjectMeta: metav1.ObjectMeta{
+				Generation: gen,
+			},
+			Status: v1.BackupStatus{
+				ObservedGeneration: obvgen,
+				BackupType:         backupType,
+			},
+		}
+	}
+
+	testCases := []struct {
+		name     string
+		input    *v1.Backup
+		expected bool
+	}{
+		{
+			name:     "Processed one-time backup",
+			input:    newInput(1, 1, "One-time"),
+			expected: true,
+		},
+		{
+			name:     "Unprocessed one-time backup",
+			input:    newInput(2, 1, "One-time"),
+			expected: false,
+		},
+		{
+			name:     "Recurring backup",
+			input:    newInput(1, 1, "Recurring"),
+			expected: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := backupIsSingularAndComplete(testCase.input)
+			assert.Equal(t, testCase.expected, result)
+		})
+	}
 }

@@ -94,6 +94,12 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if backup == nil || backup.DeletionTimestamp != nil {
 		return backup, nil
 	}
+
+	// skips if the backup is singular and already processed
+	if backupIsSingularAndComplete(backup) {
+		logrus.Debugf("Backup %s has already been processed, skipping it", backup.Name)
+		return backup, nil
+	}
 	logrus.Infof("Processing backup %v", backup.Name)
 
 	if err = h.validateBackupSpec(backup); err != nil {
@@ -101,24 +107,13 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 
 	if backup.Status.LastSnapshotTS != "" {
-		if backup.Spec.Schedule == "" {
-			// Backup CR was meant for one-time backup, and the backup has been completed. Probably here from UpdateStatus call
-			logrus.Infof("Backup CR %v has been processed for one-time backup, returning", backup.Name)
-			// This could also mean backup CR was updated from recurring to one-time, in which case observedGeneration needs to be updated
-			updBackupStatus := false
-			if backup.Generation != backup.Status.ObservedGeneration {
-				backup.Status.ObservedGeneration = backup.Generation
-				updBackupStatus = true
-			}
-			// check if the backup-type needs to be changed too
-			if backup.Status.BackupType != "One-time" {
-				backup.Status.BackupType = "One-time"
-				updBackupStatus = true
-			}
-			if updBackupStatus {
-				return h.backups.UpdateStatus(backup)
-			}
-			return backup, nil
+		if backup.Spec.Schedule == "" { // one-time backup
+			// This means backup CR was updated from recurring to one-time, in which case observedGeneration needs to be updated
+			backup.Status.ObservedGeneration = backup.Generation
+			backup.Status.BackupType = "One-time"
+
+			logrus.Infof("Updating backup %s from recurring to one-time", backup.Name)
+			return h.backups.UpdateStatus(backup)
 		}
 		if backup.Status.NextSnapshotAt != "" {
 			currTime := time.Now().Format(time.RFC3339)
@@ -369,4 +364,12 @@ func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) 
 		return backup, errors.New(originalErr.Error() + err.Error())
 	}
 	return backup, originalErr
+}
+
+// backupIsSingularAndComplete checks if the backup is a one-time backup and has not been modified
+func backupIsSingularAndComplete(backup *v1.Backup) bool {
+	if backup.Status.BackupType == "One-time" && backup.Generation == backup.Status.ObservedGeneration {
+		return true
+	}
+	return false
 }
