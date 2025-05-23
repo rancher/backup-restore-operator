@@ -368,8 +368,5 @@ func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) 
 
 // backupIsSingularAndComplete checks if the backup is a one-time backup and has not been modified
 func backupIsSingularAndComplete(backup *v1.Backup) bool {
-	if backup.Status.BackupType == "One-time" && backup.Generation == backup.Status.ObservedGeneration {
-		return true
-	}
-	return false
+	return backup.Status.BackupType == "One-time" && backup.Generation == backup.Status.ObservedGeneration
 }
