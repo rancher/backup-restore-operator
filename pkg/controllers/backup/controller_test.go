@@ -88,17 +88,17 @@ func TestBackupIsSingularAndComplete(t *testing.T) {
 	}{
 		{
 			name:     "Processed one-time backup",
-			input:    newInput(1, 1, "One-time"),
+			input:    newInput(1, 1, v1.OneTimeBackupType),
 			expected: true,
 		},
 		{
 			name:     "Unprocessed one-time backup",
-			input:    newInput(2, 1, "One-time"),
+			input:    newInput(2, 1, v1.OneTimeBackupType),
 			expected: false,
 		},
 		{
 			name:     "Recurring backup",
-			input:    newInput(1, 1, "Recurring"),
+			input:    newInput(1, 1, v1.RecurringBackupType),
 			expected: false,
 		},
 	}

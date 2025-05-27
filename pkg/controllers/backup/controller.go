@@ -110,7 +110,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		if backup.Spec.Schedule == "" { // one-time backup
 			// This means backup CR was updated from recurring to one-time, in which case observedGeneration needs to be updated
 			backup.Status.ObservedGeneration = backup.Generation
-			backup.Status.BackupType = "One-time"
+			backup.Status.BackupType = v1.OneTimeBackupType
 
 			logrus.Infof("Updating backup %s from recurring to one-time", backup.Name)
 			return h.backups.UpdateStatus(backup)
@@ -204,9 +204,9 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
 			after := nextBackupAt.Sub(time.Now())
 			h.backups.EnqueueAfter(backup.Name, after)
-			backup.Status.BackupType = "Recurring"
+			backup.Status.BackupType = v1.RecurringBackupType
 		} else {
-			backup.Status.BackupType = "One-time"
+			backup.Status.BackupType = v1.OneTimeBackupType
 		}
 		backup.Status.ObservedGeneration = backup.Generation
 		backup.Status.StorageLocation = storageLocationType

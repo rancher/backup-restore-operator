@@ -6,6 +6,11 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 )
 
+const (
+	OneTimeBackupType   = "One-time"
+	RecurringBackupType = "Recurring"
+)
+
 var (
 	BackupConditionReady        = "Ready"
 	BackupConditionUploaded     = "Uploaded"

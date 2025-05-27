@@ -122,7 +122,7 @@ func formatBackupMetadataMetrics(backups []backupv1.Backup) string {
 	var backupType, backupNextSnapshot, backupMessage string
 	for _, b := range backups {
 		backupType = b.Status.BackupType
-		if backupType == "One-time" {
+		if backupType == backupv1.OneTimeBackupType {
 			backupNextSnapshot = "N/A - One-time Backup"
 		} else {
 			backupNextSnapshot = b.Status.NextSnapshotAt
