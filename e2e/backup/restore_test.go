@@ -45,8 +45,8 @@ func formatRestoreMetadataMetrics(restores []backupv1.Restore) string {
 	var metrics string
 
 	rancherRestoreHeader := fmt.Sprint(`
-	# HELP rancher_restore Details on a specific Rancher Restore CR
-	# TYPE rancher_restore gauge
+	# HELP rancher_restore_info Details on a specific Rancher Restore CR
+	# TYPE rancher_restore_info gauge
 	`)
 
 	metrics += rancherRestoreHeader
@@ -58,7 +58,7 @@ func formatRestoreMetadataMetrics(restores []backupv1.Restore) string {
 		}
 
 		metrics += fmt.Sprintf(`
-		rancher_restore{fileName="%s",name="%s",prune="%t",restoreTime="%s",status="%s",storageLocation="%s"} 1
+		rancher_restore_info{fileName="%s",name="%s",prune="%t",restoreTime="%s",status="%s",storageLocation="%s"} 1
 		`, r.Spec.BackupFilename, r.Name, *r.Spec.Prune, r.Status.RestoreCompletionTS, restoreMessage, r.Status.BackupSource)
 	}
 
@@ -291,7 +291,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 				expected := formatRestoreMetadataMetrics(restores.Items)
 
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
-					"rancher_restore",
+					"rancher_restore_info",
 				)
 			}).Should(Succeed())
 		})

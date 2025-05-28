@@ -21,7 +21,7 @@ import (
 var (
 	backup = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "rancher_backup",
+			Name: "rancher_backup_info",
 			Help: "Details on a specific Rancher Backup CR",
 		}, []string{"name", "status", "resourceSetName", "retentionCount", "backupType", "filename", "storageLocation", "nextSnapshot", "lastSnapshot"},
 	)
@@ -35,36 +35,36 @@ var (
 
 	backupsAttempted = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "rancher_backups_attempted",
+			Name: "rancher_backups_attempted_total",
 			Help: "Number of Rancher Backups processed by this operator",
 		}, []string{"name"},
 	)
 
 	backupsFailed = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "rancher_backups_failed",
+			Name: "rancher_backups_failed_total",
 			Help: "Number of failed Rancher Backups processed by this operator",
 		}, []string{"name"},
 	)
 
 	backupDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "rancher_backup_duration_ms",
-			Help:    "Duration of each backup processed by this operator in ms",
-			Buckets: []float64{500, 1000, 2500, 5000, 7500, 10000, 30000, 60000, 120000},
+			Name:    "rancher_backup_duration_seconds",
+			Help:    "Duration of each backup processed by this operator in seconds",
+			Buckets: []float64{0.5, 1, 2.5, 5, 7.5, 10, 30, 60, 120},
 		}, []string{"name"},
 	)
 
 	backupLastProcessed = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "rancher_backup_last_processed",
+			Name: "rancher_backup_last_processed_timestamp_seconds",
 			Help: "Unix time of when the last Backup was processed (in seconds)",
 		}, []string{"name"},
 	)
 
 	restore = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "rancher_restore",
+			Name: "rancher_restore_info",
 			Help: "Details on a specific Rancher Restore CR",
 		}, []string{"name", "status", "fileName", "prune", "storageLocation", "restoreTime"},
 	)
@@ -145,9 +145,9 @@ func UpdateProcessedBackupMetrics(backup string, err *error) {
 	backupsFailed.WithLabelValues(backup)
 }
 
-func UpdateTimeSensitiveBackupMetrics(backup string, endTime int64, totalTime int64) {
-	backupDuration.WithLabelValues(backup).Observe(float64(totalTime))
-	backupLastProcessed.WithLabelValues(backup).Set(float64(endTime))
+func UpdateTimeSensitiveBackupMetrics(backup string, endTime float64, totalTime float64) {
+	backupDuration.WithLabelValues(backup).Observe(totalTime)
+	backupLastProcessed.WithLabelValues(backup).Set(endTime)
 }
 
 func StartRestoreMetricsCollection(
