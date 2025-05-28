@@ -90,19 +90,17 @@ monitoring:
     additionalLabels: {}
     metricRelabelings: []
     relabelings: []
-  
-  alerts:
-    enabled: false
 
-    ## Define custom alerting rules here.
-    ## The "BackupFailed" alert is included by default when .Values.monitoring.alerts.enabled is set to true and rancher-monitoring is installed.
-    alertingRules:
-    - alert: BackupFailed
-      expr: rancher_backup{status!~"Completed|"} > 0
-      for: 1m
-      keep_firing_for: 10m
+  prometheusRules:
+
+    ## The "BackupFailed" alert is included by default when .Values.monitoring.prometheusRules.defaultAlert.enabled is set to true and rancher-monitoring is installed.
+    defaultAlert:
+      enabled: false
       labels:
-          severity: critical
-      annotations:
-        summary: "Backup '{{ $labels.name }}' failed due to error: {{ $labels.status }}"
-        description: "The rancher-backup operator has failed to process the '{{ $labels.name }}' backup. Error: {{ $labels.status }}" 
+        severity: critical
+      window: 5m
+
+    ## Define custom Prometheus rules here.
+    customRules:
+      enabled: false
+      rules: []
