@@ -69,7 +69,7 @@ func TestValidateBackupSpecPass(t *testing.T) {
 }
 
 func TestBackupIsSingularAndComplete(t *testing.T) {
-	newInput := func(gen, obvgen int64, backupType string) *v1.Backup {
+	newInput := func(gen, obvgen int64, backupType v1.BackupType) *v1.Backup {
 		return &v1.Backup{
 			ObjectMeta: metav1.ObjectMeta{
 				Generation: gen,

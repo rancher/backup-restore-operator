@@ -82,8 +82,8 @@ func updateBackupMetrics(backups []v1.Backup) {
 	backupCount.Set(float64(count))
 
 	backup.Reset()
-
-	var backupType, backupNextSnapshot, backupMessage string
+	var backupType v1.BackupType
+	var backupNextSnapshot, backupMessage string
 	for _, b := range backups {
 		backupType = b.Status.BackupType
 		if backupType == v1.OneTimeBackupType {
@@ -101,7 +101,7 @@ func updateBackupMetrics(backups []v1.Backup) {
 			backupMessage,
 			b.Spec.ResourceSetName,
 			strconv.Itoa(int(b.Spec.RetentionCount)),
-			backupType,
+			string(backupType),
 			b.Status.Filename,
 			b.Status.StorageLocation,
 			backupNextSnapshot,

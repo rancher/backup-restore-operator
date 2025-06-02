@@ -6,9 +6,13 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 )
 
+// BackupType enforces the valid registration modes
+// +kubebuilder:validation:Enum=One-time;Recurring
+type BackupType string
+
 const (
-	OneTimeBackupType   = "One-time"
-	RecurringBackupType = "Recurring"
+	OneTimeBackupType   BackupType = "One-time"
+	RecurringBackupType BackupType = "Recurring"
 )
 
 var (
@@ -47,7 +51,7 @@ type BackupStatus struct {
 	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
 	ObservedGeneration int64                               `json:"observedGeneration"`
 	StorageLocation    string                              `json:"storageLocation"`
-	BackupType         string                              `json:"backupType"`
+	BackupType         BackupType                          `json:"backupType"`
 	Filename           string                              `json:"filename"`
 	Summary            string                              `json:"summary"`
 }
