@@ -15,7 +15,6 @@ import (
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rancher/backup-restore-operator/e2e/test"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/wrangler/v3/pkg/condition"
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -71,12 +70,12 @@ func isRestoreSuccessful(b *backupv1.Restore) error {
 		return err
 	}
 
-	if !condition.Cond(backupv1.RestoreConditionReady).IsTrue(bD) {
-		message := condition.Cond(backupv1.RestoreConditionReady).GetMessage(bD)
+	if !backupv1.RestoreConditionReady.IsTrue(bD) {
+		message := backupv1.RestoreConditionReady.GetMessage(bD)
 		return fmt.Errorf("backup %s did not upload %s", b.Name, message)
 	}
 
-	message := strings.ToLower(strings.TrimSpace(condition.Cond(backupv1.RestoreConditionReady).GetMessage(bD)))
+	message := strings.ToLower(strings.TrimSpace(backupv1.RestoreConditionReady.GetMessage(bD)))
 	if message != "completed" {
 		return fmt.Errorf("The restore was not eventually completed : %s", message)
 	}
