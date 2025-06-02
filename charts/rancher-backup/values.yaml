@@ -55,6 +55,7 @@ global:
   kubectl:
     repository: rancher/kuberlr-kubectl
     tag: v4.0.2
+    allowDownload: false
 
 ## Node labels for pod assignment
 ## Ref: https://kubernetes.io/docs/user-guide/node-selection/
