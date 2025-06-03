@@ -356,6 +356,14 @@ var suite = test.Suite{
 					},
 				),
 		},
+		{
+			Name: "Disable securityContext.runAsNonRoot",
+
+			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
+				SetValue(
+					"securityContext.runAsNonRoot", "false",
+				),
+		},
 	},
 
 	NamedChecks: []test.NamedCheck{
@@ -793,6 +801,7 @@ var suite = test.Suite{
 				}),
 			},
 		},
+<<<<<<< HEAD
 		{ // With prometheus-rules
 			Name: "With prometheus-rules",
 
@@ -827,6 +836,34 @@ var suite = test.Suite{
 						assert.Equal(tc.T, pr.Name, DefaultReleaseName, "PrometheusRule %s/%s has incorrect name configuration", pr.Namespace, pr.Name)
 						assert.Equal(tc.T, pr.Spec.Groups[0].Rules[0].Record, customRule.Record, "PrometheusRule %s/%s rule has incorrect record. Found %s expected %s", pr.Namespace, pr.Name, pr.Spec.Groups[0].Rules[0].Record, customRule.Record)
 						assert.Equal(tc.T, pr.Spec.Groups[0].Rules[0].Expr.StrVal, customRule.Expr.StrVal, "PrometheusRule %s/%s rule has incorrect expression. Found %s expected %s", pr.Namespace, pr.Name, pr.Spec.Groups[0].Rules[0].Expr.StrVal, customRule.Expr.StrVal)
+=======
+		{ // Set runAsNonRoot
+			Name: "Set runAsNonRoot",
+
+			Covers: []string{
+				".Values.securityContext.runAsNonRoot",
+			},
+
+			Checks: test.Checks{
+				checker.PerWorkload(func(tc *checker.TestContext, obj metav1.Object, podTemplateSpec corev1.PodTemplateSpec) {
+					runAsNonRoot := checker.MustRenderValue[bool](tc, ".Values.securityContext.runAsNonRoot")
+
+					rootUser := int64(0)
+					nonRootUser := int64(1000)
+
+					for _, container := range podTemplateSpec.Spec.Containers {
+						if !strings.Contains(container.Name, "patch-sa") {
+							assert.Equal(tc.T, container.SecurityContext.RunAsNonRoot, &runAsNonRoot, "container %s in Deployment %s/%s does not have correct securityContext", container.Name, obj.GetNamespace(), obj.GetName())
+
+							if runAsNonRoot {
+								assert.Equal(tc.T, container.SecurityContext.RunAsUser, &nonRootUser, "container %s in Deployment %s/%s does not have correct securityContext.runAsUser", container.Name, obj.GetNamespace(), obj.GetName())
+								assert.Equal(tc.T, container.SecurityContext.RunAsGroup, &nonRootUser, "container %s in Deployment %s/%s does not have correct securityContext.runAsGroup", container.Name, obj.GetNamespace(), obj.GetName())
+							} else {
+								assert.Equal(tc.T, container.SecurityContext.RunAsUser, &rootUser, "container %s in Deployment %s/%s does not have correct securityContext.runAsUser", container.Name, obj.GetNamespace(), obj.GetName())
+								assert.Equal(tc.T, container.SecurityContext.RunAsGroup, &rootUser, "container %s in Deployment %s/%s does not have correct securityContext.runAsGroup", container.Name, obj.GetNamespace(), obj.GetName())
+							}
+						}
+>>>>>>> 33f32d3 (Add hull tests)
 					}
 				}),
 			},
