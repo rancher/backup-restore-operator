@@ -12,4 +12,5 @@ RUN ./scripts/build
 
 FROM registry.suse.com/bci/bci-micro:latest
 COPY --from=builder /usr/src/app/bin/backup-restore-operator  /usr/bin/
+USER 1000:1000
 ENTRYPOINT ["backup-restore-operator"]
