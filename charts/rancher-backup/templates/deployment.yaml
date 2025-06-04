@@ -41,16 +41,7 @@ spec:
         image: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag }}
         imagePullPolicy: {{ default "Always" .Values.imagePullPolicy }}
         securityContext:
-          allowPrivilegeEscalation: false
-        {{- if .Values.securityContext.runAsNonRoot }}
-          runAsNonRoot: true
-          runAsUser: 1000
-          runAsGroup: 1000
-        {{- else }}
-          runAsNonRoot: false
-          runAsUser: 0
-          runAsGroup: 0
-        {{- end }}
+          {{- include "securityContext" . | nindent 10 }}
         ports:
         - containerPort: 8080
         args:

@@ -801,7 +801,6 @@ var suite = test.Suite{
 				}),
 			},
 		},
-<<<<<<< HEAD
 		{ // With prometheus-rules
 			Name: "With prometheus-rules",
 
@@ -836,7 +835,10 @@ var suite = test.Suite{
 						assert.Equal(tc.T, pr.Name, DefaultReleaseName, "PrometheusRule %s/%s has incorrect name configuration", pr.Namespace, pr.Name)
 						assert.Equal(tc.T, pr.Spec.Groups[0].Rules[0].Record, customRule.Record, "PrometheusRule %s/%s rule has incorrect record. Found %s expected %s", pr.Namespace, pr.Name, pr.Spec.Groups[0].Rules[0].Record, customRule.Record)
 						assert.Equal(tc.T, pr.Spec.Groups[0].Rules[0].Expr.StrVal, customRule.Expr.StrVal, "PrometheusRule %s/%s rule has incorrect expression. Found %s expected %s", pr.Namespace, pr.Name, pr.Spec.Groups[0].Rules[0].Expr.StrVal, customRule.Expr.StrVal)
-=======
+					}
+				}),
+			},
+		},
 		{ // Set runAsNonRoot
 			Name: "Set runAsNonRoot",
 
@@ -863,7 +865,6 @@ var suite = test.Suite{
 								assert.Equal(tc.T, container.SecurityContext.RunAsGroup, &rootUser, "container %s in Deployment %s/%s does not have correct securityContext.runAsGroup", container.Name, obj.GetNamespace(), obj.GetName())
 							}
 						}
->>>>>>> 33f32d3 (Add hull tests)
 					}
 				}),
 			},
