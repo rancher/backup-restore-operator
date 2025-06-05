@@ -83,27 +83,27 @@ func formatBackupMetrics(backups []string) string {
 	metrics += fmt.Sprintf("rancher_backup_count %d", len(backups))
 
 	rancherBackupsAttemptedHeader := fmt.Sprint(`
-	# HELP rancher_backups_attempted Number of Rancher Backups processed by this operator
-	# TYPE rancher_backups_attempted counter
+	# HELP rancher_backups_attempted_total Number of Rancher Backups processed by this operator
+	# TYPE rancher_backups_attempted_total counter
 	`)
 
 	metrics += rancherBackupsAttemptedHeader
 	for _, b := range backups {
 		if b == s3Recurring {
-			metrics += fmt.Sprintf("rancher_backups_attempted{name=\"%s\"} 2\n", b)
+			metrics += fmt.Sprintf("rancher_backups_attempted_total{name=\"%s\"} 2\n", b)
 		} else {
-			metrics += fmt.Sprintf("rancher_backups_attempted{name=\"%s\"} 1\n", b)
+			metrics += fmt.Sprintf("rancher_backups_attempted_total{name=\"%s\"} 1\n", b)
 		}
 	}
 
 	rancherBackupsFailedHeader := fmt.Sprint(`
-	# HELP rancher_backups_failed Number of failed Rancher Backups processed by this operator
-	# TYPE rancher_backups_failed counter
+	# HELP rancher_backups_failed_total Number of failed Rancher Backups processed by this operator
+	# TYPE rancher_backups_failed_total counter
 	`)
 
 	metrics += rancherBackupsFailedHeader
 	for _, b := range backups {
-		metrics += fmt.Sprintf("rancher_backups_failed{name=\"%s\"} 0\n", b)
+		metrics += fmt.Sprintf("rancher_backups_failed_total{name=\"%s\"} 0\n", b)
 	}
 
 	return metrics + "\n"
@@ -113,8 +113,8 @@ func formatBackupMetadataMetrics(backups []backupv1.Backup) string {
 	var metrics string
 
 	rancherBackupHeader := fmt.Sprint(`
-	# HELP rancher_backup Details on a specific Rancher Backup CR
-	# TYPE rancher_backup gauge
+	# HELP rancher_backup_info Details on a specific Rancher Backup CR
+	# TYPE rancher_backup_info gauge
 	`)
 
 	metrics += rancherBackupHeader
@@ -133,7 +133,7 @@ func formatBackupMetadataMetrics(backups []backupv1.Backup) string {
 		}
 
 		metrics += fmt.Sprintf(`
-		rancher_backup{backupType="%s",filename="%s",lastSnapshot="%s",name="%s",nextSnapshot="%s",resourceSetName="%s",retentionCount="%d",status="%s",storageLocation="%s"} 1
+		rancher_backup_info{backupType="%s",filename="%s",lastSnapshot="%s",name="%s",nextSnapshot="%s",resourceSetName="%s",retentionCount="%d",status="%s",storageLocation="%s"} 1
 		`, backupType, b.Status.Filename, b.Status.LastSnapshotTS, b.Name, backupNextSnapshot, b.Spec.ResourceSetName, b.Spec.RetentionCount, backupMessage, b.Status.StorageLocation)
 	}
 
@@ -248,8 +248,8 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
 					"rancher_backup_count",
-					"rancher_backups_attempted",
-					"rancher_backups_failed",
+					"rancher_backups_attempted_total",
+					"rancher_backups_failed_total",
 				)
 			}).Should(Succeed())
 		})
@@ -293,8 +293,8 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
 					"rancher_backup_count",
-					"rancher_backups_attempted",
-					"rancher_backups_failed",
+					"rancher_backups_attempted_total",
+					"rancher_backups_failed_total",
 				)
 			}).Should(Succeed())
 		})
@@ -379,8 +379,8 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
 					"rancher_backup_count",
-					"rancher_backups_attempted",
-					"rancher_backups_failed",
+					"rancher_backups_attempted_total",
+					"rancher_backups_failed_total",
 				)
 			}).Should(Succeed())
 		})
@@ -452,8 +452,8 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
 					"rancher_backup_count",
-					"rancher_backups_attempted",
-					"rancher_backups_failed",
+					"rancher_backups_attempted_total",
+					"rancher_backups_failed_total",
 				)
 			}).Should(Succeed())
 		})
@@ -528,8 +528,8 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
 					"rancher_backup_count",
-					"rancher_backups_attempted",
-					"rancher_backups_failed",
+					"rancher_backups_attempted_total",
+					"rancher_backups_failed_total",
 				)
 			}).Should(Succeed())
 		})
@@ -566,7 +566,7 @@ var _ = Describe("Backup e2e remote", Ordered, Label("integration"), func() {
 				expected := formatBackupMetadataMetrics(backups.Items)
 
 				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
-					"rancher_backup",
+					"rancher_backup_info",
 				)
 			}).Should(Succeed())
 		})

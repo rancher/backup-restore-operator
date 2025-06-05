@@ -90,3 +90,17 @@ monitoring:
     additionalLabels: {}
     metricRelabelings: []
     relabelings: []
+
+  prometheusRules:
+
+    ## The "BackupFailed" alert is included by default when .Values.monitoring.prometheusRules.defaultAlert.enabled is set to true and rancher-monitoring is installed.
+    defaultAlert:
+      enabled: false
+      labels:
+        severity: critical
+      window: 5m
+
+    ## Define custom Prometheus rules here.
+    customRules:
+      enabled: false
+      rules: []

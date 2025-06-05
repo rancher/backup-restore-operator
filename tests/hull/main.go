@@ -1,6 +1,7 @@
 package hull
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var ChartPath = utils.MustGetPathFromModuleRoot("..", "dist", "artifacts", GetChartVersionFromEnv())
@@ -316,6 +318,40 @@ var suite = test.Suite{
 					"monitoring.serviceMonitor.relabelings", []map[string]string{
 						map[string]string{
 							"action": "replace",
+						},
+					},
+				),
+		},
+		{
+			Name: "Enable default alert",
+
+			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
+				SetValue(
+					"monitoring.prometheusRules.defaultAlert.enabled", "true",
+				).
+				SetValue(
+					"monitoring.prometheusRules.defaultAlert.window", "5m",
+				).
+				Set(
+					"monitoring.prometheusRules.defaultAlert.labels", []map[string]string{
+						map[string]string{
+							"severity": "critical",
+						},
+					},
+				),
+		},
+		{
+			Name: "Enable custom prometheus-rule",
+
+			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
+				SetValue(
+					"monitoring.prometheusRules.customRules.enabled", "true",
+				).
+				Set(
+					"monitoring.prometheusRules.customRules.rules", []map[string]string{
+						map[string]string{
+							"record": "test_record",
+							"expr":   "rancher_backups_test_record",
 						},
 					},
 				),
@@ -753,6 +789,44 @@ var suite = test.Suite{
 						assert.Contains(tc.T, sm.Labels, smAdditionalLabels, "ServiceMonitor %s/%s does not contain the additional labels set ", sm.Namespace, sm.Name)
 						assert.Equal(tc.T, sm.Spec.Endpoints[0].RelabelConfigs, relabelings, "ServiceMonitor %s/%s has relabel name configuration", sm.Namespace, sm.Name)
 						assert.Equal(tc.T, sm.Spec.Endpoints[0].MetricRelabelConfigs, metricRelabelings, "ServiceMonitor %s/%s has relabel name configuration", sm.Namespace, sm.Name)
+					}
+				}),
+			},
+		},
+		{ // With prometheus-rules
+			Name: "With prometheus-rules",
+
+			Covers: []string{
+				".Values.monitoring.prometheusRules.customRules.enabled",
+				".Values.monitoring.prometheusRules.customRules.rules",
+				".Values.monitoring.prometheusRules.defaultAlert.enabled",
+				".Values.monitoring.prometheusRules.defaultAlert.labels",
+				".Values.monitoring.prometheusRules.defaultAlert.window",
+			},
+			Checks: test.Checks{
+				checker.PerResource[*monitoringv1.PrometheusRule](func(tc *checker.TestContext, pr *monitoringv1.PrometheusRule) {
+					defaultAlertEnabled := checker.MustRenderValue[bool](tc, ".Values.monitoring.prometheusRules.defaultAlert.enabled")
+					defaultAlertWindow := checker.MustRenderValue[string](tc, ".Values.monitoring.prometheusRules.defaultAlert.window")
+					defaultAlertLabels := checker.MustRenderValue[map[string]string](tc, ".Values.monitoring.prometheusRules.defaultAlert.labels")
+
+					defaultAlertQuery := fmt.Sprintf("(sum(rate(status:rancher_backups_attempted_total[%s])) by (status) / (sum(rate(status:rancher_backups_attempted_total[%s])) by (status) - sum(rate(status:rancher_backups_failed_total[%s])) by (status))) > 1", defaultAlertWindow, defaultAlertWindow, defaultAlertWindow)
+
+					if defaultAlertEnabled {
+						assert.Equal(tc.T, pr.Name, DefaultReleaseName, "PrometheusRule %s/%s has incorrect name configuration", pr.Namespace, pr.Name)
+						assert.Equal(tc.T, pr.Spec.Groups[0].Rules[2].Expr, defaultAlertQuery, "PrometheusRule %s/%s has a wrong query window. Expected %s", pr.Namespace, pr.Name, defaultAlertWindow)
+						assert.Equal(tc.T, pr.Spec.Groups[0].Labels, defaultAlertLabels, "PrometheusRule %s/%s has wrong label configuration", pr.Namespace, pr.Name)
+					}
+
+					customRulesEnabled := checker.MustRenderValue[bool](tc, ".Values.monitoring.prometheusRules.customRules.enabled")
+					if customRulesEnabled {
+						customRule := monitoringv1.Rule{
+							Expr:   intstr.IntOrString{StrVal: "rancher_backups_test_record"},
+							Record: "test_record",
+						}
+
+						assert.Equal(tc.T, pr.Name, DefaultReleaseName, "PrometheusRule %s/%s has incorrect name configuration", pr.Namespace, pr.Name)
+						assert.Equal(tc.T, pr.Spec.Groups[0].Rules[0].Record, customRule.Record, "PrometheusRule %s/%s rule has incorrect record. Found %s expected %s", pr.Namespace, pr.Name, pr.Spec.Groups[0].Rules[0].Record, customRule.Record)
+						assert.Equal(tc.T, pr.Spec.Groups[0].Rules[0].Expr.StrVal, customRule.Expr.StrVal, "PrometheusRule %s/%s rule has incorrect expression. Found %s expected %s", pr.Namespace, pr.Name, pr.Spec.Groups[0].Rules[0].Expr.StrVal, customRule.Expr.StrVal)
 					}
 				}),
 			},
