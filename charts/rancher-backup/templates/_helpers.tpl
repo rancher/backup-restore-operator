@@ -85,3 +85,22 @@ Create PVC name using release and revision number, unless a volumeName is given.
 {{- end }}
 {{- end }}
 
+{{/*
+Run as user 1000 unless runAsNonRoot is set to false
+*/}}
+{{- define "runAs" -}}
+{{- if .Values.securityContext.runAsNonRoot }}
+runAsUser: 1000
+runAsGroup: 1000
+{{- else }}
+runAsUser: 0
+runAsGroup: 0
+{{- end }}
+{{- end }}
+
+{{- define "securityContext" -}}
+allowPrivilegeEscalation: false
+runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+{{- include "runAs" . }}
+{{- end }}
+

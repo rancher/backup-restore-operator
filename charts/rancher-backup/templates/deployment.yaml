@@ -24,6 +24,10 @@ spec:
         prometheus.io/scrape: "true"
         {{ end }}
     spec:
+      {{- if .Values.securityContext.runAsNonRoot }}
+      securityContext:
+        fsGroup: 1000
+      {{- end }}
       serviceAccountName: {{ include "backupRestore.serviceAccountName" . }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -36,6 +40,8 @@ spec:
       - name: {{ .Chart.Name }}
         image: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag }}
         imagePullPolicy: {{ default "Always" .Values.imagePullPolicy }}
+        securityContext:
+          {{- include "securityContext" . | nindent 10 }}
         ports:
         - containerPort: 8080
         args:
