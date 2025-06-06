@@ -70,6 +70,10 @@ spec:
         - name: METRICS_SERVER
           value: "true"
           {{ end }}
+          {{- if .Values.monitoring.metrics.enabled }}
+        - name: BACKUP_DURATION_BUCKETS
+          value: {{ .Values.monitoring.metrics.rancherBackupDurationBuckets }}
+          {{ end }}
           {{- if .Values.persistence.enabled }}
         - name: DEFAULT_PERSISTENCE_ENABLED
           value: "persistence-enabled"
@@ -80,7 +84,7 @@ spec:
         - name: pv-storage
           persistentVolumeClaim:
             claimName: {{ include "backupRestore.pvcName" . }}
-          {{- end }} 
+          {{- end }}
       nodeSelector: {{ include "linux-node-selector" . | nindent 8 }}
 {{- if .Values.nodeSelector }}
 {{ toYaml .Values.nodeSelector | indent 8 }}

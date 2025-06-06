@@ -3,7 +3,9 @@ package monitoring
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +21,8 @@ import (
 )
 
 var (
+	defaultRancherBackupDurationBuckets = []float64{0.5, 1, 2.5, 5, 7.5, 10, 30, 60, 120}
+
 	backup = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "rancher_backup_info",
@@ -47,13 +51,7 @@ var (
 		}, []string{"name"},
 	)
 
-	backupDuration = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "rancher_backup_duration_seconds",
-			Help:    "Duration of each backup processed by this operator in seconds",
-			Buckets: []float64{0.5, 1, 2.5, 5, 7.5, 10, 30, 60, 120},
-		}, []string{"name"},
-	)
+	backupDuration *prometheus.HistogramVec
 
 	backupLastProcessed = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -76,6 +74,32 @@ var (
 		},
 	)
 )
+
+func init() {
+	buckets := defaultRancherBackupDurationBuckets
+	rancherBackupDurationBuckets := os.Getenv("BACKUP_DURATION_BUCKETS")
+
+	if rancherBackupDurationBuckets != "" {
+		buckets = []float64{}
+		for _, b := range strings.Split(rancherBackupDurationBuckets, ",") {
+			f, err := strconv.ParseFloat(strings.TrimSpace(b), 64)
+			if err != nil {
+				logrus.Errorf("Failed to parse backup duration bucket '%s': %v", b, err)
+				return
+			}
+			buckets = append(buckets, f)
+		}
+	}
+
+	logrus.Debugf("Backup duration buckets: %v", buckets)
+	backupDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rancher_backup_duration_seconds",
+			Help:    "Duration of each backup processed by this operator in seconds",
+			Buckets: buckets,
+		}, []string{"name"},
+	)
+}
 
 func updateBackupMetrics(backups []v1.Backup) {
 	count := len(backups)
