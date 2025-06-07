@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/backup-restore-operator/pkg/resourcesets"
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
-	"github.com/rancher/wrangler/v3/pkg/condition"
 	v1core "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	"github.com/robfig/cron/v3"
@@ -94,6 +93,12 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if backup == nil || backup.DeletionTimestamp != nil {
 		return backup, nil
 	}
+
+	// skips if the backup is singular and already processed
+	if backupIsSingularAndComplete(backup) {
+		logrus.Debugf("Backup %s has already been processed, skipping it", backup.Name)
+		return backup, nil
+	}
 	logrus.Infof("Processing backup %v", backup.Name)
 
 	if err = h.validateBackupSpec(backup); err != nil {
@@ -101,24 +106,13 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 
 	if backup.Status.LastSnapshotTS != "" {
-		if backup.Spec.Schedule == "" {
-			// Backup CR was meant for one-time backup, and the backup has been completed. Probably here from UpdateStatus call
-			logrus.Infof("Backup CR %v has been processed for one-time backup, returning", backup.Name)
-			// This could also mean backup CR was updated from recurring to one-time, in which case observedGeneration needs to be updated
-			updBackupStatus := false
-			if backup.Generation != backup.Status.ObservedGeneration {
-				backup.Status.ObservedGeneration = backup.Generation
-				updBackupStatus = true
-			}
-			// check if the backup-type needs to be changed too
-			if backup.Status.BackupType != "One-time" {
-				backup.Status.BackupType = "One-time"
-				updBackupStatus = true
-			}
-			if updBackupStatus {
-				return h.backups.UpdateStatus(backup)
-			}
-			return backup, nil
+		if backup.Spec.Schedule == "" { // one-time backup
+			// This means backup CR was updated from recurring to one-time, in which case observedGeneration needs to be updated
+			backup.Status.ObservedGeneration = backup.Generation
+			backup.Status.BackupType = v1.OneTimeBackupType
+
+			logrus.Infof("Updating backup %s from recurring to one-time", backup.Name)
+			return h.backups.UpdateStatus(backup)
 		}
 		if backup.Status.NextSnapshotAt != "" {
 			currTime := time.Now().Format(time.RFC3339)
@@ -199,9 +193,9 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		// reset conditions to remove the reconciling condition, because as per kstatus lib its presence is considered an error
 		backup.Status.Conditions = []genericcondition.GenericCondition{}
 
-		condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
-		condition.Cond(v1.BackupConditionReady).Message(backup, "Completed")
-		condition.Cond(v1.BackupConditionUploaded).SetStatusBool(backup, true)
+		v1.BackupConditionReady.SetStatusBool(backup, true)
+		v1.BackupConditionReady.Message(backup, "Completed")
+		v1.BackupConditionUploaded.SetStatusBool(backup, true)
 
 		backup.Status.LastSnapshotTS = time.Now().Format(time.RFC3339)
 		if cronSchedule != nil {
@@ -209,9 +203,9 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
 			after := nextBackupAt.Sub(time.Now())
 			h.backups.EnqueueAfter(backup.Name, after)
-			backup.Status.BackupType = "Recurring"
+			backup.Status.BackupType = v1.RecurringBackupType
 		} else {
-			backup.Status.BackupType = "One-time"
+			backup.Status.BackupType = v1.OneTimeBackupType
 		}
 		backup.Status.ObservedGeneration = backup.Generation
 		backup.Status.StorageLocation = storageLocationType
@@ -286,7 +280,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		return err
 	}
 
-	condition.Cond(v1.BackupConditionReady).SetStatusBool(backup, true)
+	v1.BackupConditionReady.SetStatusBool(backup, true)
 
 	gzipFile := backupFileName + ".tar.gz"
 	if backup.Spec.EncryptionConfigSecretName != "" {
@@ -343,8 +337,8 @@ func (h *handler) generateBackupFilename(backup *v1.Backup) (string, error) {
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) (*v1.Backup, error) {
-	if !condition.Cond(v1.BackupConditionReconciling).IsUnknown(backup) && condition.Cond(v1.BackupConditionReconciling).GetReason(backup) == "Error" {
-		reconcileMsg := condition.Cond(v1.BackupConditionReconciling).GetMessage(backup)
+	if !v1.BackupConditionReconciling.IsUnknown(backup) && v1.BackupConditionReconciling.GetReason(backup) == "Error" {
+		reconcileMsg := v1.BackupConditionReconciling.GetMessage(backup)
 		if strings.Contains(reconcileMsg, originalErr.Error()) {
 			// no need to update object status again, because if another UpdateStatus is called without needing it, controller will
 			// process the same object immediately without its default backoff
@@ -358,9 +352,9 @@ func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) 
 			return err
 		}
 
-		condition.Cond(v1.BackupConditionReconciling).SetStatusBool(updBackup, true)
-		condition.Cond(v1.BackupConditionReconciling).SetError(updBackup, "", originalErr)
-		condition.Cond(v1.BackupConditionReady).Message(updBackup, "Retrying")
+		v1.BackupConditionReconciling.SetStatusBool(updBackup, true)
+		v1.BackupConditionReconciling.SetError(updBackup, "", originalErr)
+		v1.BackupConditionReady.Message(updBackup, "Retrying")
 
 		_, err = h.backups.UpdateStatus(updBackup)
 		return err
@@ -369,4 +363,9 @@ func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) 
 		return backup, errors.New(originalErr.Error() + err.Error())
 	}
 	return backup, originalErr
+}
+
+// backupIsSingularAndComplete checks if the backup is a one-time backup and has not been modified
+func backupIsSingularAndComplete(backup *v1.Backup) bool {
+	return backup.Status.BackupType == "One-time" && backup.Generation == backup.Status.ObservedGeneration
 }

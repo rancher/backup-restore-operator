@@ -20,7 +20,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/rancher/backup-restore-operator/e2e/test"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/wrangler/v3/pkg/condition"
 	"github.com/samber/lo"
 	"github.com/testcontainers/testcontainers-go"
 	corev1 "k8s.io/api/core/v1"
@@ -52,8 +51,8 @@ func isBackupSuccessul(b *backupv1.Backup) error {
 		return err
 	}
 
-	if !condition.Cond(backupv1.BackupConditionUploaded).IsTrue(bD) {
-		message := condition.Cond(backupv1.BackupConditionReady).GetMessage(bD)
+	if !backupv1.BackupConditionUploaded.IsTrue(bD) {
+		message := backupv1.BackupConditionReady.GetMessage(bD)
 		return fmt.Errorf("backup %s did not upload %s", b.Name, message)
 	}
 	return nil
@@ -118,11 +117,11 @@ func formatBackupMetadataMetrics(backups []backupv1.Backup) string {
 	`)
 
 	metrics += rancherBackupHeader
-
-	var backupType, backupNextSnapshot, backupMessage string
+	var backupType backupv1.BackupType
+	var backupNextSnapshot, backupMessage string
 	for _, b := range backups {
 		backupType = b.Status.BackupType
-		if backupType == "One-time" {
+		if backupType == backupv1.OneTimeBackupType {
 			backupNextSnapshot = "N/A - One-time Backup"
 		} else {
 			backupNextSnapshot = b.Status.NextSnapshotAt
