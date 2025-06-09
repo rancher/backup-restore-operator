@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/client-go/discovery"
@@ -126,14 +127,14 @@ func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv
 	gvr := gv.WithResource(res.Name)
 	dr := h.DynamicClient.Resource(gvr)
 
-	// only resources that match name+namespace+label combination will be backed up, so we can filter in any order
+	// only resources that match name+namespace and label/field selector combination will be backed up, so we can filter in any order
 	// however, in practice filtering by label happens at an API level when we paginate the resources (creating our initial list)
-	filteredByLabel, err := h.filterByLabel(ctx, dr, filter)
+	resourcesFromAPIServer, err := h.fetchResourcesFromAPIServer(ctx, dr, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	filteredByName, err := h.filterByName(filter, filteredByLabel.Items)
+	filteredByName, err := h.filterByName(filter, resourcesFromAPIServer.Items)
 	if err != nil {
 		return nil, err
 	}
@@ -144,9 +145,10 @@ func (h *ResourceHandler) gatherObjectsForResource(ctx context.Context, res k8sv
 	return filteredByName, nil
 }
 
-// filterByLabel actually uses a label selector to fetch, unroll, and return the initial list of objects
-func (h *ResourceHandler) filterByLabel(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector) (*unstructured.UnstructuredList, error) {
+// fetchResourcesFromAPIServer uses a label selector and/or field selector from the ResourceSelector to fetch, unroll, and return the initial list of objects
+func (h *ResourceHandler) fetchResourcesFromAPIServer(ctx context.Context, dr dynamic.ResourceInterface, filter v1.ResourceSelector) (*unstructured.UnstructuredList, error) {
 	var labelSelector string
+	var fieldSelector string
 
 	if filter.LabelSelectors != nil {
 		selector, err := k8sv1.LabelSelectorAsSelector(filter.LabelSelectors)
@@ -157,7 +159,12 @@ func (h *ResourceHandler) filterByLabel(ctx context.Context, dr dynamic.Resource
 		logrus.Debugf("Listing objects using label selector %v", labelSelector)
 	}
 
-	return unrollPaginatedListResult(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector})
+	if filter.FieldSelectors != nil {
+		fieldSelector = fields.SelectorFromSet(filter.FieldSelectors).String()
+		logrus.Debugf("Listing objects using field selector %v", fieldSelector)
+	}
+
+	return unrollPaginatedListResult(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector, FieldSelector: fieldSelector})
 }
 
 func (h *ResourceHandler) filterByKind(filter v1.ResourceSelector, apiResources []k8sv1.APIResource) ([]k8sv1.APIResource, error) {

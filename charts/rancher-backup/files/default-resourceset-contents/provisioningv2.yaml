@@ -13,7 +13,7 @@
   kindsRegexp: "."
 - apiVersion: "v1"
   kindsRegexp: "^secrets$"
-  resourceNameRegexp: "machine-plan$|rke-state$|machine-state$|machine-driver-secret$|machine-provision$|^harvesterconfig|^registryconfig-auth"
+  resourceNameRegexp: "machine-driver-secret$|machine-provision$|^harvesterconfig|^registryconfig-auth"
   namespaces:
   - "fleet-default"
 - apiVersion: "v1"
@@ -21,3 +21,21 @@
   resourceNames:
     - "provisioning-log"
   namespaceRegexp: "^c-m-"
+- apiVersion: "v1"
+  kindsRegexp: "^secrets$"
+  namespaces:
+   - "fleet-default"
+  fieldSelectors:
+    "type": "rke.cattle.io/machine-plan"
+- apiVersion: "v1"
+  kindsRegexp: "^secrets$"
+  namespaces:
+   - "fleet-default"
+  fieldSelectors:
+    "type": "rke.cattle.io/cluster-state"
+- apiVersion: "v1"
+  kindsRegexp: "^secrets$"
+  namespaces:
+   - "fleet-default"
+  fieldSelectors:
+    "type": "rke.cattle.io/machine-state"
