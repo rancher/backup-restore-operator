@@ -288,6 +288,9 @@ var suite = test.Suite{
 				SetValue(
 					"monitoring.metrics.enabled", "true",
 				).
+				Set(
+					"monitoring.metrics.rancherBackupDurationBuckets", "1.5,5,12.5,20,50,100",
+				).
 				SetValue(
 					"monitoring.serviceMonitor.enabled", "false",
 				),
@@ -748,6 +751,7 @@ var suite = test.Suite{
 
 			Covers: []string{
 				".Values.monitoring.metrics.enabled",
+				".Values.monitoring.metrics.rancherBackupDurationBuckets",
 				".Values.monitoring.serviceMonitor.enabled",
 				".Values.monitoring.serviceMonitor.additionalLabels",
 				".Values.monitoring.serviceMonitor.metricRelabelings",
@@ -759,10 +763,19 @@ var suite = test.Suite{
 					if metricsServer == "" {
 						return
 					}
+					rancherBackupDurationBuckets, _ := checker.RenderValue[string](tc, ".Values.monitoring.metrics.rancherBackupDurationBuckets")
+					if rancherBackupDurationBuckets == "" {
+						return
+					}
 					envVar := []corev1.EnvVar([]corev1.EnvVar{
 						corev1.EnvVar{
 							Name:      "METRICS_SERVER",
 							Value:     metricsServer,
+							ValueFrom: (*corev1.EnvVarSource)(nil),
+						},
+						corev1.EnvVar{
+							Name:      "BACKUP_DURATION_BUCKETS",
+							Value:     rancherBackupDurationBuckets,
 							ValueFrom: (*corev1.EnvVarSource)(nil),
 						},
 					})

@@ -83,6 +83,7 @@ imagePullSecrets: []
 monitoring:
   metrics:
     enabled: false
+    rancherBackupDurationBuckets: 0.5, 1, 2.5, 5, 7.5, 10, 30, 60, 120
 
   serviceMonitor:
     enabled: false
