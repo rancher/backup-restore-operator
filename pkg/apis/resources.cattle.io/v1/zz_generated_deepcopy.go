@@ -24,6 +24,7 @@ package v1
 import (
 	genericcondition "github.com/rancher/wrangler/v3/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	fields "k8s.io/apimachinery/pkg/fields"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -168,6 +169,13 @@ func (in *ResourceSelector) DeepCopyInto(out *ResourceSelector) {
 		in, out := &in.LabelSelectors, &out.LabelSelectors
 		*out = new(metav1.LabelSelector)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.FieldSelectors != nil {
+		in, out := &in.FieldSelectors, &out.FieldSelectors
+		*out = make(fields.Set, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 	if in.ExcludeKinds != nil {
 		in, out := &in.ExcludeKinds, &out.ExcludeKinds
