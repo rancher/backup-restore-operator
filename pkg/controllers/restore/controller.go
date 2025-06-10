@@ -14,7 +14,6 @@ import (
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 	lasso "github.com/rancher/lasso/pkg/client"
-	"github.com/rancher/wrangler/v3/pkg/condition"
 	v1core "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	"github.com/rancher/wrangler/v3/pkg/slice"
@@ -285,8 +284,8 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 		// reset conditions to remove the reconciling condition, because as per kstatus lib its presence is considered an error
 		restore.Status.Conditions = []genericcondition.GenericCondition{}
-		condition.Cond(v1.RestoreConditionReady).SetStatusBool(restore, true)
-		condition.Cond(v1.RestoreConditionReady).Message(restore, "Completed")
+		v1.RestoreConditionReady.SetStatusBool(restore, true)
+		v1.RestoreConditionReady.Message(restore, "Completed")
 
 		restore.Status.RestoreCompletionTS = time.Now().Format(time.RFC3339)
 		restore.Status.ObservedGeneration = restore.Generation
@@ -808,8 +807,8 @@ func getGVR(resourceGVR string) schema.GroupVersionResource {
 // https://github.com/kubernetes-sigs/cli-utils/tree/master/pkg/kstatus
 // Reconciling and Stalled conditions are present and with a value of true whenever something unusual happens.
 func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error) (*v1.Restore, error) {
-	if !condition.Cond(v1.RestoreConditionReconciling).IsUnknown(restore) && condition.Cond(v1.RestoreConditionReconciling).GetReason(restore) == "Error" {
-		reconcileMsg := condition.Cond(v1.RestoreConditionReconciling).GetMessage(restore)
+	if !v1.RestoreConditionReconciling.IsUnknown(restore) && v1.RestoreConditionReconciling.GetReason(restore) == "Error" {
+		reconcileMsg := v1.RestoreConditionReconciling.GetMessage(restore)
 		if strings.Contains(reconcileMsg, originalErr.Error()) || strings.EqualFold(reconcileMsg, originalErr.Error()) {
 			// no need to update object status again, because if another UpdateStatus is called without needing it, controller will
 			// process the same object immediately without its default backoff
@@ -824,9 +823,9 @@ func (h *handler) setReconcilingCondition(restore *v1.Restore, originalErr error
 			return err
 		}
 
-		condition.Cond(v1.RestoreConditionReconciling).SetStatusBool(updRestore, true)
-		condition.Cond(v1.RestoreConditionReconciling).SetError(updRestore, "", originalErr)
-		condition.Cond(v1.BackupConditionReady).Message(updRestore, "Retrying")
+		v1.RestoreConditionReconciling.SetStatusBool(updRestore, true)
+		v1.RestoreConditionReconciling.SetError(updRestore, "", originalErr)
+		v1.BackupConditionReady.Message(updRestore, "Retrying")
 
 		_, err = h.restores.UpdateStatus(updRestore)
 		return err

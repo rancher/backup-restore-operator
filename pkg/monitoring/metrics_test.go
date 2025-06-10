@@ -218,7 +218,7 @@ func TestUpdateBackupMetrics(t *testing.T) {
 		{
 			ObjectMeta: k8sv1.ObjectMeta{Name: "backup1"},
 			Status: v1.BackupStatus{
-				BackupType:      "One-time",
+				BackupType:      v1.OneTimeBackupType,
 				NextSnapshotAt:  "N/A - One-time Backup",
 				Filename:        "backup1.tar.gz",
 				StorageLocation: "s3",
