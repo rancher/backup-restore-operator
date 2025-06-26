@@ -8,7 +8,7 @@ controllerReferences:
     name: "rancher"
     namespace: "cattle-system"
 resourceSelectors:
-{{- range $path, $_ := .Files.Glob "files/basic-resourceset-contents/*.yaml" -}}
+{{- range $path, $_ := .Files.Glob "files/default-resourceset-contents/*.yaml" -}}
   {{- $.Files.Get $path | nindent 2 -}}
 {{- end -}}
 {{- range $path, $_ := .Files.Glob "files/sensitive-resourceset-contents/*.yaml" -}}
