@@ -39,6 +39,7 @@ func TestGetEncryptionTransformersFromSecret_Basic(t *testing.T) {
 	transformers, err := GetEncryptionTransformersFromSecret(
 		context.Background(),
 		&testSecret,
+		EncryptionProviderConfigKey,
 	)
 
 	assert.Nil(t, err)
@@ -54,7 +55,7 @@ func TestPrepareEncryptionConfigSecretTempConfig_ValidSecretKeySillyData(t *test
 			EncryptionProviderConfigKey: []byte(sillyTestData),
 		},
 	}
-	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret, EncryptionProviderConfigKey)
 	defer os.Remove(EncryptionProviderConfigKey)
 	// Assert that no error is returned
 	assert.Nil(t, err)
@@ -76,7 +77,7 @@ func TestPrepareEncryptionConfigSecretTempConfig_ValidSecretKeySillyData(t *test
 
 func TestPrepareEncryptionConfigSecretTempConfig_EmptySecret(t *testing.T) {
 	testSecret := v1.Secret{}
-	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret, EncryptionProviderConfigKey)
 	assert.NotNil(t, err)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "no encryptionConfig provided")
@@ -90,7 +91,7 @@ func TestPrepareEncryptionConfigSecretTempConfig_IncorrectSecretKey(t *testing.T
 			"key": []byte("value"),
 		},
 	}
-	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret, EncryptionProviderConfigKey)
 	assert.NotNil(t, err)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "no encryptionConfig provided")

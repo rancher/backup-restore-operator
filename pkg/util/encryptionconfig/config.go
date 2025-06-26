@@ -28,22 +28,22 @@ func GetEncryptionConfigSecret(secrets v1.SecretController, encryptionConfigSecr
 	return encryptionConfigSecret, nil
 }
 
-func GetEncryptionTransformersFromSecret(ctx context.Context, encryptionConfigSecret *v1core.Secret) (k8sEncryptionconfig.StaticTransformers, error) {
-	err := prepareEncryptionConfigSecretTempConfig(encryptionConfigSecret)
+func GetEncryptionTransformersFromSecret(ctx context.Context, encryptionConfigSecret *v1core.Secret, encryptionProviderPath string) (k8sEncryptionconfig.StaticTransformers, error) {
+	err := prepareEncryptionConfigSecretTempConfig(encryptionConfigSecret, encryptionProviderPath)
 	// we defer file removal till here to ensure it's around for all of PrepareEncryptionTransformersFromConfig
-	defer os.Remove(EncryptionProviderConfigKey)
+	defer os.Remove(encryptionProviderPath)
 	if err != nil {
 		return nil, err
 	}
-	return PrepareEncryptionTransformersFromConfig(ctx, EncryptionProviderConfigKey)
+	return PrepareEncryptionTransformersFromConfig(ctx, encryptionProviderPath)
 }
 
-func prepareEncryptionConfigSecretTempConfig(encryptionConfigSecret *v1core.Secret) error {
+func prepareEncryptionConfigSecretTempConfig(encryptionConfigSecret *v1core.Secret, encryptionProviderPath string) error {
 	encryptionConfigBytes, ok := encryptionConfigSecret.Data[EncryptionProviderConfigKey]
 	if !ok {
 		return fmt.Errorf("no encryptionConfig provided")
 	}
-	err := os.WriteFile(EncryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
+	err := os.WriteFile(encryptionProviderPath, encryptionConfigBytes, os.ModePerm)
 	if err != nil {
 		return err
 	}
