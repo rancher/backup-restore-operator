@@ -29,8 +29,7 @@ import (
 )
 
 var (
-	LocalBackupStorageLocation      = "/var/lib/backups" // local within the pod, this is the mountPath for PVC
-	LocalEncryptionProviderLocation = "/encryption"
+	LocalBackupStorageLocation = "/var/lib/backups" // local within the pod, this is the mountPath for PVC
 )
 
 type RunOptions struct {
@@ -41,6 +40,7 @@ type RunOptions struct {
 	OperatorS3BackupStorageLocation string
 	ChartNamespace                  string
 	LocalDriverPath                 string
+	LocalEncryptionProviderLocation string
 }
 
 func (o *RunOptions) Validate() error {
@@ -231,6 +231,8 @@ func Run(
 
 	logrus.Infof("Secrets containing encryption config files must be stored in the namespace %v", options.ChartNamespace)
 
+	encryptionProviderLocation := options.LocalEncryptionProviderLocation
+
 	backup.Register(ctx,
 		c.backupFactory.Resources().V1().Backup(),
 		c.backupFactory.Resources().V1().ResourceSet(),
@@ -241,7 +243,7 @@ func Run(
 		defaultMountPath,
 		defaultS3,
 		metricsServerEnabled,
-		LocalEncryptionProviderLocation,
+		encryptionProviderLocation,
 	)
 	restore.Register(ctx,
 		c.backupFactory.Resources().V1().Restore(),
@@ -255,7 +257,7 @@ func Run(
 		defaultMountPath,
 		defaultS3,
 		metricsServerEnabled,
-		LocalEncryptionProviderLocation,
+		encryptionProviderLocation,
 	)
 
 	if err := start.All(ctx, 2, c.backupFactory); err != nil {
