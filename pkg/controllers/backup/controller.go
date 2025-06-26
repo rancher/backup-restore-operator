@@ -41,6 +41,7 @@ type handler struct {
 	defaultS3BackupLocation *v1.S3ObjectStore
 	kubeSystemNS            string
 	metricsServerEnabled    bool
+	encryptionProviderPath  string
 }
 
 const DefaultRetentionCount = 10
@@ -55,7 +56,8 @@ func Register(
 	dynamicInterface dynamic.Interface,
 	defaultLocalBackupLocation string,
 	defaultS3 *v1.S3ObjectStore,
-	metricsServerEnabled bool) {
+	metricsServerEnabled bool,
+	encryptionProviderPath string) {
 
 	controller := &handler{
 		ctx:                     ctx,
@@ -68,6 +70,7 @@ func Register(
 		defaultBackupMountPath:  defaultLocalBackupLocation,
 		defaultS3BackupLocation: defaultS3,
 		metricsServerEnabled:    metricsServerEnabled,
+		encryptionProviderPath:  encryptionProviderPath,
 	}
 	if controller.defaultBackupMountPath != "" {
 		logrus.Infof("Default location for storing backups is %v", controller.defaultBackupMountPath)
@@ -235,7 +238,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 			return err
 		}
 
-		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, encryptionConfigSecret)
+		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, encryptionConfigSecret, h.encryptionProviderPath)
 		if err != nil {
 			return err
 		}

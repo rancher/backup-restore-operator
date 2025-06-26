@@ -29,7 +29,8 @@ import (
 )
 
 var (
-	LocalBackupStorageLocation = "/var/lib/backups" // local within the pod, this is the mountPath for PVC
+	LocalBackupStorageLocation      = "/var/lib/backups" // local within the pod, this is the mountPath for PVC
+	LocalEncryptionProviderLocation = "/encryption"
 )
 
 type RunOptions struct {
@@ -240,6 +241,7 @@ func Run(
 		defaultMountPath,
 		defaultS3,
 		metricsServerEnabled,
+		LocalEncryptionProviderLocation,
 	)
 	restore.Register(ctx,
 		c.backupFactory.Resources().V1().Restore(),
@@ -253,6 +255,7 @@ func Run(
 		defaultMountPath,
 		defaultS3,
 		metricsServerEnabled,
+		LocalEncryptionProviderLocation,
 	)
 
 	if err := start.All(ctx, 2, c.backupFactory); err != nil {
