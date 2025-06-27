@@ -74,11 +74,11 @@ spec:
         - name: BACKUP_DURATION_BUCKETS
           value: {{ .Values.monitoring.metrics.rancherBackupDurationBuckets }}
           {{ end }}
+        - name: ENCRYPTION_PROVIDER_LOCATION
+          value: /encryption
           {{- if .Values.persistence.enabled }}
         - name: DEFAULT_PERSISTENCE_ENABLED
           value: "persistence-enabled"
-        - name: ENCRYPTION_PROVIDER_LOCATION
-          value: /encryption
         volumeMounts:
         - mountPath: "/var/lib/backups"
           name: pv-storage
