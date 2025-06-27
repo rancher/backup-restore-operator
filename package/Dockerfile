@@ -17,6 +17,10 @@ RUN echo 'bro:x:1000:1000::/home/bro:/bin/bash' >> /etc/passwd && \
     echo 'bro:x:1000:' >> /etc/group && \
     mkdir /home/bro && \
     chown -R bro:bro /home/bro
+
+RUN mkdir /encryption && \
+    chown -R bro:bro /encryption
+
 USER bro
 
 ENTRYPOINT ["backup-restore-operator"]

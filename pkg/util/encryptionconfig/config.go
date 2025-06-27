@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/rancher/backup-restore-operator/pkg/util"
 	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
@@ -28,22 +29,26 @@ func GetEncryptionConfigSecret(secrets v1.SecretController, encryptionConfigSecr
 	return encryptionConfigSecret, nil
 }
 
-func GetEncryptionTransformersFromSecret(ctx context.Context, encryptionConfigSecret *v1core.Secret) (k8sEncryptionconfig.StaticTransformers, error) {
-	err := prepareEncryptionConfigSecretTempConfig(encryptionConfigSecret)
+func GetEncryptionTransformersFromSecret(ctx context.Context, encryptionConfigSecret *v1core.Secret, encryptionProviderPath string) (k8sEncryptionconfig.StaticTransformers, error) {
+	err := prepareEncryptionConfigSecretTempConfig(encryptionConfigSecret, encryptionProviderPath)
 	// we defer file removal till here to ensure it's around for all of PrepareEncryptionTransformersFromConfig
-	defer os.Remove(EncryptionProviderConfigKey)
+
+	fullEncryptionProviderPath := path.Join(encryptionProviderPath, EncryptionProviderConfigKey)
+	defer os.Remove(fullEncryptionProviderPath)
 	if err != nil {
 		return nil, err
 	}
-	return PrepareEncryptionTransformersFromConfig(ctx, EncryptionProviderConfigKey)
+	return PrepareEncryptionTransformersFromConfig(ctx, fullEncryptionProviderPath)
 }
 
-func prepareEncryptionConfigSecretTempConfig(encryptionConfigSecret *v1core.Secret) error {
+func prepareEncryptionConfigSecretTempConfig(encryptionConfigSecret *v1core.Secret, encryptionProviderPath string) error {
 	encryptionConfigBytes, ok := encryptionConfigSecret.Data[EncryptionProviderConfigKey]
 	if !ok {
 		return fmt.Errorf("no encryptionConfig provided")
 	}
-	err := os.WriteFile(EncryptionProviderConfigKey, encryptionConfigBytes, os.ModePerm)
+
+	fullEncryptionProviderPath := path.Join(encryptionProviderPath, EncryptionProviderConfigKey)
+	err := os.WriteFile(fullEncryptionProviderPath, encryptionConfigBytes, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -51,9 +56,9 @@ func prepareEncryptionConfigSecretTempConfig(encryptionConfigSecret *v1core.Secr
 	return nil
 }
 
-func PrepareEncryptionTransformersFromConfig(ctx context.Context, encryptionProviderPath string) (k8sEncryptionconfig.StaticTransformers, error) {
+func PrepareEncryptionTransformersFromConfig(ctx context.Context, fullEncryptionProviderPath string) (k8sEncryptionconfig.StaticTransformers, error) {
 	apiServerID := ""
-	encryptionConfig, err := k8sEncryptionconfig.LoadEncryptionConfig(ctx, encryptionProviderPath, false, apiServerID)
+	encryptionConfig, err := k8sEncryptionconfig.LoadEncryptionConfig(ctx, fullEncryptionProviderPath, false, apiServerID)
 	if err != nil {
 		return nil, err
 	}

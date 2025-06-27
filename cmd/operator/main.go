@@ -19,6 +19,7 @@ var (
 	Version                         = "v0.0.0-dev"
 	GitCommit                       = "HEAD"
 	LocalBackupStorageLocation      = "/var/lib/backups" // local within the pod, this is the mountPath for PVC
+	LocalEncryptionProviderLocation string
 	KubeConfig                      string
 	OperatorPVEnabled               string
 	MetricsServerEnabled            string
@@ -38,6 +39,7 @@ func init() {
 	OperatorS3BackupStorageLocation = os.Getenv("DEFAULT_S3_BACKUP_STORAGE_LOCATION")
 	ChartNamespace = os.Getenv("CHART_NAMESPACE")
 	MetricsServerEnabled = os.Getenv("METRICS_SERVER")
+	LocalEncryptionProviderLocation = os.Getenv("ENCRYPTION_PROVIDER_LOCATION")
 }
 
 func main() {
@@ -68,6 +70,7 @@ func main() {
 		OperatorS3BackupStorageLocation: OperatorS3BackupStorageLocation,
 		ChartNamespace:                  ChartNamespace,
 		LocalDriverPath:                 "",
+		LocalEncryptionProviderLocation: LocalEncryptionProviderLocation,
 	}
 
 	if err := operator.Run(ctx, restKubeConfig, runOptions); err != nil {

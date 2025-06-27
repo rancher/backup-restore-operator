@@ -3,6 +3,7 @@ package encryptionconfig
 import (
 	"context"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -25,6 +26,8 @@ var deploymentGVR = schema.GroupVersionResource{
 	Resource: "deployments",
 }
 
+var fullEncryptionProviderPath = path.Join("testdata", EncryptionProviderConfigKey)
+
 func TestGetEncryptionTransformersFromSecret_Basic(t *testing.T) {
 	encryptionConfigFilepath := filepath.Join("testdata", "encryption-provider-config-wildcard.yaml")
 	configBytes, _ := os.ReadFile(encryptionConfigFilepath)
@@ -39,6 +42,7 @@ func TestGetEncryptionTransformersFromSecret_Basic(t *testing.T) {
 	transformers, err := GetEncryptionTransformersFromSecret(
 		context.Background(),
 		&testSecret,
+		"testdata",
 	)
 
 	assert.Nil(t, err)
@@ -54,11 +58,11 @@ func TestPrepareEncryptionConfigSecretTempConfig_ValidSecretKeySillyData(t *test
 			EncryptionProviderConfigKey: []byte(sillyTestData),
 		},
 	}
-	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
-	defer os.Remove(EncryptionProviderConfigKey)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret, "testdata")
+	defer os.Remove(fullEncryptionProviderPath)
 	// Assert that no error is returned
 	assert.Nil(t, err)
-	file, err := os.Open(EncryptionProviderConfigKey)
+	file, err := os.Open(fullEncryptionProviderPath)
 	if err != nil {
 		t.FailNow()
 	}
@@ -76,7 +80,7 @@ func TestPrepareEncryptionConfigSecretTempConfig_ValidSecretKeySillyData(t *test
 
 func TestPrepareEncryptionConfigSecretTempConfig_EmptySecret(t *testing.T) {
 	testSecret := v1.Secret{}
-	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret, "testdata")
 	assert.NotNil(t, err)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "no encryptionConfig provided")
@@ -90,7 +94,7 @@ func TestPrepareEncryptionConfigSecretTempConfig_IncorrectSecretKey(t *testing.T
 			"key": []byte("value"),
 		},
 	}
-	err := prepareEncryptionConfigSecretTempConfig(&testSecret)
+	err := prepareEncryptionConfigSecretTempConfig(&testSecret, "testdata")
 	assert.NotNil(t, err)
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "no encryptionConfig provided")

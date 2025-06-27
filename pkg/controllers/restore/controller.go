@@ -64,6 +64,7 @@ type handler struct {
 	defaultS3BackupLocation *v1.S3ObjectStore
 	kubernetesLeaseClient   coordinationclientv1.LeaseInterface
 	metricsServerEnabled    bool
+	encryptionProviderPath  string
 }
 
 type ObjectsFromBackupCR struct {
@@ -101,7 +102,8 @@ func Register(
 	restmapper meta.RESTMapper,
 	defaultLocalBackupLocation string,
 	defaultS3 *v1.S3ObjectStore,
-	metricsServerEnabled bool) {
+	metricsServerEnabled bool,
+	encryptionProviderPath string) {
 
 	controller := &handler{
 		ctx:                     ctx,
@@ -117,6 +119,7 @@ func Register(
 		defaultS3BackupLocation: defaultS3,
 		kubernetesLeaseClient:   leaseClient,
 		metricsServerEnabled:    metricsServerEnabled,
+		encryptionProviderPath:  encryptionProviderPath,
 	}
 
 	lease, err := leaseClient.Get(ctx, leaseName, k8sv1.GetOptions{})
@@ -170,7 +173,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 			return h.setReconcilingCondition(restore, err)
 		}
 
-		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, encryptionConfigSecret)
+		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, encryptionConfigSecret, h.encryptionProviderPath)
 		if err != nil {
 			logrus.Errorf("Error processing encryption config: %v", err)
 			return h.setReconcilingCondition(restore, err)
