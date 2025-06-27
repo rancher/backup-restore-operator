@@ -70,7 +70,7 @@ func main() {
 		OperatorS3BackupStorageLocation: OperatorS3BackupStorageLocation,
 		ChartNamespace:                  ChartNamespace,
 		LocalDriverPath:                 "",
-		LocalEncryptionProviderLocation: "",
+		LocalEncryptionProviderLocation: LocalEncryptionProviderLocation,
 	}
 
 	if err := operator.Run(ctx, restKubeConfig, runOptions); err != nil {
