@@ -525,7 +525,7 @@ var suite = test.Suite{
 
 			Checks: test.Checks{
 				checker.PerWorkload(func(tc *checker.TestContext, obj metav1.Object, podTemplateSpec corev1.PodTemplateSpec) {
-					envVar := []corev1.EnvVar([]corev1.EnvVar{corev1.EnvVar{Name: "CHART_NAMESPACE", Value: "cattle-resources-system", ValueFrom: (*corev1.EnvVarSource)(nil)}, corev1.EnvVar{Name: "DEFAULT_S3_BACKUP_STORAGE_LOCATION", Value: "rancher-backup-s3", ValueFrom: (*corev1.EnvVarSource)(nil)}})
+					envVar := []corev1.EnvVar([]corev1.EnvVar{corev1.EnvVar{Name: "CHART_NAMESPACE", Value: "cattle-resources-system", ValueFrom: (*corev1.EnvVarSource)(nil)}, corev1.EnvVar{Name: "DEFAULT_S3_BACKUP_STORAGE_LOCATION", Value: "rancher-backup-s3", ValueFrom: (*corev1.EnvVarSource)(nil)}, corev1.EnvVar{Name: "ENCRYPTION_PROVIDER_LOCATION", Value: "/encryption", ValueFrom: (*corev1.EnvVarSource)(nil)}})
 					s3Enabled := checker.MustRenderValue[bool](tc, ".Values.s3.enabled")
 					if s3Enabled {
 						for _, container := range podTemplateSpec.Spec.Containers {
@@ -739,6 +739,11 @@ var suite = test.Suite{
 							Value:     noProxy,
 							ValueFrom: (*corev1.EnvVarSource)(nil),
 						},
+						corev1.EnvVar{
+							Name:      "ENCRYPTION_PROVIDER_LOCATION",
+							Value:     "/encryption",
+							ValueFrom: (*corev1.EnvVarSource)(nil),
+						},
 					})
 					for _, container := range podTemplateSpec.Spec.Containers {
 						assert.Equal(tc.T, envVar, container.Env, "container %s in Deployment %s/%s does not have correct Proxy image env variables", container.Name, obj.GetNamespace(), obj.GetName())
@@ -776,6 +781,11 @@ var suite = test.Suite{
 						corev1.EnvVar{
 							Name:      "BACKUP_DURATION_BUCKETS",
 							Value:     rancherBackupDurationBuckets,
+							ValueFrom: (*corev1.EnvVarSource)(nil),
+						},
+						corev1.EnvVar{
+							Name:      "ENCRYPTION_PROVIDER_LOCATION",
+							Value:     "/encryption",
 							ValueFrom: (*corev1.EnvVarSource)(nil),
 						},
 					})
