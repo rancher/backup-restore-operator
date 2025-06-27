@@ -1,0 +1,8 @@
+- apiVersion: "v1"
+  kindsRegexp: "^secrets$"
+  labelSelectors:
+    matchExpressions:
+    - key: "app.kubernetes.io/part-of"
+      operator: "In"
+      values: ["kubewarden"]
+  namespaceRegexp: "^cattle-kubewarden-|^kubewarden"
