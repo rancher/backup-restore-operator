@@ -18,7 +18,7 @@ import (
 )
 
 func (h *handler) downloadFromS3(restore *v1.Restore, objStore *v1.S3ObjectStore) (string, error) {
-	s3Client, err := objectstore.GetS3Client(h.ctx, objStore, h.dynamicClient)
+	s3Client, err := objectstore.GetS3Client(h.ctx, objStore, h.dynamicClient, restore.Spec.ClientConfig)
 	if err != nil {
 		return "", err
 	}

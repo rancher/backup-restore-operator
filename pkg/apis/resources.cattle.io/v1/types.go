@@ -140,11 +140,16 @@ type RestoreStatus struct {
 	Summary             string                              `json:"summary"`
 }
 
+// ClientConfig allows configuration of more advanced minio client settings
+// any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providres.
 type ClientConfig struct {
+	// TODO: Add setting to control lookup mode
+	// TODO: Add a setting for varying trace options that minio provides
 	Aws *AwsConfig `json:"aws,omitempty"`
 }
 
 type AwsConfig struct {
 	// +default:value=true
 	DualStack bool `json:"dualStack"`
+	// TODO: also support s3 TransferAccelerate feature this way?
 }
