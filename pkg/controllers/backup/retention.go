@@ -29,14 +29,14 @@ func (h *handler) deleteBackupsFollowingRetentionPolicy(backup *v1.Backup) error
 			return h.deleteBackupsFromMountPath(retentionCount, h.defaultBackupMountPath, backup.Name, backup.Spec.EncryptionConfigSecretName != "")
 		} else if h.defaultS3BackupLocation != nil {
 			// not checking for nil, since if this wasn't provided, the default local location would get used
-			s3Client, err := objectstore.GetS3Client(h.ctx, h.defaultS3BackupLocation, h.dynamicClient, backup.Spec.ClientConfig)
+			s3Client, err := objectstore.GetS3Client(h.ctx, h.defaultS3BackupLocation, h.dynamicClient)
 			if err != nil {
 				return err
 			}
 			return h.deleteS3Backups(backup, h.defaultS3BackupLocation, s3Client, retentionCount, backup.Spec.EncryptionConfigSecretName != "")
 		}
 	} else if backup.Spec.StorageLocation.S3 != nil {
-		s3Client, err := objectstore.GetS3Client(h.ctx, backup.Spec.StorageLocation.S3, h.dynamicClient, backup.Spec.ClientConfig)
+		s3Client, err := objectstore.GetS3Client(h.ctx, backup.Spec.StorageLocation.S3, h.dynamicClient)
 		if err != nil {
 			return err
 		}

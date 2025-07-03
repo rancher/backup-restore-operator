@@ -113,7 +113,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 
 // GetS3Client prepares the S3 client per the current BRO config requirements
 // TODO: namespace should be backup.NS only if backup CR contains storage location, for using operator's s3, use chart's ns
-func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClient dynamic.Interface, clientConfig *v1.ClientConfig) (*minio.Client, error) {
+func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClient dynamic.Interface) (*minio.Client, error) {
 	var accessKey, secretKey string
 	var notFoundKeys []string
 	if objectStore.CredentialSecretName != "" {
@@ -163,10 +163,10 @@ func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClie
 
 	// Because we only have an AWS specific config for now check both at the same time
 	// if/when we add other configs we can refactor this a bit.
-	if clientConfig != nil && clientConfig.Aws != nil {
+	if objectStore.ClientConfig != nil && objectStore.ClientConfig.Aws != nil {
 		// When the client config AWS dual-stack setting is set to false we disable it
 		// This is enabled by default and in some user environments this has caused issues
-		if clientConfig.Aws.DualStack == false {
+		if objectStore.ClientConfig.Aws.DualStack == false {
 			log.Debug("disabling the AWS S3 dual-stack client setting")
 			s3Client.SetS3EnableDualstack(false)
 		}

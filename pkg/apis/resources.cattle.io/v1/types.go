@@ -44,7 +44,6 @@ type BackupSpec struct {
 	EncryptionConfigSecretName string           `json:"encryptionConfigSecretName,omitempty"`
 	Schedule                   string           `json:"schedule,omitempty"`
 	RetentionCount             int64            `json:"retentionCount,omitempty"`
-	ClientConfig               *ClientConfig    `json:"clientConfig,omitempty"`
 }
 
 type BackupStatus struct {
@@ -98,14 +97,15 @@ type StorageLocation struct {
 }
 
 type S3ObjectStore struct {
-	Endpoint                  string `json:"endpoint"`
-	EndpointCA                string `json:"endpointCA"`
-	InsecureTLSSkipVerify     bool   `json:"insecureTLSSkipVerify"`
-	CredentialSecretName      string `json:"credentialSecretName"`
-	CredentialSecretNamespace string `json:"credentialSecretNamespace"`
-	BucketName                string `json:"bucketName"`
-	Region                    string `json:"region"`
-	Folder                    string `json:"folder"`
+	Endpoint                  string        `json:"endpoint"`
+	EndpointCA                string        `json:"endpointCA"`
+	InsecureTLSSkipVerify     bool          `json:"insecureTLSSkipVerify"`
+	CredentialSecretName      string        `json:"credentialSecretName"`
+	CredentialSecretNamespace string        `json:"credentialSecretNamespace"`
+	BucketName                string        `json:"bucketName"`
+	Region                    string        `json:"region"`
+	Folder                    string        `json:"folder"`
+	ClientConfig              *ClientConfig `json:"clientConfig,omitempty"`
 }
 
 // +genclient
@@ -126,7 +126,6 @@ type RestoreSpec struct {
 	Prune                      *bool            `json:"prune"` //prune by default
 	DeleteTimeoutSeconds       int              `json:"deleteTimeoutSeconds,omitempty"`
 	EncryptionConfigSecretName string           `json:"encryptionConfigSecretName,omitempty"`
-	ClientConfig               *ClientConfig    `json:"clientConfig,omitempty"`
 
 	// When set to true, the controller ignores any errors during the restore process
 	IgnoreErrors bool `json:"ignoreErrors,omitempty"`
