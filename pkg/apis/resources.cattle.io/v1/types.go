@@ -44,6 +44,7 @@ type BackupSpec struct {
 	EncryptionConfigSecretName string           `json:"encryptionConfigSecretName,omitempty"`
 	Schedule                   string           `json:"schedule,omitempty"`
 	RetentionCount             int64            `json:"retentionCount,omitempty"`
+	ClientConfig               *ClientConfig    `json:"clientConfig,omitempty"`
 }
 
 type BackupStatus struct {
@@ -125,6 +126,7 @@ type RestoreSpec struct {
 	Prune                      *bool            `json:"prune"` //prune by default
 	DeleteTimeoutSeconds       int              `json:"deleteTimeoutSeconds,omitempty"`
 	EncryptionConfigSecretName string           `json:"encryptionConfigSecretName,omitempty"`
+	ClientConfig               *ClientConfig    `json:"clientConfig,omitempty"`
 
 	// When set to true, the controller ignores any errors during the restore process
 	IgnoreErrors bool `json:"ignoreErrors,omitempty"`
@@ -136,4 +138,13 @@ type RestoreStatus struct {
 	ObservedGeneration  int64                               `json:"observedGeneration"`
 	BackupSource        string                              `json:"backupSource"`
 	Summary             string                              `json:"summary"`
+}
+
+type ClientConfig struct {
+	Aws *AwsConfig `json:"aws,omitempty"`
+}
+
+type AwsConfig struct {
+	// +default:value=true
+	DualStack bool `json:"dualStack"`
 }

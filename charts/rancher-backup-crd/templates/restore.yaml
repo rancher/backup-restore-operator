@@ -32,6 +32,16 @@ spec:
               backupFilename:
                 nullable: true
                 type: string
+              clientConfig:
+                nullable: true
+                properties:
+                  aws:
+                    nullable: true
+                    properties:
+                      dualStack:
+                        type: boolean
+                    type: object
+                type: object
               deleteTimeoutSeconds:
                 maximum: 10
                 type: integer

@@ -35,6 +35,16 @@ spec:
         properties:
           spec:
             properties:
+              clientConfig:
+                nullable: true
+                properties:
+                  aws:
+                    nullable: true
+                    properties:
+                      dualStack:
+                        type: boolean
+                    type: object
+                type: object
               encryptionConfigSecretName:
                 description: Name of the Secret containing the encryption config
                 nullable: true
