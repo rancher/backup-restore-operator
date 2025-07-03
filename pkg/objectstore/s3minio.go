@@ -96,6 +96,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 
 		break
 	}
+	client.SetAppInfo("rancher backup-restore-operator", version.Version)
 
 	found, err := client.BucketExists(context.Background(), bc.BucketName)
 	if err != nil {
