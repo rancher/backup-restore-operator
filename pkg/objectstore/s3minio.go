@@ -37,6 +37,8 @@ type ObjectStore struct {
 	BucketName                string `json:"bucketName"`
 	Region                    string `json:"region"`
 	Folder                    string `json:"folder"`
+	// TODO: this may need to be a string too
+	ClientConfig *v1.ClientConfig `json:"clientConfig,omitempty"`
 }
 
 // Almost everything in this file is from rke-tools with some modifications https://github.com/rancher/rke-tools/blob/master/main.go

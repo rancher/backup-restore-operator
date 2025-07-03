@@ -163,6 +163,7 @@ func FetchDefaultS3Configuration(options RunOptions, core *v1core.Factory) (*bac
 		BucketName:                objStoreWithStrSkipVerify.BucketName,
 		Region:                    objStoreWithStrSkipVerify.Region,
 		Folder:                    objStoreWithStrSkipVerify.Folder,
+		ClientConfig:              objStoreWithStrSkipVerify.ClientConfig,
 	}
 
 	if objStoreWithStrSkipVerify.InsecureTLSSkipVerify == "true" {
