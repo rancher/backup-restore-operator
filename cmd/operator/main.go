@@ -4,11 +4,13 @@ import (
 	"flag"
 	"os"
 
-	"github.com/rancher/backup-restore-operator/pkg/operator"
-	backuputil "github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 	"github.com/rancher/wrangler/v3/pkg/signals"
 	"github.com/sirupsen/logrus"
+
+	"github.com/rancher/backup-restore-operator/cmd/operator/version"
+	"github.com/rancher/backup-restore-operator/pkg/operator"
+	backuputil "github.com/rancher/backup-restore-operator/pkg/util"
 )
 
 const (
@@ -16,8 +18,6 @@ const (
 )
 
 var (
-	Version                         = "v0.0.0-dev"
-	GitCommit                       = "HEAD"
 	LocalBackupStorageLocation      = "/var/lib/backups" // local within the pod, this is the mountPath for PVC
 	LocalEncryptionProviderLocation string
 	KubeConfig                      string
@@ -53,7 +53,7 @@ func main() {
 		logrus.Tracef("Loglevel set to [%v]", logrus.TraceLevel)
 	}
 
-	logrus.Infof("Starting backup-restore controller version %s (%s)", Version, GitCommit)
+	logrus.Infof("Starting backup-restore controller version %s (%s) [built at %s]", version.Version, version.GitCommit, version.Date)
 	ctx := signals.SetupSignalContext()
 	restKubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
 	if err != nil {
