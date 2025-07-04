@@ -145,6 +145,29 @@ var suite = test.Suite{
 				),
 		},
 		{
+			Name: "Set .Values.s3 true with dualstack disabled",
+
+			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
+				Set(
+					"s3", map[string]interface{}{
+						"enabled":                   true,
+						"bucketName":                "test-bucket",
+						"credentialSecretName":      "s3-secret",
+						"credentialSecretNamespace": "cattle-resources-system",
+						"endpoint":                  "s3.us-east-2.amazonaws.com",
+						"endpointCA":                "test-ca",
+						"folder":                    "rancher",
+						"insecureTLSSkipVerify":     true,
+						"region":                    "us-east-2",
+						"clientConfig": map[string]interface{}{
+							"aws": map[string]interface{}{
+								"dualStack": false,
+							},
+						},
+					},
+				),
+		},
+		{
 			Name: "Set Node Affinity",
 
 			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
@@ -521,6 +544,9 @@ var suite = test.Suite{
 				".Values.s3.folder",
 				".Values.s3.insecureTLSSkipVerify",
 				".Values.s3.region",
+				".Values.s3.clientConfig",
+				".Values.s3.clientConfig.aws",
+				".Values.s3.clientConfig.aws.dualStack",
 			},
 
 			Checks: test.Checks{
@@ -546,6 +572,10 @@ var suite = test.Suite{
 					folder := checker.MustRenderValue[string](tc, ".Values.s3.folder")
 					insecureTLSSkipVerify := strconv.FormatBool(checker.MustRenderValue[bool](tc, ".Values.s3.insecureTLSSkipVerify"))
 					region := checker.MustRenderValue[string](tc, ".Values.s3.region")
+
+					_, isClientConfigSet := checker.RenderValue[map[string]string](tc, ".Values.s3.clientConfig")
+					dualStack, isDualStackSet := checker.RenderValue[bool](tc, ".Values.s3.clientConfig.aws.dualStack")
+
 					if s3Enabled {
 						assert.Equal(tc.T, bucketName, secret.StringData["bucketName"], "S3 Secret Improperly configured (bucketName)")
 						assert.Equal(tc.T, credentialSecretNamespace, secret.StringData["credentialSecretNamespace"], "S3 Secret Improperly configured (credentialSecretNamespace)")
@@ -555,6 +585,12 @@ var suite = test.Suite{
 						assert.Equal(tc.T, folder, secret.StringData["folder"], "S3 Secret Improperly configured (folder)")
 						assert.Equal(tc.T, insecureTLSSkipVerify, secret.StringData["insecureTLSSkipVerify"], "S3 Secret Improperly configured (insecureTLSSkipVerify)")
 						assert.Equal(tc.T, region, secret.StringData["region"], "S3 Secret Improperly configured (region)")
+
+						if isClientConfigSet {
+							if isDualStackSet && (dualStack == false) {
+								assert.Equal(tc.T, dualStack, secret.StringData["clientConfig"], "S3 Secret improperly configured clientConfig")
+							}
+						}
 					}
 				}),
 			},
