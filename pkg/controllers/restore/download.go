@@ -159,7 +159,7 @@ func shouldSkipBuiltin(resourceTypeName string, resource map[string]interface{})
 	}
 
 	if isBuiltIn, builtInOk := resource["builtin"]; builtInOk {
-		return isBuiltIn == "true"
+		return isBuiltIn == "true" || isBuiltIn == true
 	}
 
 	return false
