@@ -134,6 +134,11 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 		GVR:        gvr,
 		ConfigPath: tarContent.Name,
 	}
+
+	if shouldSkipBuiltin(gvr.Resource, fileMap) {
+		return nil
+	}
+
 	if strings.EqualFold(gvr.Resource, "customresourcedefinitions") {
 		cr.crdInfoToData[info] = unstructured.Unstructured{Object: fileMap}
 	} else {
@@ -145,4 +150,17 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 		}
 	}
 	return nil
+}
+
+// shouldSkipBuiltin helps verify a resource is a builtin that should be skipped from restore
+func shouldSkipBuiltin(resourceTypeName string, resource map[string]interface{}) bool {
+	if !strings.EqualFold(resourceTypeName, "globalroles") && !strings.EqualFold(resourceTypeName, "roletemplates") {
+		return false
+	}
+
+	if isBuiltIn, builtInOk := resource["builtin"]; builtInOk {
+		return isBuiltIn == "true" || isBuiltIn == true
+	}
+
+	return false
 }
