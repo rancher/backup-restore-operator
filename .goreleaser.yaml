@@ -17,7 +17,7 @@ builds:
         - -static
         - -s
         - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Version={{.Version}}
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Commit={{.Commit}}
+        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.GitCommit={{.Commit}}
         - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Date={{.Date}}
       flags:
         - -trimpath

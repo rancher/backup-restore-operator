@@ -10,7 +10,8 @@ if [ "$(uname)" = "Linux" ]; then
     OTHER_LINKFLAGS="-extldflags -static -s -w"
 fi
 
-LINKFLAGS="-X github.com/rancher/backup-restore-operator/cmd/operator/main.Version=$VERSION"
-LINKFLAGS="-X github.com/rancher/backup-restore-operator/cmd/operator/main.GitCommit=$COMMIT $LINKFLAGS"
+LINKFLAGS="-X github.com/rancher/backup-restore-operator/cmd/operator/version.Version=$VERSION"
+LINKFLAGS="-X github.com/rancher/backup-restore-operator/cmd/operator/version.GitCommit=$COMMIT $LINKFLAGS"
+LINKFLAGS="-X github.com/rancher/backup-restore-operator/cmd/operator/version.Date=$(date -u +"%Y-%m-%dT%H:%M:%SZ") $LINKFLAGS"
 
 CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o "bin/backup-restore-operator" ./cmd/operator/main.go
