@@ -53,7 +53,7 @@ func main() {
 		logrus.Tracef("Loglevel set to [%v]", logrus.TraceLevel)
 	}
 
-	logrus.Infof("Starting backup-restore controller version %s (%s) [built at %s]", version.Version, version.GitCommit, version.Date)
+	logrus.Infof("Starting backup-restore-operator version %s (%s) [built at %s]", version.Version, version.GitCommit, version.Date)
 	ctx := signals.SetupSignalContext()
 	restKubeConfig, err := kubeconfig.GetNonInteractiveClientConfig(KubeConfig).ClientConfig()
 	if err != nil {
