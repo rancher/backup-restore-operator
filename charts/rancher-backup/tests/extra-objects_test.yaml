@@ -1,0 +1,23 @@
+suite: Test extra objects
+templates:
+- extra-objects.yaml
+tests:
+- it: should create ConfigMap from extraObjects
+  set:
+    extraObjects:
+      - apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: test-config
+        data:
+          key: value
+  template: extra-objects.yaml
+  asserts:
+  - hasDocuments:
+      count: 1
+  - contains:
+      kind: ConfigMap
+      metadata:
+        name: test-config
+      data:
+        key: value
