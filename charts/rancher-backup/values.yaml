@@ -125,7 +125,7 @@ resources: {}
   #   cpu: 2
   #   memory: 2Gi
 
-# Add extra objects to be created alongside the main deployment
+# Add extra objects to be managed by the release
 # This allows users to create Backups using the Backup CRD
 extraObjects: []
   # - apiVersion: resources.cattle.io/v1
