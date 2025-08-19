@@ -119,7 +119,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	}
 
 	if backup.Status.LastSnapshotTS != "" {
-		if backup.Status.BackupType == v1.OneTimeBackupType { // one-time backup
+		if backup.Status.BackupType == v1.OneTimeBackupType {
 			// This means backup CR was updated from recurring to one-time, in which case observedGeneration needs to be updated
 			backup.Status.ObservedGeneration = backup.Generation
 
