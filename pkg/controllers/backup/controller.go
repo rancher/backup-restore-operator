@@ -171,7 +171,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	logrus.Infof("Temporary backup path for storing all contents for backup CR %v is %v", backup.Name, tmpBackupPath)
 
 	if err = h.performBackup(backup, tmpBackupPath, backupFileName); err != nil {
-		fmt.Println(err.Error())
 		removeDirErr := os.RemoveAll(tmpBackupPath)
 		if removeDirErr != nil {
 			return h.setReconcilingCondition(backup, errors.New(err.Error()+removeDirErr.Error()))
