@@ -44,7 +44,7 @@ spec:
                 nullable: true
                 type: string
               retentionCount:
-                default: 10
+                default: 1
                 minimum: 1
                 type: integer
               schedule:
