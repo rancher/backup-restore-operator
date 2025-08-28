@@ -44,7 +44,7 @@ func TestValidateBackupSpecFail(t *testing.T) {
 	}
 	backup.SetName(backupName)
 
-	err := mockHandler.validateBackupSpec(backup)
+	err := mockHandler.validateBackupInitialStatus(backup)
 
 	require.Error(t, err, "Error when Validating backup spec")
 }
@@ -63,7 +63,7 @@ func TestValidateBackupSpecPass(t *testing.T) {
 	}
 	backup.SetName(backupName)
 
-	err := mockHandler.validateBackupSpec(backup)
+	err := mockHandler.validateBackupInitialStatus(backup)
 
 	require.NoError(t, err, "Error when Validating backup spec")
 }
