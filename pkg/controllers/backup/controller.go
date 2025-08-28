@@ -119,17 +119,8 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		return backupWithType, nil
 	}
 
-	validatedBackup := backup.DeepCopy()
-	if err = h.validateBackupSpec(validatedBackup); err != nil {
-		return h.setReconcilingCondition(validatedBackup, err)
-	}
-
-	if !reflect.DeepEqual(validatedBackup, backup) {
-		if validatedBackup, err = h.backups.Update(validatedBackup); err != nil {
-			return h.setReconcilingCondition(validatedBackup, err)
-		}
-
-		return validatedBackup, nil
+	if err = h.validateBackupSpec(backup); err != nil {
+		return h.setReconcilingCondition(backup, err)
 	}
 
 	if backup.Status.LastSnapshotTS != "" {

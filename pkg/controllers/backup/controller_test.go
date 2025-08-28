@@ -38,6 +38,9 @@ func TestValidateBackupSpecFail(t *testing.T) {
 	mockHandler := handler{}
 
 	backup := &v1.Backup{
+		Status: v1.BackupStatus{
+			BackupType: v1.RecurringBackupType,
+		},
 		Spec: v1.BackupSpec{
 			Schedule: "kldsnd",
 		},
@@ -57,6 +60,9 @@ func TestValidateBackupSpecPass(t *testing.T) {
 	mockHandler := handler{}
 
 	backup := &v1.Backup{
+		Status: v1.BackupStatus{
+			BackupType: v1.RecurringBackupType,
+		},
 		Spec: v1.BackupSpec{
 			Schedule: "0 0 * * *",
 		},
@@ -66,6 +72,24 @@ func TestValidateBackupSpecPass(t *testing.T) {
 	err := mockHandler.validateBackupSpec(backup)
 
 	require.NoError(t, err, "Error when Validating backup spec")
+}
+
+func TestValidateBackupSpecOneTime(t *testing.T) {
+	backupName := "TestName"
+
+	mockHandler := handler{}
+
+	backup := &v1.Backup{
+		Status: v1.BackupStatus{
+			BackupType: v1.OneTimeBackupType,
+		},
+	}
+	backup.SetName(backupName)
+
+	err := mockHandler.validateBackupSpec(backup)
+
+	require.NoError(t, err, "Error when Validating backup spec")
+	require.Equal(t, backup.Spec.RetentionCount, int64(1))
 }
 
 func TestBackupIsSingularAndComplete(t *testing.T) {
