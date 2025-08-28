@@ -104,7 +104,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	logrus.Infof("Processing backup %v", backup.Name)
 
 	validatedBackup := backup.DeepCopy()
-	if err = h.validateBackupInitialStatus(validatedBackup); err != nil {
+	if err = h.setBackupInitialStatus(validatedBackup); err != nil {
 		return h.setReconcilingCondition(backup, err)
 	}
 
@@ -321,7 +321,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	return nil
 }
 
-func (h *handler) validateBackupInitialStatus(backup *v1.Backup) error {
+func (h *handler) setBackupInitialStatus(backup *v1.Backup) error {
 	if backup.Spec.Schedule != "" {
 		_, err := cron.ParseStandard(backup.Spec.Schedule)
 		if err != nil {
