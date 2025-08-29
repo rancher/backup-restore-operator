@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -44,7 +45,10 @@ type handler struct {
 	encryptionProviderPath  string
 }
 
-const DefaultRetentionCount = 10
+const (
+	DefaultRetentionCountRecurring = 10
+	DefaultRetentionCountOneTime   = 1
+)
 
 func Register(
 	ctx context.Context,
@@ -102,21 +106,24 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 		logrus.Debugf("Backup %s has already been processed, skipping it", backup.Name)
 		return backup, nil
 	}
+
 	logrus.Infof("Processing backup %v", backup.Name)
+
+	backupWithType := backup.DeepCopy()
+	h.setBackupType(backupWithType)
+	if !reflect.DeepEqual(backupWithType, backup) {
+		if backupWithType, err = h.backups.UpdateStatus(backupWithType); err != nil {
+			return h.setReconcilingCondition(backupWithType, err)
+		}
+
+		return backupWithType, nil
+	}
 
 	if err = h.validateBackupSpec(backup); err != nil {
 		return h.setReconcilingCondition(backup, err)
 	}
 
 	if backup.Status.LastSnapshotTS != "" {
-		if backup.Spec.Schedule == "" { // one-time backup
-			// This means backup CR was updated from recurring to one-time, in which case observedGeneration needs to be updated
-			backup.Status.ObservedGeneration = backup.Generation
-			backup.Status.BackupType = v1.OneTimeBackupType
-
-			logrus.Infof("Updating backup %s from recurring to one-time", backup.Name)
-			return h.backups.UpdateStatus(backup)
-		}
 		if backup.Status.NextSnapshotAt != "" {
 			currTime := time.Now().Format(time.RFC3339)
 			logrus.Infof("Next snapshot is scheduled for: %v, current time: %v", backup.Status.NextSnapshotAt, currTime)
@@ -206,9 +213,6 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			backup.Status.NextSnapshotAt = nextBackupAt.Format(time.RFC3339)
 			after := nextBackupAt.Sub(time.Now())
 			h.backups.EnqueueAfter(backup.Name, after)
-			backup.Status.BackupType = v1.RecurringBackupType
-		} else {
-			backup.Status.BackupType = v1.OneTimeBackupType
 		}
 		backup.Status.ObservedGeneration = backup.Generation
 		backup.Status.StorageLocation = storageLocationType
@@ -316,16 +320,31 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 	return nil
 }
 
+func (h *handler) setBackupType(backup *v1.Backup) {
+	// Only checking if Schedule is set to determine the backup type, actual validation happens later in validateBackupSpec
+	if backup.Spec.Schedule == "" {
+		backup.Status.BackupType = v1.OneTimeBackupType
+	} else {
+		backup.Status.BackupType = v1.RecurringBackupType
+	}
+}
+
 func (h *handler) validateBackupSpec(backup *v1.Backup) error {
-	if backup.Spec.Schedule != "" {
+	logrus.Infof("backuptype set to: %v for %s", backup.Status.BackupType, backup.Name)
+
+	if backup.Status.BackupType == v1.RecurringBackupType {
 		_, err := cron.ParseStandard(backup.Spec.Schedule)
 		if err != nil {
 			return fmt.Errorf("error parsing invalid cron string for schedule: %v", err)
 		}
 		if backup.Spec.RetentionCount == 0 {
-			backup.Spec.RetentionCount = DefaultRetentionCount
+			backup.Spec.RetentionCount = DefaultRetentionCountRecurring
 		}
+	} else {
+		backup.Spec.RetentionCount = DefaultRetentionCountOneTime
 	}
+
+	logrus.Infof("retentionCount set to: %v for %s", backup.Spec.RetentionCount, backup.Name)
 	return nil
 }
 
@@ -370,5 +389,5 @@ func (h *handler) setReconcilingCondition(backup *v1.Backup, originalErr error) 
 
 // backupIsSingularAndComplete checks if the backup is a one-time backup and has not been modified
 func backupIsSingularAndComplete(backup *v1.Backup) bool {
-	return backup.Status.BackupType == "One-time" && backup.Generation == backup.Status.ObservedGeneration
+	return backup.Status.BackupType == v1.OneTimeBackupType && backup.Generation == backup.Status.ObservedGeneration
 }
