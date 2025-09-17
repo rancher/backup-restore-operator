@@ -41,6 +41,15 @@ persistence:
 
   ## Only certain StorageClasses allow resizing PVs; Refer https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/
   size: 2Gi
+  
+## Optional resources to include in the backup
+## Querying for all possible resources may have performance penalties, for
+## example if they could be in any namespace.
+optionalResources:
+  # user-defined custom resources. E.g: policyservers, policies,
+  # policy-reporter targets
+  kubewarden-user-crs:
+    enabled: false
 
 # Add log level flags to backup-restore
 debug: false
