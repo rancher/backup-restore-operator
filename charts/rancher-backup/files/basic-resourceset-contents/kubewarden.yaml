@@ -48,7 +48,25 @@
   resourceNames:
     - "kubewarden-controller"
     
-# policyservers, policies in all ns
+# default policy-server:
+- apiVersion: "policies.kubewarden.io/v1"
+  kindsRegexp: "policyservers"
+  labelSelectors:
+    matchExpressions:
+    - key: "app.kubernetes.io/part-of"
+      operator: "In"
+      values: ["kubewarden"]
+
+# recommended policies:
+- apiVersion: "policies.kubewarden.io/v1"
+  kindsRegexp: "clusteradmissionpolicies"
+  labelSelectors:
+    matchExpressions:
+    - key: "app.kubernetes.io/part-of"
+      operator: "In"
+      values: ["kubewarden"]
+    
+# user-defined policyservers, policies in all ns
 - apiVersion: "policies.kubewarden.io/v1"
   kindsRegexp: "."
 
@@ -152,6 +170,8 @@
       operator: "In"
       values: ["policy-reporter", "policy-reporter-ui"]
   namespaceRegexp: "^cattle-kubewarden-|^kubewarden"
+
+# user-defined policy-reporter CRDs to configure alerts
 - apiVersion: "apiextensions.k8s.io/v1"
   kindsRegexp: "."
   resourceNameRegexp: "policyrepoter.kyverno.io$"
