@@ -9,5 +9,11 @@ controllerReferences:
     namespace: "cattle-system"
 resourceSelectors:
 {{- range $path, $_ := .Files.Glob "files/basic-resourceset-contents/*.yaml" -}}
-  {{- $.Files.Get $path | nindent 2 -}}
+  {{- if not (hasSuffix $path "files/basic-resourceset-contents/kubewarden-user-crs.yaml") }}
+    {{- $.Files.Get $path | nindent 2 -}}
+  {{- else}}
+    {{- if $.Values.optionalResources.kubewarden-user-crs.enabled }}
+      {{- $.Files.Get $path | nindent 2 -}}
+    {{- end }}
+  {{- end }}
 {{- end -}}

@@ -65,12 +65,6 @@
       - key: "app.kubernetes.io/part-of"
         operator: "In"
         values: ["kubewarden"]
-    
-{{- if .Values.optionalResources.kubewarden-user-crs.enabled }}
-# user-defined policyservers, policies in all ns
-- apiVersion: "policies.kubewarden.io/v1"
-  kindsRegexp: "."
-{{- end }}
 
 # kubewarden webhook configurations exposed by the kubewarden-controller
 # (not the ones the controller reconciles that connect to each policy-server)
@@ -172,12 +166,3 @@
         operator: "In"
         values: ["policy-reporter", "policy-reporter-ui"]
   namespaceRegexp: "^cattle-kubewarden-|^kubewarden"
-
-{{- if .Values.optionalResources.kubewarden-user-crs.enabled }}
-# user-defined policy-reporter CRDs to configure alerts
-- apiVersion: "apiextensions.k8s.io/v1"
-  kindsRegexp: "."
-  resourceNameRegexp: "policyrepoter.kyverno.io$"
-- apiVersion: "policyreporter.kyverno.io/v1alpha1"
-  kindsRegexp: "."
-{{- end }}
