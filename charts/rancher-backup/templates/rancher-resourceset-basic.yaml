@@ -12,7 +12,7 @@ resourceSelectors:
   {{- if not (hasSuffix $path "files/basic-resourceset-contents/kubewarden-user-crs.yaml") }}
     {{- $.Files.Get $path | nindent 2 -}}
   {{- else}}
-    {{- if $.Values.optionalResources.kubewarden-user-crs.enabled }}
+    {{- if $.Values.optionalResources.kubewardenUserCRs.enabled }}
       {{- $.Files.Get $path | nindent 2 -}}
     {{- end }}
   {{- end }}

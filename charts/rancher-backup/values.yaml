@@ -48,7 +48,7 @@ persistence:
 optionalResources:
   # user-defined custom resources. E.g: policyservers, policies,
   # policy-reporter targets
-  kubewarden-user-crs:
+  kubewardenUserCRs:
     enabled: false
 
 # Add log level flags to backup-restore
