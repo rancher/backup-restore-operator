@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	backuprestoreoperatorv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/hull/pkg/chart"
 	"github.com/rancher/hull/pkg/checker"
 	"github.com/rancher/hull/pkg/test"
@@ -166,6 +167,15 @@ var suite = test.Suite{
 						},
 					},
 				),
+		},
+		{
+			Name: "Set .optionalResources.kubewardenUserCRs.enabled",
+			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
+				Set("optionalResources", map[string]interface{}{
+					"kubewardenUserCRs": map[string]interface{}{
+						"enabled": true,
+					},
+				}),
 		},
 		{
 			Name: "Set Node Affinity",
@@ -989,6 +999,40 @@ var suite = test.Suite{
 					} else {
 						assert.False(tc.T, pspsFound, "ClusterRole %s has incorrect PSP configuration", cr.Name)
 					}
+				}),
+			},
+		},
+
+		{ // Set kubewardenUserCRs
+			Name: "Include Kubewarden optional resources",
+
+			Covers: []string{
+				".Values.optionalResources.kubewardenUserCRs.enabled",
+			},
+
+			Checks: test.Checks{
+				checker.PerResource[*backuprestoreoperatorv1.ResourceSet](func(tc *checker.TestContext, rs *backuprestoreoperatorv1.ResourceSet) {
+					selectors := rs.ResourceSelectors
+					assert.Greater(tc.T, len(rs.ResourceSelectors), 0, "ResourceSelectors should not be empty")
+					found1, found2, found3 := false, false, false
+					for _, sel := range selectors {
+						if sel.APIVersion == "policies.kubewarden.io/v1" &&
+							sel.KindsRegexp == "." {
+							found1 = true
+						}
+						if sel.APIVersion == "apiextensions.k8s.io/v1" &&
+							sel.KindsRegexp == "." &&
+							sel.ResourceNameRegexp == "policyrepoter.kyverno.io$" {
+							found2 = true
+						}
+						if sel.APIVersion == "policyreporter.kyverno.io/v1alpha1" &&
+							sel.KindsRegexp == "." {
+							found3 = true
+						}
+					}
+					assert.True(tc.T, found1, "Expected kubewardenUserCRs: policies.kubewarden.io/v1 selector not found")
+					assert.True(tc.T, found2, "Expected kubewardenUserCRs: apiextensions.k8s.io/v1 selector not found")
+					assert.True(tc.T, found3, "Expected kubewardenUserCRs: policyreporter.kyverno.io/v1alpha1 selector not found")
 				}),
 			},
 		},
