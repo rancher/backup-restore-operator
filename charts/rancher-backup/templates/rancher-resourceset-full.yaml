@@ -8,8 +8,14 @@ controllerReferences:
     name: "rancher"
     namespace: "cattle-system"
 resourceSelectors:
-{{- range $path, $_ := .Files.Glob "files/basic-resourceset-contents/*.yaml" -}}
-  {{- $.Files.Get $path | nindent 2 -}}
+{{- range $path, $_ := .Files.Glob "files/basic-resourceset-contents/*.yaml" }}
+  {{- if not (hasSuffix $path "files/basic-resourceset-contents/kubewarden-user-crs.yaml") }}
+    {{- $.Files.Get $path | nindent 2 -}}
+  {{- else}}
+    {{- if $.Values.optionalResources.kubewardenUserCRs.enabled }}
+      {{- $.Files.Get $path | nindent 2 -}}
+    {{- end }}
+  {{- end }}
 {{- end -}}
 {{- range $path, $_ := .Files.Glob "files/sensitive-resourceset-contents/*.yaml" -}}
   {{- $.Files.Get $path | nindent 2 -}}
