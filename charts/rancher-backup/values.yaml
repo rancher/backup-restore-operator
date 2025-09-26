@@ -2,6 +2,11 @@ image:
   repository: rancher/backup-restore-operator
   tag: %TAG%
 
+optionalResources:
+  ## If enabled, will include kubewarden-related resources in the backups
+  kubewarden:
+    enabled: false
+
 ## Default s3 bucket for storing all backup files created by the backup-restore-operator
 s3:
   enabled: false
