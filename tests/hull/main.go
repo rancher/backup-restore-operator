@@ -2,10 +2,12 @@ package hull
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/hull/pkg/chart"
 	"github.com/rancher/hull/pkg/checker"
 	"github.com/rancher/hull/pkg/test"
@@ -13,7 +15,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-
 	rbacv1 "k8s.io/api/rbac/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -388,6 +389,14 @@ var suite = test.Suite{
 			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
 				SetValue(
 					"securityContext.runAsNonRoot", "false",
+				),
+		},
+		{
+			Name: "Enable including kubewarden resources in backups",
+
+			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
+				SetValue(
+					"optionalResources.kubewarden.enabled", "true",
 				),
 		},
 	},
@@ -962,6 +971,77 @@ var suite = test.Suite{
 					annotations, _ := checker.RenderValue[map[string]string](tc, ".Values.serviceAccount.annotations")
 					if len(annotations) > 0 {
 						assert.Equal(tc.T, annotations, sa.ObjectMeta.Annotations, "Job %s/%s has incorrect image configuration", sa.Namespace, sa.Name)
+					}
+				}),
+			},
+		},
+		{ // Include optional kubewarden resources in backups
+			Name: "Enable kubewarden resources",
+
+			Covers: []string{
+				".Values.optionalResources",
+				".Values.optionalResources.kubewarden",
+				".Values.optionalResources.kubewarden.enabled",
+			},
+
+			Checks: test.Checks{
+				checker.PerResource[*backupv1.ResourceSet](func(tc *checker.TestContext, rs *backupv1.ResourceSet) {
+					if checker.Select("rancher-resource-set-basic", "", rs) {
+						return
+					}
+
+					containsKubewardenResources := slices.ContainsFunc(rs.ResourceSelectors, func(selector backupv1.ResourceSelector) bool {
+						if selector.ResourceNameRegexp == "^cattle-kubewarden-|^kubewarden" {
+							return true
+						}
+
+						return false
+					})
+					containsKubewardenSecret := slices.ContainsFunc(rs.ResourceSelectors, func(selector backupv1.ResourceSelector) bool {
+						if selector.ResourceNameRegexp == "^cattle-kubewarden-|^kubewarden" && selector.KindsRegexp == "^secrets$" {
+							return true
+						}
+
+						return false
+					})
+
+					shouldIncludeKubewardenResources, _ := checker.RenderValue[bool](tc, ".Values.optionalResources.kubewarden.enabled")
+					if shouldIncludeKubewardenResources {
+						assert.Equal(tc.T, containsKubewardenResources, true, "ResourceSet %s should contain kubewarden resources", rs.Name)
+						assert.Equal(tc.T, containsKubewardenSecret, false, "ResourceSet %s should not contain kubewarden secrets", rs.Name)
+					} else {
+						assert.Equal(tc.T, containsKubewardenResources, false, "ResourceSet %s should not contain kubewarden resources", rs.Name)
+						assert.Equal(tc.T, containsKubewardenSecret, false, "ResourceSet %s should not contain kubewarden secrets", rs.Name)
+					}
+				}),
+
+				checker.PerResource[*backupv1.ResourceSet](func(tc *checker.TestContext, rs *backupv1.ResourceSet) {
+					if checker.Select("rancher-resource-set-full", "", rs) {
+						return
+					}
+
+					containsKubewardenResources := slices.ContainsFunc(rs.ResourceSelectors, func(selector backupv1.ResourceSelector) bool {
+						if selector.ResourceNameRegexp == "^cattle-kubewarden-|^kubewarden" {
+							return true
+						}
+
+						return false
+					})
+					containsKubewardenSecret := slices.ContainsFunc(rs.ResourceSelectors, func(selector backupv1.ResourceSelector) bool {
+						if selector.ResourceNameRegexp == "^cattle-kubewarden-|^kubewarden" && selector.KindsRegexp == "^secrets$" {
+							return true
+						}
+
+						return false
+					})
+
+					shouldIncludeKubewardenResources, _ := checker.RenderValue[bool](tc, ".Values.optionalResources.kubewarden.enabled")
+					if shouldIncludeKubewardenResources {
+						assert.Equal(tc.T, containsKubewardenResources, true, "ResourceSet %s should contain kubewarden resources", rs.Name)
+						assert.Equal(tc.T, containsKubewardenSecret, true, "ResourceSet %s should contain kubewarden secrets", rs.Name)
+					} else {
+						assert.Equal(tc.T, containsKubewardenResources, false, "ResourceSet %s should not contain kubewarden resources", rs.Name)
+						assert.Equal(tc.T, containsKubewardenSecret, false, "ResourceSet %s should not contain kubewarden secrets", rs.Name)
 					}
 				}),
 			},
