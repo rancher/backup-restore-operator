@@ -8,9 +8,17 @@ controllerReferences:
     name: "rancher"
     namespace: "cattle-system"
 resourceSelectors:
-{{- range $path, $_ := .Files.Glob "files/basic-resourceset-contents/*.yaml" -}}
+{{- /* Includes default resources into the ResourceSet */ -}}
+{{- range $path, $_ := .Files.Glob "files/default/**/*.yaml" -}}
   {{- $.Files.Get $path | nindent 2 -}}
 {{- end -}}
-{{- range $path, $_ := .Files.Glob "files/sensitive-resourceset-contents/*.yaml" -}}
-  {{- $.Files.Get $path | nindent 2 -}}
-{{- end -}}
+
+{{- /* Include all optional resources into the ResourceSet based on what's enabled */ -}}
+{{- range $key, $val := .Values.optionalResources }}
+  {{- if $val.enabled }}
+    {{- $globPattern := printf "files/optional/**/%s.yaml" $key }}
+    {{- range $path, $_ := $.Files.Glob $globPattern }}
+      {{- $.Files.Get $path | nindent 2 }}
+    {{- end }}
+  {{- end }}
+{{- end }}
