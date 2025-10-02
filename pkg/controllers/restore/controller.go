@@ -453,6 +453,14 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 				continue
 			}
 
+			// This behavior is needed as BRO ignores all builtin GlobalRoles and RoleTemplates which would lead to all their child resources
+			// not beind properly created on migrations if they kept waiting for their Owners to be created.
+			if strings.EqualFold(kind, "globalrole") || strings.EqualFold(kind, "roletemplate") {
+				errCheckingOwnerRefs = true
+				logrus.Infof("Resource %v of type %v has %v as owner. The OwnerRefs will be dropped.", name, gvr.String(), gvk.String())
+				continue
+			}
+
 			var apiGroup, version string
 			split := strings.SplitN(groupVersion, "/", 2)
 			if len(split) == 1 {
