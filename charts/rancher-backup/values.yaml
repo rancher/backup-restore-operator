@@ -120,3 +120,8 @@ securityContext:
   ## Only processes running as 'root' can write to HostPath PVCs so Backups will fail in that scenario if not running as 'root'.
   ## However, this goes against Kubernetes security best practices and should be avoided whenever possible.
   runAsNonRoot: true
+
+# Create a dynamic manifests via values:
+# Beware: There will be no validation on these resource manifests in `extraObjects` - they must be valid k8s resources.
+# If you encounter issues installing/upgrading while using these, please investigate these first.
+extraObjects: []
