@@ -135,9 +135,9 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 		ConfigPath: tarContent.Name,
 	}
 
-	if shouldSkipBuiltin(gvr.Resource, fileMap) {
-		return nil
-	}
+	// if shouldSkipBuiltin(gvr.Resource, fileMap) {
+	// 	return nil
+	// }
 
 	if strings.EqualFold(gvr.Resource, "customresourcedefinitions") {
 		cr.crdInfoToData[info] = unstructured.Unstructured{Object: fileMap}

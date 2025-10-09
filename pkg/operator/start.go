@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/start"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
@@ -80,16 +81,17 @@ func (o *RunOptions) shouldRunMetricsServer() bool {
 }
 
 type ControllerOptions struct {
-	mapper        meta.RESTMapper
-	clientSet     *clientset.Clientset
-	k8sClient     *kubernetes.Clientset
-	backupFactory *resources.Factory
-	core          *v1core.Factory
-	dynamic       *dynamic.DynamicClient
-	sharedFactory lasso.SharedClientFactory
+	mapper                  meta.RESTMapper
+	clientSet               *clientset.Clientset
+	k8sClient               *kubernetes.Clientset
+	backupFactory           *resources.Factory
+	core                    *v1core.Factory
+	dynamic                 *dynamic.DynamicClient
+	dynamicHasImpersonation bool
+	sharedFactory           lasso.SharedClientFactory
 }
 
-func setup(kubeconfig *rest.Config) (ControllerOptions, error) {
+func setup(ctx context.Context, kubeconfig *rest.Config) (ControllerOptions, error) {
 	restmapper, err := mapper.New(kubeconfig)
 	if err != nil {
 		return ControllerOptions{}, fmt.Errorf("error building rest mapper: %s", err.Error())
@@ -115,23 +117,47 @@ func setup(kubeconfig *rest.Config) (ControllerOptions, error) {
 		return ControllerOptions{}, fmt.Errorf("error getting kubernetes client: %s", err.Error())
 	}
 
-	dynamicInterface, err := dynamic.NewForConfig(kubeconfig)
-	if err != nil {
-		return ControllerOptions{}, fmt.Errorf("error generating dynamic client: %s", err.Error())
-	}
 	sharedClientFactory, err := lasso.NewSharedClientFactoryForConfig(kubeconfig)
 	if err != nil {
 		return ControllerOptions{}, fmt.Errorf("error generating shared client factory: %s", err.Error())
 	}
+
+	webhookSA, err := k8sclient.CoreV1().ServiceAccounts("cattle-system").Get(ctx, "rancher-webhook-sudo", metav1.GetOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		return ControllerOptions{}, fmt.Errorf("error validating existence of rancher-webhook-sudo service account: %s", err.Error())
+	}
+
+	dynamicHasImpersonation := false
+	if webhookSA != nil {
+		logrus.Info("initializing dynamic client with webhook impersonation")
+		kubeconfig.Impersonate = webhookImpersonation()
+		dynamicHasImpersonation = true
+	} else {
+		logrus.Info("initializing dynamic client without webhook impersonation")
+	}
+
+	dynamicInterface, err := dynamic.NewForConfig(kubeconfig)
+	if err != nil {
+		return ControllerOptions{}, fmt.Errorf("error generating dynamic client: %s", err.Error())
+	}
 	return ControllerOptions{
-		mapper:        restmapper,
-		clientSet:     clientSet,
-		k8sClient:     k8sclient,
-		backupFactory: backups,
-		core:          coreF,
-		dynamic:       dynamicInterface,
-		sharedFactory: sharedClientFactory,
+		mapper:                  restmapper,
+		clientSet:               clientSet,
+		k8sClient:               k8sclient,
+		backupFactory:           backups,
+		core:                    coreF,
+		dynamic:                 dynamicInterface,
+		dynamicHasImpersonation: dynamicHasImpersonation,
+		sharedFactory:           sharedClientFactory,
 	}, nil
+}
+
+// WebhookImpersonation returns a ImpersonationConfig that can be used for impersonating the webhook's sudo account and bypass validation.
+func webhookImpersonation() rest.ImpersonationConfig {
+	return rest.ImpersonationConfig{
+		UserName: "system:serviceaccount:cattle-system:rancher-webhook-sudo",
+		Groups:   []string{"system:masters"},
+	}
 }
 
 func FetchDefaultS3Configuration(options RunOptions, core *v1core.Factory) (*backupv1.S3ObjectStore, error) {
@@ -191,7 +217,7 @@ func Run(
 
 	kubeconfig.RateLimiter = ratelimit.None
 
-	c, err := setup(kubeconfig)
+	c, err := setup(ctx, kubeconfig)
 	if err != nil {
 		return err
 	}
@@ -253,6 +279,8 @@ func Run(
 		c.k8sClient.CoordinationV1().Leases(options.ChartNamespace),
 		c.clientSet,
 		c.dynamic,
+		c.dynamicHasImpersonation,
+		kubeconfig,
 		c.sharedFactory,
 		c.mapper,
 		defaultMountPath,
