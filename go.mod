@@ -112,7 +112,7 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/samber/lo v1.49.1
 	github.com/testcontainers/testcontainers-go v0.35.0
-	sigs.k8s.io/controller-runtime v0.22.1
+	sigs.k8s.io/controller-runtime v0.22.3
 )
 
 require (
