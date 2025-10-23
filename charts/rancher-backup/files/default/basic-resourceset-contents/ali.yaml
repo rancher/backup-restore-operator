@@ -22,4 +22,4 @@
   namespaces:
     - "cattle-system"
   resourceNames:
-  - "ali-operator"
+    - "ali-operator"
