@@ -50,7 +50,6 @@ The following table lists the configurable parameters of the rancher-backup char
 | serviceAccount.annotations | Annotations to apply to created service account | {} |
 | global.cattle.psp.enabled | Enable or disable PSPs in the chart | false |
 | resources | CPU and memory resource requests and limits for the backup-restore-operator container | {} |
-| extraObjects | Array of additional Kubernetes objects managed by the release | [] |
 
 -----
 
