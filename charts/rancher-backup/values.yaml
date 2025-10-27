@@ -124,13 +124,3 @@ resources: {}
   # limits:
   #   cpu: 2
   #   memory: 2Gi
-
-# Add extra objects to be managed by the release
-# This allows users to create Backups using the Backup CRD
-extraObjects: []
-  # - apiVersion: resources.cattle.io/v1
-  #   kind: Backup
-  #   spec:
-  #   resourceSetName: rancher-resource-set
-  #     retentionCount: 24
-  #     schedule: '@every 1h'
