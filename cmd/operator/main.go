@@ -4,12 +4,13 @@ import (
 	"flag"
 	"os"
 
-	"github.com/rancher/backup-restore-operator/cmd/operator/version"
-	"github.com/rancher/backup-restore-operator/pkg/operator"
-	backuputil "github.com/rancher/backup-restore-operator/pkg/util"
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 	"github.com/rancher/wrangler/v3/pkg/signals"
 	"github.com/sirupsen/logrus"
+
+	"github.com/rancher/backup-restore-operator/cmd/operator/version"
+	"github.com/rancher/backup-restore-operator/pkg/operator"
+	backuputil "github.com/rancher/backup-restore-operator/pkg/util"
 )
 
 const (
