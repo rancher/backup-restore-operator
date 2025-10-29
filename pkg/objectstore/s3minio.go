@@ -15,16 +15,17 @@ import (
 	"strings"
 	"time"
 
-	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
+	"github.com/rancher/backup-restore-operator/cmd/operator/version"
+	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/util"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
-	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
-	"github.com/rancher/backup-restore-operator/pkg/util"
 	log "github.com/sirupsen/logrus"
+	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 )
 
 type ObjectStore struct {
@@ -36,6 +37,8 @@ type ObjectStore struct {
 	BucketName                string `json:"bucketName"`
 	Region                    string `json:"region"`
 	Folder                    string `json:"folder"`
+	// TODO: this may need to be a string too
+	ClientConfig *v1.ClientConfig `json:"clientConfig,omitempty"`
 }
 
 // Almost everything in this file is from rke-tools with some modifications https://github.com/rancher/rke-tools/blob/master/main.go
@@ -96,7 +99,10 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 
 		break
 	}
+	client.SetAppInfo("rancher backup-restore-operator", version.Version)
 
+	// TODO: check bucket exists after returning basic configured client
+	// this way any config's that could affect the out come of checking will be setup first.
 	found, err := client.BucketExists(context.Background(), bc.BucketName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if s3 bucket [%s] exists, error: %v", bc.BucketName, err)
@@ -107,6 +113,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 	return client, nil
 }
 
+// GetS3Client prepares the S3 client per the current BRO config requirements
 // TODO: namespace should be backup.NS only if backup CR contains storage location, for using operator's s3, use chart's ns
 func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClient dynamic.Interface) (*minio.Client, error) {
 	var accessKey, secretKey string
@@ -155,6 +162,18 @@ func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClie
 	if err != nil {
 		return &minio.Client{}, err
 	}
+
+	// Because we only have an AWS specific config for now check both at the same time
+	// if/when we add other configs we can refactor this a bit.
+	if objectStore.ClientConfig != nil && objectStore.ClientConfig.Aws != nil {
+		// When the client config AWS dual-stack setting is set to false we disable it
+		// This is enabled by default and in some user environments this has caused issues
+		if objectStore.ClientConfig.Aws.DualStack == false {
+			log.Debug("disabling the AWS S3 dual-stack client setting")
+			s3Client.SetS3EnableDualstack(false)
+		}
+	}
+
 	return s3Client, nil
 }
 
