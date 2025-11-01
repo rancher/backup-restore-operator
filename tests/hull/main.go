@@ -95,6 +95,21 @@ var suite = test.Suite{
 				),
 		},
 		{
+			Name: "Set .Values.resources",
+
+			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
+				Set("resources", map[string]interface{}{
+					"requests": map[string]interface{}{
+						"cpu":    "1",
+						"memory": "1Gi",
+					},
+					"limits": map[string]interface{}{
+						"cpu":    "2",
+						"memory": "2Gi",
+					},
+				}),
+		},
+		{
 			Name: "Set .Values.persistence false",
 
 			TemplateOptions: chart.NewTemplateOptions(DefaultReleaseName, DefaultNamespace).
@@ -494,6 +509,28 @@ var suite = test.Suite{
 						pcn, "Deployment %s/%s does not have correct PriorityClassName",
 						obj.GetNamespace(), obj.GetName(),
 					)
+				}),
+			},
+		},
+		{ // Set resources
+			Name: "Set resources",
+
+			Covers: []string{
+				".Values.resources",
+			},
+
+			Checks: test.Checks{
+				checker.PerWorkload(func(tc *checker.TestContext, obj metav1.Object, podTemplateSpec corev1.PodTemplateSpec) {
+					if checker.Select("rancher-backup-patch-sa", "cattle-resources-system", obj) {
+						return
+					}
+					resources := checker.MustRenderValue[corev1.ResourceRequirements](tc, ".Values.resources")
+					for _, container := range podTemplateSpec.Spec.Containers {
+						assert.Equal(tc.T, resources.Requests.Cpu().String(), container.Resources.Requests.Cpu().String(), "container %s in Deployment %s/%s does not have correct CPU requests", container.Name, obj.GetNamespace(), obj.GetName())
+						assert.Equal(tc.T, resources.Requests.Memory().String(), container.Resources.Requests.Memory().String(), "container %s in Deployment %s/%s does not have correct Memory requests", container.Name, obj.GetNamespace(), obj.GetName())
+						assert.Equal(tc.T, resources.Limits.Cpu().String(), container.Resources.Limits.Cpu().String(), "container %s in Deployment %s/%s does not have correct CPU limits", container.Name, obj.GetNamespace(), obj.GetName())
+						assert.Equal(tc.T, resources.Limits.Memory().String(), container.Resources.Limits.Memory().String(), "container %s in Deployment %s/%s does not have correct Memory limits", container.Name, obj.GetNamespace(), obj.GetName())
+					}
 				}),
 			},
 		},
