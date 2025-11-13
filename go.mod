@@ -19,7 +19,7 @@ require (
 	golang.org/x/sync v0.17.0
 	k8s.io/api v0.34.1
 	k8s.io/apiextensions-apiserver v0.34.1
-	k8s.io/apimachinery v0.34.1
+	k8s.io/apimachinery v0.34.2
 	k8s.io/apiserver v0.34.1
 	k8s.io/client-go v0.34.1
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397 // indirect with v0.30.0
@@ -112,7 +112,7 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/samber/lo v1.49.1
 	github.com/testcontainers/testcontainers-go v0.35.0
-	sigs.k8s.io/controller-runtime v0.22.1
+	sigs.k8s.io/controller-runtime v0.22.4
 )
 
 require (
