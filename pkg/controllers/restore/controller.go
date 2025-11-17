@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	coordinationclientv1 "k8s.io/client-go/kubernetes/typed/coordination/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 )
@@ -51,20 +52,22 @@ const (
 )
 
 type handler struct {
-	ctx                     context.Context
-	restores                restoreControllers.RestoreController
-	backups                 restoreControllers.BackupController
-	secrets                 v1core.SecretController
-	discoveryClient         discovery.DiscoveryInterface
-	apiClient               clientset.Interface
-	dynamicClient           dynamic.Interface
-	sharedClientFactory     lasso.SharedClientFactory
-	restmapper              meta.RESTMapper
-	defaultBackupMountPath  string
-	defaultS3BackupLocation *v1.S3ObjectStore
-	kubernetesLeaseClient   coordinationclientv1.LeaseInterface
-	metricsServerEnabled    bool
-	encryptionProviderPath  string
+	ctx                           context.Context
+	restores                      restoreControllers.RestoreController
+	backups                       restoreControllers.BackupController
+	secrets                       v1core.SecretController
+	discoveryClient               discovery.DiscoveryInterface
+	apiClient                     clientset.Interface
+	dynamicClient                 dynamic.Interface
+	dynamicClientHasImpersonation bool
+	kubeconfig                    *rest.Config
+	sharedClientFactory           lasso.SharedClientFactory
+	restmapper                    meta.RESTMapper
+	defaultBackupMountPath        string
+	defaultS3BackupLocation       *v1.S3ObjectStore
+	kubernetesLeaseClient         coordinationclientv1.LeaseInterface
+	metricsServerEnabled          bool
+	encryptionProviderPath        string
 }
 
 type ObjectsFromBackupCR struct {
@@ -98,6 +101,8 @@ func Register(
 	leaseClient coordinationclientv1.LeaseInterface,
 	clientSet *clientset.Clientset,
 	dynamicInterface dynamic.Interface,
+	dynamicClientHasImpersonation bool,
+	kubeconfig *rest.Config,
 	sharedClientFactory lasso.SharedClientFactory,
 	restmapper meta.RESTMapper,
 	defaultLocalBackupLocation string,
@@ -106,20 +111,22 @@ func Register(
 	encryptionProviderPath string) {
 
 	controller := &handler{
-		ctx:                     ctx,
-		restores:                restores,
-		backups:                 backups,
-		secrets:                 secrets,
-		dynamicClient:           dynamicInterface,
-		discoveryClient:         clientSet.Discovery(),
-		apiClient:               clientSet,
-		sharedClientFactory:     sharedClientFactory,
-		restmapper:              restmapper,
-		defaultBackupMountPath:  defaultLocalBackupLocation,
-		defaultS3BackupLocation: defaultS3,
-		kubernetesLeaseClient:   leaseClient,
-		metricsServerEnabled:    metricsServerEnabled,
-		encryptionProviderPath:  encryptionProviderPath,
+		ctx:                           ctx,
+		restores:                      restores,
+		backups:                       backups,
+		secrets:                       secrets,
+		dynamicClient:                 dynamicInterface,
+		dynamicClientHasImpersonation: dynamicClientHasImpersonation,
+		kubeconfig:                    kubeconfig,
+		discoveryClient:               clientSet.Discovery(),
+		apiClient:                     clientSet,
+		sharedClientFactory:           sharedClientFactory,
+		restmapper:                    restmapper,
+		defaultBackupMountPath:        defaultLocalBackupLocation,
+		defaultS3BackupLocation:       defaultS3,
+		kubernetesLeaseClient:         leaseClient,
+		metricsServerEnabled:          metricsServerEnabled,
+		encryptionProviderPath:        encryptionProviderPath,
 	}
 
 	lease, err := leaseClient.Get(ctx, leaseName, k8sv1.GetOptions{})
@@ -300,6 +307,40 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 		return h.setReconcilingCondition(restore, updateErr)
 	}
 
+	// TOOO: should use onError function
+	impersonateError := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		// If the dynamicClient was created without impersonating the rancher-webhook-sudo SA, wait until it becomes available and impersonate it
+		if !h.dynamicClientHasImpersonation {
+			logrus.Debug("Trying to perform webhook service account impersonation")
+
+			webhookSA, err := h.dynamicClient.Resource(schema.GroupVersionResource{
+				Group:    "",
+				Version:  "v1",
+				Resource: "serviceaccounts",
+			}).Namespace("cattle-system").Get(h.ctx, "rancher-webhook-sudo", k8sv1.GetOptions{})
+			if err != nil && !apierrors.IsNotFound(err) {
+				return err
+			}
+
+			if webhookSA != nil {
+				logrus.Info("Performing webhook service account impersonation")
+				h.dynamicClient, err = dynamic.NewForConfig(h.kubeconfig)
+				if err != nil {
+					return err
+				}
+				h.dynamicClientHasImpersonation = true
+			}
+		} else {
+			logrus.Info("Skipping webhook service account impersonation as it is already active")
+		}
+
+		return nil
+	})
+	if impersonateError != nil {
+		logrus.Error("Failed to perform webhook service account impersonation")
+		return h.setReconcilingCondition(restore, impersonateError)
+	}
+
 	logrus.Infof("Done restoring")
 	return restore, err
 }
@@ -457,11 +498,11 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 
 			// This behavior is needed as BRO ignores all builtin GlobalRoles and RoleTemplates which would lead to all their child resources
 			// not beind properly created on migrations if they kept waiting for their Owners to be created.
-			if strings.EqualFold(kind, "globalrole") || strings.EqualFold(kind, "roletemplate") {
-				errCheckingOwnerRefs = true
-				logrus.Infof("Resource %v of type %v has %v as owner. The OwnerRefs will be dropped.", name, gvr.String(), gvk.String())
-				continue
-			}
+			// if strings.EqualFold(kind, "globalrole") || strings.EqualFold(kind, "roletemplate") {
+			// 	errCheckingOwnerRefs = true
+			// 	logrus.Infof("Resource %v of type %v has %v as owner. The OwnerRefs will be dropped.", name, gvr.String(), gvk.String())
+			// 	continue
+			// }
 
 			var apiGroup, version string
 			split := strings.SplitN(groupVersion, "/", 2)
