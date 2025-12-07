@@ -2,7 +2,7 @@ module github.com/rancher/backup-restore-operator/tests
 
 go 1.24.0
 
-toolchain go1.24.10
+toolchain go1.24.11
 
 require (
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.80.1
