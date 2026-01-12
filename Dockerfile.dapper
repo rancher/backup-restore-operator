@@ -20,7 +20,7 @@ RUN if [ "${ARCH}" != "s390x" ]; then \
 
 ENV DAPPER_ENV REPO TAG DRONE_TAG CROSS CROSS_ARCH USE_DOCKER_BUILDX TARGET_ARCH
 ENV DAPPER_SOURCE /go/src/github.com/rancher/backup-restore-operator/
-ENV DAPPER_OUTPUT ./bin ./dist
+ENV DAPPER_OUTPUT ./bin ./dist ./pkg
 ENV GOCACHE /root/.cache/go-build
 ENV GOPATH /go
 ENV DAPPER_DOCKER_SOCKET true
