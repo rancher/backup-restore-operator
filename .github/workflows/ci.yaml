@@ -60,7 +60,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Helm-unittest
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest
+        run: helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest
       - name: CI
         run: make ci
   test:
@@ -86,7 +86,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Helm-unittest
-        run: helm plugin install https://github.com/quintush/helm-unittest
+        run: helm plugin install --verify=false https://github.com/quintush/helm-unittest
       - name: Setup helm charts
         run: ./scripts/package-helm
       - name: Debug
