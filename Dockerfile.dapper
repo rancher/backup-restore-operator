@@ -9,7 +9,7 @@ RUN zypper -n in git-core curl tar gzip docker wget awk hostname && \
     zypper -n clean -a && \
     rm -rf /tmp/* /var/tmp/* /usr/share/doc/packages/*
 
-RUN if [ "${ARCH}" == "amd64" ]; then \
+RUN if [ "${ARCH}" != "s390x" ]; then \
         curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.61.0; \
     fi
 RUN curl -sL https://get.helm.sh/helm-v3.9.0-linux-${ARCH}.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
