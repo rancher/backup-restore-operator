@@ -202,9 +202,9 @@ func Run(
 				dmPath := filepath.Join(dir, "backups")
 				err := os.MkdirAll(dmPath, 0700)
 				if err != nil {
-					logrus.Fatalf("Error setting default location %v: %v", dmPath, err)
+					logrus.WithFields(logrus.Fields{"dm_path": dmPath, "error": err}).Fatal("Failed to set default location for device mapper path")
 				}
-				logrus.Infof("No temporary backup location provided, saving backups at %v", dmPath)
+				logrus.WithFields(logrus.Fields{"dm_path": dmPath}).Info("No temporary backup location specified, using default backup directory")
 				defaultMountPath = dmPath
 			}
 		}
@@ -230,7 +230,7 @@ func Run(
 		metricsServerEnabled = options.shouldRunMetricsServer()
 	}
 
-	logrus.Infof("Secrets containing encryption config files must be stored in the namespace %v", options.ChartNamespace)
+	logrus.WithFields(logrus.Fields{"chart_namespace": options.ChartNamespace}).Info("Encryption config secret files must be stored in the chart namespace")
 
 	encryptionProviderLocation := options.LocalEncryptionProviderLocation
 
@@ -262,7 +262,7 @@ func Run(
 	)
 
 	if err := start.All(ctx, 2, c.backupFactory); err != nil {
-		logrus.Fatalf("Error starting: %s", err.Error())
+		logrus.WithFields(logrus.Fields{"error": err.Error()}).Fatal("Failed to start application due to initialization error")
 	}
 
 	<-ctx.Done()

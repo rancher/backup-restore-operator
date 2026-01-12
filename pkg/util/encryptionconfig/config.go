@@ -20,7 +20,7 @@ const EncryptionProviderConfigKey = "encryption-provider-config.yaml"
 func GetEncryptionConfigSecret(secrets v1.SecretController, encryptionConfigSecretName string) (*v1core.Secret, error) {
 	// EncryptionConfig secret ns is hardcoded to ns of controller in chart's ns
 	// kubectl create secret generic test-encryptionconfig --from-file=./encryption-provider-config.yaml
-	logrus.Infof("Get encryption config from namespace %v", util.GetChartNamespace())
+	logrus.WithFields(logrus.Fields{"get_chart_namespace": util.GetChartNamespace()}).Info("Retrieving encryption configuration from chart namespace")
 	encryptionConfigSecret, err := secrets.Get(util.GetChartNamespace(), encryptionConfigSecretName, v2.GetOptions{})
 	if err != nil {
 		return nil, err

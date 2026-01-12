@@ -84,14 +84,14 @@ func init() {
 		for _, b := range strings.Split(rancherBackupDurationBuckets, ",") {
 			f, err := strconv.ParseFloat(strings.TrimSpace(b), 64)
 			if err != nil {
-				logrus.Errorf("Failed to parse backup duration bucket '%s': %v", b, err)
+				logrus.WithFields(logrus.Fields{"b": b, "error": err}).Error("Failed to parse backup duration bucket: invalid format")
 				return
 			}
 			buckets = append(buckets, f)
 		}
 	}
 
-	logrus.Debugf("Backup duration buckets: %v", buckets)
+	logrus.WithFields(logrus.Fields{"buckets": buckets}).Debug("Configured backup duration histogram buckets for metrics collection")
 	backupDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "rancher_backup_duration_seconds",
@@ -188,14 +188,14 @@ func StartRestoreMetricsCollection(
 
 		getRestoresErr := retry.OnError(retry.DefaultRetry,
 			func(err error) bool {
-				logrus.Warnf("Retrying listing Backup CRs: %s", err)
+				logrus.WithFields(logrus.Fields{"error": err}).Warn("Failed to list Backup custom resources, retrying operation")
 				return true
 			}, func() error {
 				restoreList, err = restores.List(k8sv1.ListOptions{})
 				return err
 			})
 		if getRestoresErr != nil {
-			logrus.Errorf("Failed collecting restore metadata to populate metrics: %s", getRestoresErr)
+			logrus.WithFields(logrus.Fields{"get_restores_err": getRestoresErr}).Error("Failed to collect restore metadata for metrics due to unknown error")
 		}
 
 		updateRestoreMetrics(restoreList.Items)
@@ -218,14 +218,14 @@ func StartBackupMetricsCollection(
 
 		getBackupsErr := retry.OnError(retry.DefaultRetry,
 			func(err error) bool {
-				logrus.Warnf("Retrying listing Backup CRs: %s", err)
+				logrus.WithFields(logrus.Fields{"error": err}).Warn("Retrying backup custom resource listing due to error")
 				return true
 			}, func() error {
 				backupList, err = backups.List(k8sv1.ListOptions{})
 				return err
 			})
 		if getBackupsErr != nil {
-			logrus.Errorf("Failed collecting backup metadata to populate metrics: %s", getBackupsErr)
+			logrus.WithFields(logrus.Fields{"get_backups_err": getBackupsErr}).Error("Failed to collect backup metadata for metrics population due to error")
 		}
 
 		updateBackupMetrics(backupList.Items)
@@ -246,7 +246,7 @@ func InitMetricsServer(port int) {
 
 	http.Handle("/metrics", promhttp.Handler())
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
-		logrus.Fatalf("failed to start metrics server : %s", err)
+		logrus.WithFields(logrus.Fields{"error": err}).Fatal("Failed to start metrics server")
 	}
 
 	logrus.Info("Shutting down prometheus metrics server")

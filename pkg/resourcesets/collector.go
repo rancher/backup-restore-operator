@@ -73,7 +73,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 			currGVResource.Namespaced = res.Namespaced
 
 			if strings.Contains(res.Name, "/") {
-				logrus.Debugf("Skipped backing up subresource: %s", res.Name)
+				logrus.WithFields(logrus.Fields{"name": res.Name}).Debug("Skipped backup of subresource due to configuration settings")
 				continue
 			}
 
@@ -85,7 +85,7 @@ func (h *ResourceHandler) GatherResources(ctx context.Context, resourceSelectors
 					}
 					h.GVResourceToObjects[currGVResource] = filteredObjects
 				} else {
-					logrus.Infof("Not collecting objects for resource %v since it does not have list or get verbs", res.Name)
+					logrus.WithFields(logrus.Fields{"name": res.Name}).Info("Skipping resource collection as list and get verbs are not available")
 				}
 				continue
 			}
@@ -111,13 +111,13 @@ func (h *ResourceHandler) gatherResourcesForGroupVersion(filter v1.ResourceSelec
 	var resourceList []k8sv1.APIResource
 
 	groupVersion := filter.APIVersion
-	logrus.Debugf("Gathering resources for groupVersion: %v", groupVersion)
+	logrus.WithFields(logrus.Fields{"group_version": groupVersion}).Debug("Gathering resources for unknown group version")
 
 	// first list all resources for given groupversion using discovery API
 	resources, err := h.DiscoveryClient.ServerResourcesForGroupVersion(groupVersion)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logrus.Debugf("No resources found for groupVersion %v, skipping it", groupVersion)
+			logrus.WithFields(logrus.Fields{"group_version": groupVersion}).Debug("No resources found for group version, skipping discovery")
 			return resourceList, nil
 		}
 		return resourceList, err
@@ -158,12 +158,12 @@ func (h *ResourceHandler) fetchResourcesFromAPIServer(ctx context.Context, dr dy
 			return nil, err
 		}
 		labelSelector = selector.String()
-		logrus.Debugf("Listing objects using label selector %v", labelSelector)
+		logrus.WithFields(logrus.Fields{"label_selector": labelSelector}).Debug("Listing objects with specified label selector")
 	}
 
 	if filter.FieldSelectors != nil {
 		fieldSelector = fields.SelectorFromSet(filter.FieldSelectors).String()
-		logrus.Debugf("Listing objects using field selector %v", fieldSelector)
+		logrus.WithFields(logrus.Fields{"field_selector": fieldSelector}).Debug("Listing objects with field selector filter applied")
 	}
 
 	return unrollPaginatedListResult(ctx, dr, k8sv1.ListOptions{LabelSelector: labelSelector, FieldSelector: fieldSelector})
@@ -250,14 +250,14 @@ func (h *ResourceHandler) filterByName(filter v1.ResourceSelector, resourceObjec
 		name := resObj.GetName()
 		if includeNameMap[name] {
 			filteredByName = append(filteredByName, resObj)
-			logrus.Debugf("Including [%s] because it matched a name in ResourceNames", name)
+			logrus.WithFields(logrus.Fields{"name": name}).Debug("Including resource because name matched entry in ResourceNames list")
 		} else if hasRegEx {
 			includeMatch := includeRegex == nil || includeRegex.MatchString(name)
 			if includeMatch {
 				excludeMatch := excludeRegex != nil && excludeRegex.MatchString(name)
 				if !excludeMatch {
 					filteredByName = append(filteredByName, resObj)
-					logrus.Debugf("Including [%s] because it matched ResourceNameRegexp [%s] and didn't match ExcludeResourceNameRegexp [%s]", name, filter.ResourceNameRegexp, filter.ExcludeResourceNameRegexp)
+					logrus.WithFields(logrus.Fields{"name": name, "resource_name_regexp": filter.ResourceNameRegexp, "exclude_resource_name_regexp": filter.ExcludeResourceNameRegexp}).Debug("Resource included based on name pattern matching rules")
 				}
 			}
 		}
@@ -275,7 +275,7 @@ func (h *ResourceHandler) filterByNamespace(filter v1.ResourceSelector, filtered
 	}
 	if filter.NamespaceRegexp != "" {
 		var err error
-		logrus.Debugf("Using NamespaceRegexp %s to filter resource names", filter.NamespaceRegexp)
+		logrus.WithFields(logrus.Fields{"namespace_regexp": filter.NamespaceRegexp}).Debug("Filtering resource names using namespace regular expression")
 		namespaceRegexp, err = regexp.Compile(filter.NamespaceRegexp)
 		if err != nil {
 			return nil, fmt.Errorf("error in namespace pattern %s: %w", filter.NamespaceRegexp, err)
@@ -324,12 +324,12 @@ func (h *ResourceHandler) gatherObjectsForNonListResource(ctx context.Context, r
 
 	// these objects
 	if len(filter.ResourceNames) == 0 {
-		logrus.Infof("Cannot get objects for res %v since it doesn't allow list, and no resource names are provided", res.Name)
+		logrus.WithFields(logrus.Fields{"name": res.Name}).Info("Unable to retrieve objects as resource does not support listing and no specific resource names were provided")
 		return gatheredObjects, nil
 	}
 
 	if res.Namespaced && len(filter.Namespaces) == 0 {
-		logrus.Infof("Cannot get objects for res %v since it doesn't allow list, and no namespaces are provided", res.Name)
+		logrus.WithFields(logrus.Fields{"name": res.Name}).Info("Unable to retrieve objects for resource: listing not supported and no namespaces specified")
 		return gatheredObjects, nil
 	}
 

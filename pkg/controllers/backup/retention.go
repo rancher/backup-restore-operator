@@ -52,7 +52,7 @@ func (h *handler) deleteBackupsFromMountPath(retentionCount int, backupLocation,
 	} else {
 		fileMatchPattern = filepath.Join(backupLocation, fmt.Sprintf("%s-%s*.tar.gz", name, h.kubeSystemNS))
 	}
-	logrus.Infof("Finding files starting with %v", fileMatchPattern)
+	logrus.WithFields(logrus.Fields{"file_match_pattern": fileMatchPattern}).Info("Searching for files matching the specified pattern")
 	fileMatches, err := filepath.Glob(fileMatchPattern)
 	if err != nil {
 		return err
@@ -64,7 +64,7 @@ func (h *handler) deleteBackupsFromMountPath(retentionCount int, backupLocation,
 	for _, file := range fileMatches {
 		fileInfo, err := os.Stat(file)
 		if err != nil {
-			logrus.Errorf("Error getting file information for %v: %v", file, err)
+			logrus.WithFields(logrus.Fields{"file": file, "error": err}).Error("Failed to retrieve file information")
 			continue
 		}
 		b := backupInfo{
@@ -77,7 +77,7 @@ func (h *handler) deleteBackupsFromMountPath(retentionCount int, backupLocation,
 		return !backupFiles[i].creationTimestamp.Before(backupFiles[j].creationTimestamp)
 	})
 	for _, file := range backupFiles[retentionCount:] {
-		logrus.Infof("File %v was created at %v, deleting it to follow backup's policy of retaining %v backups", file.filename, file.creationTimestamp, retentionCount)
+		logrus.WithFields(logrus.Fields{"filename": file.filename, "creation_timestamp": file.creationTimestamp, "retention_count": retentionCount}).Info("Deleting backup file to enforce retention policy")
 		if err := os.Remove(filepath.Join(backupLocation, file.filename)); err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *
 	var backupFiles []backupInfo
 	for object := range objectCh {
 		if object.Err != nil {
-			logrus.Error("error to fetch s3 file:", object.Err)
+			logrus.WithFields(logrus.Fields{"error": object.Err}).Error("Failed to fetch file from S3")
 			return object.Err
 		}
 		// only parse backup file names that matches backup format
@@ -128,7 +128,7 @@ func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *
 			if len(s3.Folder) != 0 {
 				// example object.Key with folder: folder/timestamp_etcd.zip
 				// folder and separator needs to be stripped so time can be parsed below
-				logrus.Debugf("Stripping [%s] from [%s]", fmt.Sprintf("%s/", prefix), filename)
+				logrus.WithFields(logrus.Fields{"sprintf": fmt.Sprintf(), "filename": filename}).Debug("Removing prefix from filename during processing")
 				filename = strings.TrimPrefix(filename, fmt.Sprintf("%s/", prefix))
 			}
 			b := backupInfo{
@@ -145,13 +145,13 @@ func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *
 		return !backupFiles[i].creationTimestamp.Before(backupFiles[j].creationTimestamp)
 	})
 	for _, backupFile := range backupFiles[retentionCount:] {
-		logrus.Infof("Deleting s3 backup file [%s] to follow retention policy of max %v backups", backupFile.filename, retentionCount)
+		logrus.WithFields(logrus.Fields{"filename": backupFile.filename, "retention_count": retentionCount}).Info("Deleting S3 backup file to maintain retention policy limit")
 		err := svc.RemoveObject(context.Background(), s3.BucketName, backupFile.filename, minio.RemoveObjectOptions{})
 		if err != nil {
-			logrus.Errorf("Error detected during deletion: %v", err)
+			logrus.WithFields(logrus.Fields{"error": err}).Error("Failed to delete resource due to unexpected error")
 			return err
 		}
-		logrus.Infof("Success delete s3 backup file [%s]", backupFile.filename)
+		logrus.WithFields(logrus.Fields{"filename": backupFile.filename}).Info("Successfully deleted S3 backup file")
 	}
 	return nil
 }

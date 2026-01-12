@@ -42,7 +42,7 @@ func (h *handler) uploadToS3(backup *v1.Backup, objectStore *v1.S3ObjectStore, t
 }
 
 func CreateTarAndGzip(backupPath, targetGzipPath, targetGzipFile, backupCRName string) error {
-	logrus.Infof("Compressing backup CR %v", backupCRName)
+	logrus.WithFields(logrus.Fields{"backup_c_r_name": backupCRName}).Info("Compressing backup custom resource")
 	gzipFile, err := os.Create(filepath.Join(targetGzipPath, targetGzipFile))
 	if err != nil {
 		return fmt.Errorf("error creating backup tar gzip file: %v", err)

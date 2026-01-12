@@ -48,9 +48,9 @@ func (h *handler) prune(resourceSelectors []v1.ResourceSelector, transformerMap 
 				resourcePath = filepath.Join(resourcePath, objNs)
 			}
 			resourceFilePath := filepath.Join(resourcePath, objName+".json")
-			logrus.Debugf("resourceFilePath: %v", resourceFilePath)
+			logrus.WithFields(logrus.Fields{"resource_file_path": resourceFilePath}).Debug("Processing resource file at specified path")
 			if !cr.resourcesFromBackup[resourceFilePath] {
-				logrus.Infof("Marking resource %v for deletion", strings.TrimSuffix(resourceFilePath, ".json"))
+				logrus.WithFields(logrus.Fields{"trim_suffix": strings.TrimSuffix()}).Info("Marking resource for deletion after string suffix removal")
 				resourcesToDelete = append(resourcesToDelete, pruneResourceInfo{
 					name:      objName,
 					namespace: objNs,
@@ -66,10 +66,10 @@ func (h *handler) pruneClusterScopedResources(resourcesToDelete []pruneResourceI
 	err := h.deleteResources(resourcesToDelete, false)
 	if err != nil {
 		// don't return this error, let the second call retry
-		logrus.Errorf("Error pruning resources: %v", err)
+		logrus.WithFields(logrus.Fields{"error": err}).Error("Failed to prune resources due to unexpected error")
 	}
 
-	logrus.Infof("Will retry pruning resources by removing finalizers in %vs", pruneTimeout)
+	logrus.WithFields(logrus.Fields{"prune_timeout": pruneTimeout}).Info("Retrying resource pruning with finalizer removal after timeout")
 	time.Sleep(time.Duration(pruneTimeout) * time.Second)
 	logrus.Infof("Retrying pruning resources by removing finalizers")
 	return h.deleteResources(resourcesToDelete, true)

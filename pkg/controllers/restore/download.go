@@ -109,12 +109,12 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 	if decryptionTransformer != nil && readData[0] == 34 {
 		var encryptedBytes []byte
 		if err := json.Unmarshal(readData, &encryptedBytes); err != nil {
-			logrus.Errorf("Error unmarshaling encrypted data for resource [%v]: %v", gvr.GroupResource(), err)
+			logrus.WithFields(logrus.Fields{"group_resource": gvr.GroupResource(), "error": err}).Error("Failed to unmarshal encrypted data for resource, check encryption format and keys")
 			return fmt.Errorf("error unmarshaling encrypted data for resource [%v]: %v", gvr.GroupResource(), err)
 		}
 		decrypted, _, err := decryptionTransformer.TransformFromStorage(h.ctx, encryptedBytes, value.DefaultContext(additionalAuthenticatedData))
 		if err != nil {
-			logrus.Errorf("Error decrypting encrypted resource [%v]: %v, provide same encryption config as used for backup", gvr.GroupResource(), err)
+			logrus.WithFields(logrus.Fields{"group_resource": gvr.GroupResource(), "error": err}).Error("Failed to decrypt resource during restore, verify encryption config matches backup")
 			return fmt.Errorf("error decrypting encrypted resource [%v]: %v, provide same encryption config as used for backup", gvr.GroupResource(), err)
 		}
 		readData = decrypted
@@ -124,7 +124,7 @@ func (h *handler) loadDataFromFile(tarContent *tar.Header, readData []byte,
 	if err != nil {
 		if strings.Contains(err.Error(), "json: cannot unmarshal string into Go value") && decryptionTransformer == nil {
 			// This will be the case if we try to unmarshal an encrypted resource without decrypting it first
-			logrus.Errorf("Error unmarshaling encrypted resource [%v], no encryption config provided ", gvr.GroupResource())
+			logrus.WithFields(logrus.Fields{"group_resource": gvr.GroupResource()}).Error("Failed to unmarshal encrypted resource: missing encryption configuration")
 			return fmt.Errorf("error unmarshaling encrypted resource [%v], no encryption config provided", gvr.GroupResource())
 		}
 		return err
