@@ -33,12 +33,12 @@ const (
 	contentType     = "application/gzip"
 )
 
-func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool) (*minio.Client, error) {
+func SetS3Service(bc *v1.S3ObjectStore, accessKeyID, secretKey string, useSSL bool) (*minio.Client, error) {
 	// Initialize minio client object.
 	log.WithFields(log.Fields{
 		"s3-endpoint":              bc.Endpoint,
 		"s3-bucketName":            bc.BucketName,
-		"s3-accessKey":             accessKey,
+		"s3-accessKey":             redactAccessKeyID(accessKeyID),
 		"s3-region":                bc.Region,
 		"s3-endpoint-ca":           bc.EndpointCA,
 		"s3-folder":                bc.Folder,
@@ -52,7 +52,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 	bucketLookup := getBucketLookupType(bc.Endpoint)
 	for retries := 0; retries <= s3ServerRetries; retries++ {
 		// if the s3 access key and secret is not set use iam role
-		if len(accessKey) == 0 && len(secretKey) == 0 {
+		if len(accessKeyID) == 0 && len(secretKey) == 0 {
 			log.Info("invoking set s3 service client use IAM role")
 			// This will work when run on an EC2 instance that has the right policy to access buckets
 			cred = *credentials.NewIAM("")
@@ -60,7 +60,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 				bc.Endpoint = s3Endpoint
 			}
 		} else {
-			cred = *credentials.NewStatic(accessKey, secretKey, "", credentials.SignatureDefault)
+			cred = *credentials.NewStatic(accessKeyID, secretKey, "", credentials.SignatureDefault)
 		}
 		tr, err = setTransport(tr, bc.EndpointCA, bc.InsecureTLSSkipVerify)
 		if err != nil {
@@ -96,7 +96,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 
 // TODO: namespace should be backup.NS only if backup CR contains storage location, for using operator's s3, use chart's ns
 func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClient dynamic.Interface) (*minio.Client, error) {
-	var accessKey, secretKey string
+	var accessKeyID, secretAccessKey string
 	var notFoundKeys []string
 	if objectStore.CredentialSecretName != "" {
 		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
@@ -125,17 +125,17 @@ func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClie
 		if err != nil {
 			return &minio.Client{}, fmt.Errorf("malformed secret [%s] in namespace [%s], accessKey could not be base64 decoded: %v", secretName, secretNs, err)
 		}
-		accessKey = string(accessKeyBytes)
-		log.Debugf("Found accessKey [%s] in secret [%s] in namespace [%s]", accessKey, secretName, secretNs)
+		accessKeyID = string(accessKeyBytes)
+		log.Debugf("Found accessKey [%s] in secret [%s] in namespace [%s]", redactAccessKeyID(accessKeyID), secretName, secretNs)
 		secretKeyBytes, err := base64.StdEncoding.DecodeString(secretKeyEncoded)
 		if err != nil {
 			return &minio.Client{}, fmt.Errorf("malformed secret [%s] in namespace [%s], secretKey could not be base64 decoded: %v", secretName, secretNs, err)
 		}
-		secretKey = string(secretKeyBytes)
-		log.Tracef("Found secretKey [%s] in secret [%s] in namespace [%s]", secretKey, secretName, secretNs)
+		secretAccessKey = string(secretKeyBytes)
+		log.Tracef("Found secretKey matching accessKey [%s] in secret [%s] in namespace [%s]", redactAccessKeyID(accessKeyID), secretName, secretNs)
 	}
 	// if no s3 credentials are provided, use IAM profile, this means passing empty access and secret keys to the SetS3Service call
-	s3Client, err := SetS3Service(objectStore, accessKey, secretKey, true)
+	s3Client, err := SetS3Service(objectStore, accessKeyID, secretAccessKey, true)
 	if err != nil {
 		return &minio.Client{}, err
 	}
@@ -281,4 +281,15 @@ func isValidCertificate(c []byte) bool {
 		return false
 	}
 	return true
+}
+
+const redactStringMask = "**************"
+const accessKeyIDLength = 20
+
+func redactAccessKeyID(input string) string {
+	const reveal = 5
+	if len(input) < accessKeyIDLength {
+		return redactStringMask
+	}
+	return input[:reveal] + redactStringMask[reveal:]
 }
