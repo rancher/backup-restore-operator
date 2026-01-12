@@ -77,17 +77,17 @@ func Register(
 		encryptionProviderPath:  encryptionProviderPath,
 	}
 	if controller.defaultBackupMountPath != "" {
-		logrus.Infof("Default location for storing backups is %v", controller.defaultBackupMountPath)
+		logrus.WithFields(logrus.Fields{"default_backup_mount_path": controller.defaultBackupMountPath}).Info("Default backup storage location configured for controller")
 	} else if controller.defaultS3BackupLocation != nil {
-		logrus.Infof("Default s3 location for storing backups is %v", controller.defaultS3BackupLocation)
-		logrus.Infof("If credentials are used for default s3, the secret containing creds must exist in chart's namespace %v", util.GetChartNamespace())
+		logrus.WithFields(logrus.Fields{"default_s3_backup_location": controller.defaultS3BackupLocation}).Info("Default S3 backup location configured for controller")
+		logrus.WithFields(logrus.Fields{"get_chart_namespace": util.GetChartNamespace()}).Info("Chart namespace credentials requirement: S3 secret must exist in chart namespace when using default S3 credentials")
 	}
 
 	// Use the kube-system NS.UID as the unique ID for a cluster
 	kubeSystemNS, err := controller.namespaces.Get("kube-system", k8sv1.GetOptions{})
 	if err != nil {
 		// fatal log here, because we need the kube-system ns UID while creating any backup file
-		logrus.Fatalf("Error getting namespace kube-system %v", err)
+		logrus.WithFields(logrus.Fields{"error": err}).Fatal("Failed to retrieve kube-system namespace")
 	}
 	controller.kubeSystemNS = string(kubeSystemNS.UID)
 	// Register handlers
@@ -103,11 +103,11 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 
 	// skips if the backup is singular and already processed
 	if backupIsSingularAndComplete(backup) {
-		logrus.Debugf("Backup %s has already been processed, skipping it", backup.Name)
+		logrus.WithFields(logrus.Fields{"name": backup.Name}).Debug("Backup already processed, skipping to avoid duplicate operation")
 		return backup, nil
 	}
 
-	logrus.Infof("Processing backup %v", backup.Name)
+	logrus.WithFields(logrus.Fields{"name": backup.Name}).Info("Processing backup operation for specified backup name")
 
 	backupWithType := backup.DeepCopy()
 	h.setBackupType(backupWithType)
@@ -126,7 +126,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if backup.Status.LastSnapshotTS != "" {
 		if backup.Status.NextSnapshotAt != "" {
 			currTime := time.Now().Format(time.RFC3339)
-			logrus.Infof("Next snapshot is scheduled for: %v, current time: %v", backup.Status.NextSnapshotAt, currTime)
+			logrus.WithFields(logrus.Fields{"next_snapshot_at": backup.Status.NextSnapshotAt, "curr_time": currTime}).Info("Snapshot scheduling status check completed")
 
 			nextSnapshotTime, err := time.Parse(time.RFC3339, backup.Status.NextSnapshotAt)
 			if err != nil {
@@ -143,7 +143,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 			}
 
 			// proceed with backup only if current time is same as or after nextSnapshotTime
-			logrus.Infof("Processing recurring backup CR %v ", backup.Name)
+			logrus.WithFields(logrus.Fields{"name": backup.Name}).Info("Processing recurring backup custom resource with name")
 		}
 	}
 
@@ -160,7 +160,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if err != nil {
 		return h.setReconcilingCondition(backup, err)
 	}
-	logrus.Infof("For backup CR %v, filename: %v", backup.Name, backupFileName)
+	logrus.WithFields(logrus.Fields{"name": backup.Name, "backup_file_name": backupFileName}).Info("Processing backup with custom resource name and generated filename")
 
 	// create a temp dir to write all backup files to, delete this before returning.
 	// empty dir param in os.MkdirTemp. defaults to os.TempDir
@@ -168,7 +168,7 @@ func (h *handler) OnBackupChange(_ string, backup *v1.Backup) (*v1.Backup, error
 	if err != nil {
 		return h.setReconcilingCondition(backup, fmt.Errorf("error creating temp dir: %v", err))
 	}
-	logrus.Infof("Temporary backup path for storing all contents for backup CR %v is %v", backup.Name, tmpBackupPath)
+	logrus.WithFields(logrus.Fields{"name": backup.Name, "tmp_backup_path": tmpBackupPath}).Info("Created temporary backup path for storing backup contents")
 
 	if err = h.performBackup(backup, tmpBackupPath, backupFileName); err != nil {
 		fmt.Println(err.Error())
@@ -236,7 +236,7 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 
 	transformerMap := k8sEncryptionconfig.StaticTransformers{}
 	if backup.Spec.EncryptionConfigSecretName != "" {
-		logrus.Infof("Processing encryption config %v for backup CR %v", backup.Spec.EncryptionConfigSecretName, backup.Name)
+		logrus.WithFields(logrus.Fields{"encryption_config_secret_name": backup.Spec.EncryptionConfigSecretName, "name": backup.Name}).Info("Processing encryption configuration for backup custom resource")
 		encryptionConfigSecret, err := encryptionconfig.GetEncryptionConfigSecret(h.secrets, backup.Spec.EncryptionConfigSecretName)
 		if err != nil {
 			return err
@@ -248,13 +248,13 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		}
 	}
 
-	logrus.Infof("Using resourceSet %v for gathering resources for backup CR %v", backup.Spec.ResourceSetName, backup.Name)
+	logrus.WithFields(logrus.Fields{"resource_set_name": backup.Spec.ResourceSetName, "name": backup.Name}).Info("Using resource set to gather resources for backup custom resource")
 	resourceSetTemplate, err := h.resourceSets.Get(backup.Spec.ResourceSetName, k8sv1.GetOptions{})
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Gathering resources for backup CR %v", backup.Name)
+	logrus.WithFields(logrus.Fields{"name": backup.Name}).Info("Gathering resources for backup custom resource")
 	rh := resourcesets.ResourceHandler{
 		DiscoveryClient: h.discoveryClient,
 		DynamicClient:   h.dynamicClient,
@@ -266,13 +266,13 @@ func (h *handler) performBackup(backup *v1.Backup, tmpBackupPath, backupFileName
 		return err
 	}
 
-	logrus.Infof("Finished gathering resources for backup CR %v, writing to temp location", backup.Name)
+	logrus.WithFields(logrus.Fields{"name": backup.Name}).Info("Backup resource gathering completed, writing to temporary location")
 	err = rh.WriteBackupObjects(tmpBackupPath)
 	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Saving resourceSet used for backup CR %v", backup.Name)
+	logrus.WithFields(logrus.Fields{"name": backup.Name}).Info("Saving resource set for backup custom resource")
 	filters, err := json.Marshal(resourceSetTemplate)
 	if err != nil {
 		return err
@@ -330,7 +330,7 @@ func (h *handler) setBackupType(backup *v1.Backup) {
 }
 
 func (h *handler) validateBackupSpec(backup *v1.Backup) error {
-	logrus.Infof("backuptype set to: %v for %s", backup.Status.BackupType, backup.Name)
+	logrus.WithFields(logrus.Fields{"backup_type": backup.Status.BackupType, "name": backup.Name}).Info("Backup type configured for backup resource")
 
 	if backup.Status.BackupType == v1.RecurringBackupType {
 		_, err := cron.ParseStandard(backup.Spec.Schedule)
@@ -344,7 +344,7 @@ func (h *handler) validateBackupSpec(backup *v1.Backup) error {
 		backup.Spec.RetentionCount = DefaultRetentionCountOneTime
 	}
 
-	logrus.Infof("retentionCount set to: %v for %s", backup.Spec.RetentionCount, backup.Name)
+	logrus.WithFields(logrus.Fields{"retention_count": backup.Spec.RetentionCount, "name": backup.Name}).Info("Backup retention count configured for resource")
 	return nil
 }
 

@@ -145,10 +145,10 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 	defer h.Unlock(*leaseHolderName(restore))
 
-	logrus.Infof("Processing Restore CR %v", restore.Name)
+	logrus.WithFields(logrus.Fields{"name": restore.Name}).Info("Processing restore custom resource")
 	var backupSource string
 	backupName := restore.Spec.BackupFilename
-	logrus.Infof("Restoring from backup %v", restore.Spec.BackupFilename)
+	logrus.WithFields(logrus.Fields{"backup_filename": restore.Spec.BackupFilename}).Info("Initiating database restore from backup file")
 
 	created := make(map[string]bool)
 	ownerToDependentsList := make(map[string][]restoreObj)
@@ -166,16 +166,16 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	transformerMap := k8sEncryptionconfig.StaticTransformers{}
 	var err error
 	if restore.Spec.EncryptionConfigSecretName != "" {
-		logrus.Infof("Processing encryption config %v for restore CR %v", restore.Spec.EncryptionConfigSecretName, restore.Name)
+		logrus.WithFields(logrus.Fields{"encryption_config_secret_name": restore.Spec.EncryptionConfigSecretName, "name": restore.Name}).Info("Processing encryption configuration for restore custom resource")
 		encryptionConfigSecret, err := encryptionconfig.GetEncryptionConfigSecret(h.secrets, restore.Spec.EncryptionConfigSecretName)
 		if err != nil {
-			logrus.Errorf("Error fetching encryption config secret: %v", err)
+			logrus.WithFields(logrus.Fields{"error": err}).Error("Failed to fetch encryption configuration secret")
 			return h.setReconcilingCondition(restore, err)
 		}
 
 		transformerMap, err = encryptionconfig.GetEncryptionTransformersFromSecret(h.ctx, encryptionConfigSecret, h.encryptionProviderPath)
 		if err != nil {
-			logrus.Errorf("Error processing encryption config: %v", err)
+			logrus.WithFields(logrus.Fields{"error": err}).Error("Failed to process encryption configuration")
 			return h.setReconcilingCondition(restore, err)
 		}
 	}
@@ -230,48 +230,48 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	h.scaleDownControllersFromResourceSet(objFromBackupCR)
 
 	// first restore CRDs
-	logrus.Infof("Starting to restore CRDs for restore CR %v", restore.Name)
+	logrus.WithFields(logrus.Fields{"name": restore.Name}).Info("Starting CRD restoration process for restore resource")
 	if crdsWithSubStatus, err = h.restoreCRDs(created, objFromBackupCR); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		if restore.Spec.IgnoreErrors {
-			logrus.Warnf("Skipping error when restoring CRDs %v", err)
+			logrus.WithFields(logrus.Fields{"error": err}).Warn("Failed to restore CRDs during migration, continuing with remaining operations")
 		} else {
-			logrus.Errorf("Error restoring CRDs %v", err)
+			logrus.WithFields(logrus.Fields{"error": err}).Error("Failed to restore custom resource definitions during migration process")
 			// Cannot set the exact error on reconcile condition, the order in which resources failed to restore are added in err msg could
 			// change with each restore, which means the condition will get updated on each try
 			return h.setReconcilingCondition(restore, fmt.Errorf("error restoring CRDs, check logs for exact error"))
 		}
 	}
 
-	logrus.Infof("Starting to restore clusterscoped resources for restore CR %v", restore.Name)
+	logrus.WithFields(logrus.Fields{"name": restore.Name}).Info("Starting cluster-scoped resource restoration for restore CR")
 	// then restore clusterscoped resources, by first generating dependency graph for cluster scoped resources, and create from the graph
 	if err := h.restoreClusterScopedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, crdsWithSubStatus); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		if restore.Spec.IgnoreErrors {
-			logrus.Warnf("Skipping error when restoring cluster-scoped resources %v", err)
+			logrus.WithFields(logrus.Fields{"error": err}).Warn("Failed to restore cluster-scoped resources, continuing with migration")
 		} else {
-			logrus.Errorf("Error restoring cluster-scoped resources %v", err)
+			logrus.WithFields(logrus.Fields{"error": err}).Error("Failed to restore cluster-scoped resources")
 			return h.setReconcilingCondition(restore, fmt.Errorf("error restoring cluster-scoped resources, check logs for exact error"))
 		}
 	}
 
-	logrus.Infof("Starting to restore namespaced resources for restore CR %v", restore.Name)
+	logrus.WithFields(logrus.Fields{"name": restore.Name}).Info("Starting restore of namespaced resources for custom resource")
 	// now restore namespaced resources: generate adjacency lists for dependents and ownerRefs for namespaced resources
 	ownerToDependentsList = make(map[string][]restoreObj)
 	toRestore = []restoreObj{}
 	if err := h.restoreNamespacedResources(ownerToDependentsList, &toRestore, numOwnerReferences, created, objFromBackupCR, crdsWithSubStatus); err != nil {
 		h.scaleUpControllersFromResourceSet(objFromBackupCR)
 		if restore.Spec.IgnoreErrors {
-			logrus.Warnf("Skipping error when restoring namespaced resources %v", err)
+			logrus.WithFields(logrus.Fields{"error": err}).Warn("Failed to restore namespaced resources but continuing with migration process")
 		} else {
-			logrus.Errorf("Error restoring namespaced resources %v", err)
+			logrus.WithFields(logrus.Fields{"error": err}).Error("Failed to restore namespaced resources")
 			return h.setReconcilingCondition(restore, fmt.Errorf("error restoring namespaced resources, check logs for exact error"))
 		}
 	}
 
 	// prune by default
 	if restore.Spec.Prune == nil || *restore.Spec.Prune == true {
-		logrus.Infof("Pruning resources that are not part of the backup for restore CR %v", restore.Name)
+		logrus.WithFields(logrus.Fields{"name": restore.Name}).Info("Pruning resources not included in backup for restore operation")
 		if err := h.prune(objFromBackupCR.backupResourceSet.ResourceSelectors, transformerMap, objFromBackupCR, restore.Spec.DeleteTimeoutSeconds); err != nil {
 			h.scaleUpControllersFromResourceSet(objFromBackupCR)
 			return h.setReconcilingCondition(restore, fmt.Errorf("error pruning during restore: %v", err))
@@ -313,7 +313,7 @@ func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFr
 		created[crdInfo.ConfigPath] = true
 		crds := getCRDsWithSubresourceStatus(crdData)
 		if len(crds) > 0 {
-			logrus.Debugf("Adding the following to the list of CRDs with the subresource Status: %v", crds)
+			logrus.WithFields(logrus.Fields{"crds": crds}).Debug("Adding CRDs to status subresource list")
 			crdsWithStatus = append(crdsWithStatus, crds...)
 		}
 	}
@@ -326,13 +326,13 @@ func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFr
 }
 
 func (h *handler) waitCRD(crdName string) error {
-	logrus.Infof("Waiting for CRD %s to become available", crdName)
-	defer logrus.Infof("Done waiting for CRD %s to become available", crdName)
+	logrus.WithFields(logrus.Fields{"crd_name": crdName}).Info("Waiting for custom resource definition to become available")
+	defer logrus.WithFields(logrus.Fields{"crd_name": crdName}).Info("CRD availability wait completed successfully")
 
 	first := true
 	return wait.Poll(500*time.Millisecond, 60*time.Second, func() (bool, error) {
 		if !first {
-			logrus.Infof("Waiting for CRD %s to become available", crdName)
+			logrus.WithFields(logrus.Fields{"crd_name": crdName}).Info("Waiting for custom resource definition to become available")
 		}
 		first = false
 
@@ -348,7 +348,7 @@ func (h *handler) waitCRD(crdName string) error {
 				}
 			case apiext.NamesAccepted:
 				if cond.Status == apiext.ConditionFalse {
-					logrus.Infof("Name conflict on %s: %v\n", crdName, cond.Reason)
+					logrus.WithFields(logrus.Fields{"crd_name": crdName, "reason": cond.Reason}).Info("CRD name conflict detected during processing")
 				}
 			}
 		}
@@ -397,7 +397,7 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 		gvr := resourceInfo.GVR
 		if resourceData.GetKind() == "Deployment" && namespace == "cattle-system" {
 			if strings.HasSuffix(name, "rancher") || strings.HasSuffix(name, "rancher-webhook") {
-				logrus.Infof("Skip restoring the deployment %s/%s", namespace, name)
+				logrus.WithFields(logrus.Fields{"namespace": namespace, "name": name}).Info("Skipping deployment restoration due to existing configuration")
 				continue
 			}
 		}
@@ -420,13 +420,13 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 			continue
 		}
 		numOwners := 0
-		logrus.Infof("Checking ownerRefs for resource %v of type %v", name, gvr.String())
+		logrus.WithFields(logrus.Fields{"name": name, "string": gvr.String()}).Info("Checking owner references for resource with specified type")
 		errCheckingOwnerRefs := false
 		for _, owner := range ownerRefs {
 			ownerRefData, ok := owner.(map[string]interface{})
 			if !ok {
 				errCheckingOwnerRefs = true
-				logrus.Errorf("Invalid ownerRef for resource %v of type %v", name, gvr.String())
+				logrus.WithFields(logrus.Fields{"name": name, "string": gvr.String()}).Error("Invalid owner reference found for resource with specified type")
 				continue
 			}
 
@@ -434,12 +434,12 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 			gv, err := schema.ParseGroupVersion(groupVersion)
 			if err != nil {
 				errCheckingOwnerRefs = true
-				logrus.Errorf("Error parsing ownerRef apiVersion %v for resource %v: %v", groupVersion, name, err)
+				logrus.WithFields(logrus.Fields{"group_version": groupVersion, "name": name, "error": err}).Error("Failed to parse owner reference API version for resource")
 				continue
 			}
 			kind := ownerRefData["kind"].(string)
 			gvk := gv.WithKind(kind)
-			logrus.Infof("Getting GVR for ownerRef %v of resource %v", gvk.String(), name)
+			logrus.WithFields(logrus.Fields{"string": gvk.String(), "name": name}).Info("Resolving group version resource for owner reference")
 			ownerGVR, isOwnerNamespaced, err := h.sharedClientFactory.ResourceForGVK(gvk)
 			if err != nil {
 				// Prior to Rancher 2.4.5, following resources had roles&rolebindings with malformed ownerRefs:
@@ -450,8 +450,8 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 				// so don't count this as owner. if the curr object has at least one valid ownerRef, it will get added to ownersToDependents list
 				// if not, for objects like the rancher 2.4.5 nodetemplate, check at the end of this loop if even a single ownerRef is found, if not add it to toRestore list
 				errCheckingOwnerRefs = true
-				logrus.Errorf("Invalid ownerRef %v, either of the fields is incorrect: APIVersion or Kind", gvk.String())
-				logrus.Errorf("Error getting ownerRef %v for object %v(of %v): %v", gvk.String(), name, gvr.String(), err)
+				logrus.WithFields(logrus.Fields{"string": gvk.String()}).Error("Invalid owner reference detected with incorrect APIVersion or Kind field")
+				logrus.WithFields(logrus.Fields{"string": gvk.String(), "name": name, "string": gvr.String(), "error": err}).Error("Failed to retrieve owner reference for object: check object permissions and API connectivity")
 				continue
 			}
 
@@ -459,7 +459,7 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 			// not beind properly created on migrations if they kept waiting for their Owners to be created.
 			if strings.EqualFold(kind, "globalrole") || strings.EqualFold(kind, "roletemplate") {
 				errCheckingOwnerRefs = true
-				logrus.Infof("Resource %v of type %v has %v as owner. The OwnerRefs will be dropped.", name, gvr.String(), gvk.String())
+				logrus.WithFields(logrus.Fields{"name": name, "string": gvr.String(), "string": gvk.String()}).Info("Resource owner references will be dropped during migration due to type mismatch")
 				continue
 			}
 
@@ -515,7 +515,7 @@ func (h *handler) generateDependencyGraph(ownerToDependentsList map[string][]res
 			}
 			// Errors were encountered while processing ownerRefs for this object, so it should get restored without any ownerRefs,
 			// add it to toRestore
-			logrus.Warnf("Resource %v of type %v has invalid ownerRefs, adding it to restore queue by dropping the ownerRefs", name, gvr.String())
+			logrus.WithFields(logrus.Fields{"name": name, "string": gvr.String()}).Warn("Resource with invalid owner references added to restore queue with references dropped")
 			delete(currRestoreObj.Data.Object[metadataMapKey].(map[string]interface{}), ownerRefsMapKey)
 			*toRestore = append(*toRestore, currRestoreObj)
 		}
@@ -529,7 +529,7 @@ func customize(obj *unstructured.Unstructured) {
 	case "ServiceAccount":
 		// remove secrets section as referenced secrets will be removed by k8s Token Controller as they are considered orphaned
 		delete(obj.Object, secretsMapKey)
-		logrus.Debugf("Secrets section is ignored in ServiceAccount %s/%s", obj.GetNamespace(), obj.GetName())
+		logrus.WithFields(logrus.Fields{"get_namespace": obj.GetNamespace(), "get_name": obj.GetName()}).Debug("Secrets section ignored for ServiceAccount resource during processing")
 	case "Cluster":
 		// for fleet cluster it needs to be reimported in order to reissue service account token that is no longer valid
 		switch obj.GetAPIVersion() {
@@ -537,20 +537,20 @@ func customize(obj *unstructured.Unstructured) {
 			// only warn error if field can't be found. In case there are breaking api changes error will be printed as Warn and user has workaround to patch it.
 			redeployAgentGeneration, _, err := unstructured.NestedFloat64(obj.Object, "spec", "redeployAgentGeneration")
 			if err != nil {
-				logrus.Warnf("Fleet cluster %s/%s can't be reset to be re-imported, failed to fetch .spec.redeployAgentGeneration, error: %v", obj.GetNamespace(), obj.GetName(), err)
+				logrus.WithFields(logrus.Fields{"get_namespace": obj.GetNamespace(), "get_name": obj.GetName(), "error": err}).Warn("Failed to reset fleet cluster for re-import: unable to fetch spec.redeployAgentGeneration field")
 				return
 			}
 			if err := unstructured.SetNestedField(obj.Object, int64(redeployAgentGeneration+1), "spec", "redeployAgentGeneration"); err != nil {
-				logrus.Warnf("Fleet cluster %s/%s can't be reset to be re-imported, error: %v", obj.GetNamespace(), obj.GetName(), err)
+				logrus.WithFields(logrus.Fields{"get_namespace": obj.GetNamespace(), "get_name": obj.GetName(), "error": err}).Warn("Failed to reset fleet cluster for re-import due to error")
 			}
 		case "provisioning.cattle.io/v1":
 			redeploySystemAgentGeneration, _, err := unstructured.NestedFloat64(obj.Object, "spec", "redeploySystemAgentGeneration")
 			if err != nil {
-				logrus.Warnf("Provisioning cluster %s/%s can't be reset to be re-imported, failed to fetch .spec.redeploySystemAgentGeneration, error: %v", obj.GetNamespace(), obj.GetName(), err)
+				logrus.WithFields(logrus.Fields{"get_namespace": obj.GetNamespace(), "get_name": obj.GetName(), "error": err}).Warn("Failed to reset provisioning cluster for re-import: unable to fetch spec.redeploySystemAgentGeneration")
 				return
 			}
 			if err := unstructured.SetNestedField(obj.Object, int64(redeploySystemAgentGeneration+1), "spec", "redeploySystemAgentGeneration"); err != nil {
-				logrus.Warnf("Provisioning cluster %s/%s can't be reset to be re-imported, error: %v", obj.GetNamespace(), obj.GetName(), err)
+				logrus.WithFields(logrus.Fields{"get_namespace": obj.GetNamespace(), "get_name": obj.GetName(), "error": err}).Warn("Failed to reset provisioning cluster for re-import due to configuration error")
 			}
 		case "management.cattle.io/v3":
 			//Set io.cattle.agent.force.deploy to true to force cattle-cluster-agent redeployment
@@ -577,7 +577,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 			toRestore = toRestore[1:]
 		}
 		if created[curr.ResourceConfigPath] {
-			logrus.Infof("Resource %v is already created/updated", curr.ResourceConfigPath)
+			logrus.WithFields(logrus.Fields{"resource_config_path": curr.ResourceConfigPath}).Info("Resource already exists or has been updated at the specified configuration path")
 			continue
 		}
 		currResourceInfo := objInfo{
@@ -595,7 +595,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 		target := fmt.Sprintf("%s.%s", currResourceInfo.GVR.Resource, currResourceInfo.GVR.GroupVersion().String())
 		hasSubStatus := slice.ContainsString(crdsWithSubStatus, target)
 		if err := h.restoreResource(currResourceInfo, resourceData, hasSubStatus); err != nil {
-			logrus.Errorf("Error restoring resource %v of type %v: %v", currResourceInfo.Name, currResourceInfo.GVR.String(), err)
+			logrus.WithFields(logrus.Fields{"name": currResourceInfo.Name, "string": currResourceInfo.GVR.String(), "error": err}).Error("Failed to restore resource during migration process")
 			errList = append(errList, fmt.Errorf("error restoring %v of type %v: %v", currResourceInfo.Name, currResourceInfo.GVR.String(), err))
 			continue
 		}
@@ -605,7 +605,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 				numOwnerReferences[dependent.ResourceConfigPath]--
 			}
 			if numOwnerReferences[dependent.ResourceConfigPath] == 0 {
-				logrus.Infof("dependent %v is now ready to create", dependent.Name)
+				logrus.WithFields(logrus.Fields{"name": dependent.Name}).Info("Dependent service is now ready for creation")
 				toRestore = append(toRestore, dependent)
 			}
 		}
@@ -616,7 +616,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 	if len(toRestore) > 0 {
 		// These resources could not be restored because of some issues with ownerRefs that violate k8s design
 		for _, res := range toRestore {
-			logrus.Warnf("Could not restore %v of type %v", res.Name, res.GVR.String())
+			logrus.WithFields(logrus.Fields{"name": res.Name, "string": res.GVR.String()}).Warn("Failed to restore resource: operation could not be completed")
 		}
 	}
 
@@ -624,7 +624,7 @@ func (h *handler) createFromDependencyGraph(ownerToDependentsList map[string][]r
 }
 
 func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstructured.Unstructured, hasStatusSubresource bool) error {
-	logrus.Infof("restoreResource: Restoring %v of type %v", restoreObjInfo.Name, restoreObjInfo.GVR)
+	logrus.WithFields(logrus.Fields{"name": restoreObjInfo.Name, "g_v_r": restoreObjInfo.GVR}).Info("Starting resource restoration for specified object type")
 
 	fileMap := restoreObjData.Object
 	obj := restoreObjData
@@ -640,7 +640,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 			return err
 		}
 		if found && secretType == "fleet.cattle.io/cluster-registration-values" {
-			logrus.Infof("restoreResource: Skiping secret %s/%s since it has type fleet.cattle.io/cluster-registration-values", namespace, name)
+			logrus.WithFields(logrus.Fields{"namespace": namespace, "name": name}).Info("Skipping secret restore due to cluster registration type")
 			return nil
 		}
 	}
@@ -648,7 +648,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 	dr = h.dynamicClient.Resource(gvr)
 	if namespace != "" {
 		dr = h.dynamicClient.Resource(gvr).Namespace(namespace)
-		logrus.Infof("restoreResource: Namespace %v for name %v of type %v", namespace, restoreObjInfo.Name, restoreObjInfo.GVR)
+		logrus.WithFields(logrus.Fields{"namespace": namespace, "name": restoreObjInfo.Name, "g_v_r": restoreObjInfo.GVR}).Info("Restoring resource in namespace with specified name and type")
 	}
 	ownerReferences, _ := fileMapMetadata[ownerRefsMapKey].([]interface{})
 	if ownerReferences != nil {
@@ -657,11 +657,11 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 				// This can only happen when the ownerRefs are created in a way that violates k8s design https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/
 				// Although disallowed, k8s currently has a bug where it allows creating cross-namespaced ownerRefs, and lets create clusterscoped objects with namespaced owners
 				// https://github.com/kubernetes/kubernetes/issues/65200
-				logrus.Warnf("Could not find ownerRef for resource %v", name)
+				logrus.WithFields(logrus.Fields{"name": name}).Warn("Failed to find owner reference for resource, check resource configuration")
 				// if owner not found, still restore resource but drop the ownerRefs field,
 				// because k8s terminates objects with invalid ownerRef UIDs
 				delete(obj.Object[metadataMapKey].(map[string]interface{}), ownerRefsMapKey)
-				logrus.Warnf("Resource %v will be restored without ownerReferences, edit it to add required ownerReferences", name)
+				logrus.WithFields(logrus.Fields{"name": name}).Warn("Resource will be restored without owner references; manually edit to add required references")
 			} else {
 				return err
 			}
@@ -671,7 +671,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 	if obj.GetAPIVersion() == "apiextensions.k8s.io/v1" {
 		// Invalid field is spec.preserveUnknownFields
 		if _, ok := obj.Object["spec"].(map[string]interface{})[preserveUnknownFieldsKey]; ok {
-			logrus.Infof("restoreResource: Marking %v of type %v as to be migrated to valid v1", restoreObjInfo.Name, restoreObjInfo.GVR)
+			logrus.WithFields(logrus.Fields{"name": restoreObjInfo.Name, "g_v_r": restoreObjInfo.GVR}).Info("Marking resource for migration from current version to valid v1 format")
 			// Set spec.preserveUnknownFields to false
 			unstructured.SetNestedField(obj.Object, false, "spec", preserveUnknownFieldsKey)
 			// New fields to be added to replace spec.preserveUnknownFields
@@ -686,12 +686,12 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 	}
 	// Drop immutable metadata.deletionGracePeriodSeconds
 	deletionGracePeriodSeconds, _ := fileMapMetadata[deletionGracePeriodSecondsKey]
-	logrus.Tracef("deletionGracePeriodSeconds for %v of type %v: %v", restoreObjInfo.Name, restoreObjInfo.GVR, deletionGracePeriodSeconds)
+	logrus.WithFields(logrus.Fields{"name": restoreObjInfo.Name, "g_v_r": restoreObjInfo.GVR, "deletion_grace_period_seconds": deletionGracePeriodSeconds}).Trace("Deletion grace period configured for Kubernetes resource")
 	if deletionGracePeriodSeconds != nil {
-		logrus.Infof("Removing metadata.deletionGracePeriodSeconds for %v of type %v because it is immutable", restoreObjInfo.Name, restoreObjInfo.GVR)
+		logrus.WithFields(logrus.Fields{"name": restoreObjInfo.Name, "g_v_r": restoreObjInfo.GVR}).Info("Removing immutable metadata.deletionGracePeriodSeconds field during object restoration")
 		delete(obj.Object[metadataMapKey].(map[string]interface{}), deletionGracePeriodSecondsKey)
 	}
-	logrus.Tracef("restoreResource: obj: [%+v]", obj)
+	logrus.WithFields(logrus.Fields{"obj": obj}).Trace("Restoring resource object")
 
 	res, err := dr.Get(h.ctx, name, k8sv1.GetOptions{})
 	if err != nil {
@@ -704,7 +704,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 			return fmt.Errorf("restoreResource: err creating resource %v", err)
 		}
 		if hasStatusSubresource && obj.Object["status"] != nil {
-			logrus.Infof("Post-create: Updating status subresource for %#v of type %v", name, gvr)
+			logrus.WithFields(logrus.Fields{"name": name, "gvr": gvr}).Info("Post-create status subresource update initiated for resource")
 			createdObj.Object["status"] = obj.Object["status"]
 			_, err := dr.UpdateStatus(h.ctx, createdObj, k8sv1.UpdateOptions{})
 			if err != nil {
@@ -721,7 +721,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 		return fmt.Errorf("restoreResource: err updating resource %v", err)
 	}
 	if hasStatusSubresource && obj.Object["status"] != nil {
-		logrus.Infof("Updating status subresource for %#v of type %v", name, gvr)
+		logrus.WithFields(logrus.Fields{"name": name, "gvr": gvr}).Info("Updating status subresource for resource with specified group, version, and kind")
 		updatedObj.Object["status"] = obj.Object["status"]
 		_, err := dr.UpdateStatus(h.ctx, updatedObj, k8sv1.UpdateOptions{})
 		if err != nil {
@@ -729,7 +729,7 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 		}
 	}
 
-	logrus.Infof("Successfully restored %v", name)
+	logrus.WithFields(logrus.Fields{"name": name}).Info("Database backup successfully restored for resource")
 	return nil
 }
 
@@ -769,7 +769,7 @@ func (h *handler) updateOwnerRefs(ownerReferences []interface{}, namespace strin
 			ownerObj.Namespace = namespace
 		}
 
-		logrus.Infof("Getting new UID for %v ", ownerObj.Name)
+		logrus.WithFields(logrus.Fields{"name": ownerObj.Name}).Info("Generating new UID for owner object")
 		ownerObjNewUID, err := h.getOwnerNewUID(ownerObj)
 		if err != nil {
 			// not found error should be handled separately
@@ -943,11 +943,11 @@ func setValidationOverride(un *unstructured.Unstructured, fieldOverride map[stri
 
 		_, ok, err := unstructured.NestedFieldNoCopy(v.(map[string]interface{}), schemaPath...)
 		if err != nil {
-			logrus.Errorf("Error while retrieving schemaPath [%s] nested field for kind [%s], error: %v", schemaPath, crdKind(un), err)
+			logrus.WithFields(logrus.Fields{"schema_path": schemaPath, "crd_kind": crdKind(), "error": err}).Error("Failed to retrieve nested schema field for CRD kind")
 			continue
 		}
 		if !ok {
-			logrus.Errorf("%s not found for kind %s", schemaPath, crdKind(un))
+			logrus.WithFields(logrus.Fields{"schema_path": schemaPath, "crd_kind": crdKind()}).Error("Schema file not found for the specified CRD kind")
 			continue
 		}
 		finalOverride = append(finalOverride, v)
@@ -961,12 +961,12 @@ func setValidationOverride(un *unstructured.Unstructured, fieldOverride map[stri
 func crdKind(crd *unstructured.Unstructured) string {
 	kind, found, err := unstructured.NestedFieldNoCopy(crd.Object, "spec", "names", "kind")
 	if err != nil {
-		logrus.Errorf("Error while retrieving spec.names.kind nested field for object [%v], error: %v", crd.Object, err)
+		logrus.WithFields(logrus.Fields{"object": crd.Object, "error": err}).Error("Failed to retrieve spec.names.kind field from CRD object")
 		return ""
 	}
 
 	if !found {
-		logrus.Errorf("kind not found for object [%v]", crd.Object)
+		logrus.WithFields(logrus.Fields{"object": crd.Object}).Error("Failed to determine kind for CRD object during processing")
 		return ""
 	}
 	return kind.(string)

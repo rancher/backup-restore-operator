@@ -90,7 +90,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKey, secretKey string, useSSL bool
 			Transport:    tr,
 		})
 		if err != nil {
-			log.Infof("failed to init s3 client server: %v, retried %d times", err, retries)
+			logrus.WithFields(logrus.Fields{"error": err, "retries": retries}).Info("Failed to initialize S3 client after retries, check credentials and network connectivity")
 			if retries >= s3ServerRetries {
 				return nil, fmt.Errorf("failed to set s3 server: %v", err)
 			}
@@ -146,13 +146,13 @@ func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClie
 			return &minio.Client{}, fmt.Errorf("malformed secret [%s] in namespace [%s], accessKey could not be base64 decoded: %v", secretName, secretNs, err)
 		}
 		accessKey = string(accessKeyBytes)
-		log.Debugf("Found accessKey [%s] in secret [%s] in namespace [%s]", accessKey, secretName, secretNs)
+		logrus.WithFields(logrus.Fields{"access_key": accessKey, "secret_name": secretName, "secret_ns": secretNs}).Debug("Successfully located access key in Kubernetes secret")
 		secretKeyBytes, err := base64.StdEncoding.DecodeString(secretKeyEncoded)
 		if err != nil {
 			return &minio.Client{}, fmt.Errorf("malformed secret [%s] in namespace [%s], secretKey could not be base64 decoded: %v", secretName, secretNs, err)
 		}
 		secretKey = string(secretKeyBytes)
-		log.Tracef("Found secretKey [%s] in secret [%s] in namespace [%s]", secretKey, secretName, secretNs)
+		logrus.WithFields(logrus.Fields{"secret_key": secretKey, "secret_name": secretName, "secret_ns": secretNs}).Trace("Secret key successfully located in specified namespace")
 	}
 	ctxca, caT := context.WithTimeout(ctx, 5*time.Millisecond)
 	defer caT()
@@ -189,18 +189,18 @@ func getBucketLookupType(endpoint string) minio.BucketLookupType {
 
 func UploadBackupFile(svc *minio.Client, bucketName, fileName, filePath string) error {
 	// Upload the zip file with FPutObject
-	log.Infof("invoking uploading backup file [%s] to s3", fileName)
+	logrus.WithFields(logrus.Fields{"file_name": fileName}).Info("Uploading backup file to S3")
 	for retries := 0; retries <= s3ServerRetries; retries++ {
 		uploadInfo, err := svc.FPutObject(context.Background(), bucketName, fileName, filePath, minio.PutObjectOptions{ContentType: contentType})
 		if err != nil {
-			log.Infof("failed to upload backup file [%s], error: %v, retried %d times", fileName, err, retries)
+			logrus.WithFields(logrus.Fields{"file_name": fileName, "error": err, "retries": retries}).Info("Backup file upload failed after retries")
 			if retries >= s3ServerRetries {
 				return fmt.Errorf("failed to upload backup file [%s], error: %v", fileName, err)
 			}
 			continue
 		}
-		log.Debugf("uploadInfo for [%s] is: %v", fileName, uploadInfo)
-		log.Infof("Successfully uploaded [%s]", fileName)
+		logrus.WithFields(logrus.Fields{"file_name": fileName, "upload_info": uploadInfo}).Debug("Retrieved upload information for file during processing")
+		logrus.WithFields(logrus.Fields{"file_name": fileName}).Info("File uploaded successfully")
 		break
 	}
 	return nil
@@ -224,7 +224,7 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 
 	for object := range objectCh {
 		if object.Err != nil {
-			log.Errorf("failed to list objects in backup buckets [%s]: %v", bucket, object.Err)
+			logrus.WithFields(logrus.Fields{"bucket": bucket, "error": object.Err}).Error("Failed to list objects in backup bucket due to API error")
 			return "", object.Err
 		}
 
@@ -239,19 +239,19 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 	// if folder is included, strip it so it doesnt end up in a folder on the host itself
 	targetFilename := path.Base(filename)
 	targetFileLocation := filepath.Join(os.TempDir(), targetFilename)
-	log.Infof("Temporary location of backup file from s3: %v", targetFileLocation)
+	logrus.WithFields(logrus.Fields{"target_file_location": targetFileLocation}).Info("Downloaded backup file from S3 to temporary location")
 	var object *minio.Object
 	var err error
 	for retries := 0; retries <= s3ServerRetries; retries++ {
 		object, err = client.GetObject(context.Background(), bucket, filename, minio.GetObjectOptions{})
 		if err != nil {
-			log.Infof("Failed to download backup file [%s] from bucket [%s]: %v, retried %d times", filename, bucket, err, retries)
+			logrus.WithFields(logrus.Fields{"filename": filename, "bucket": bucket, "error": err, "retries": retries}).Info("Backup file download failed after maximum retry attempts")
 			if retries >= s3ServerRetries {
 				return "", fmt.Errorf("unable to download backup file [%s] from bucket [%s]: %v", filename, bucket, err)
 			}
 		}
 		if err == nil {
-			log.Infof("Successfully downloaded backup file [%s] from bucket [%s]", filename, bucket)
+			logrus.WithFields(logrus.Fields{"filename": filename, "bucket": bucket}).Info("Backup file downloaded successfully from storage bucket")
 			break
 		}
 	}
@@ -301,7 +301,7 @@ func readS3EndpointCA(endpointCA string) ([]byte, error) {
 		log.Info("reading s3-endpoint-ca as a base64 string")
 	} else {
 		ca, err = os.ReadFile(endpointCA)
-		log.Infof("reading s3-endpoint-ca from [%v]", endpointCA)
+		logrus.WithFields(logrus.Fields{"endpoint_c_a": endpointCA}).Info("Reading S3 endpoint CA configuration from source")
 	}
 	return ca, err
 }
