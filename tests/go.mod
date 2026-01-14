@@ -7,8 +7,8 @@ toolchain go1.22.8
 require (
 	github.com/rancher/hull v0.0.0-20230424152137-627ef5347afd
 	github.com/stretchr/testify v1.9.0
-	k8s.io/api v0.30.3
-	k8s.io/apimachinery v0.30.3
+	k8s.io/api v0.30.14
+	k8s.io/apimachinery v0.30.14
 )
 
 require (
@@ -133,15 +133,15 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	helm.sh/helm/v3 v3.12.1 // indirect
-	k8s.io/apiextensions-apiserver v0.29.3 // indirect
-	k8s.io/apiserver v0.29.3 // indirect
-	k8s.io/cli-runtime v0.29.3 // indirect
-	k8s.io/client-go v0.29.3 // indirect
-	k8s.io/component-base v0.29.3 // indirect
+	k8s.io/apiextensions-apiserver v0.30.14 // indirect
+	k8s.io/apiserver v0.30.14 // indirect
+	k8s.io/cli-runtime v0.30.14 // indirect
+	k8s.io/client-go v0.30.14 // indirect
+	k8s.io/component-base v0.30.14 // indirect
 	k8s.io/klog/v2 v2.120.1 // indirect
-	k8s.io/kube-aggregator v0.29.3 // indirect
+	k8s.io/kube-aggregator v0.30.14 // indirect
 	k8s.io/kube-openapi v0.0.0-20240411171206-dc4e619f62f3 // indirect
-	k8s.io/kubectl v0.29.3 // indirect
+	k8s.io/kubectl v0.30.14 // indirect
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0 // indirect
 	oras.land/oras-go v1.2.2 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
