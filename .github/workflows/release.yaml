@@ -64,6 +64,10 @@ jobs:
       - name : Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
+      - name: Check SemVer Characteristics
+        id: semver_check
+        run: bash ./.github/scripts/check-semver "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
         # This encapsulates: login, qemu, build/push
       - name: Build and push BRO image (dockerhub and prime stg)
         uses: rancher/ecm-distro-tools/actions/publish-image@master
@@ -72,13 +76,26 @@ jobs:
           tag: ${{ github.ref_name }}
 
           public-registry: ${{ env.PUBLIC_REGISTRY }}
-          public-repo: ${{ env.REPO }}
+          public-repo: ${{ env.PUBLIC_REPO }}
           public-username: ${{ env.DOCKER_USERNAME || vars.DOCKER_USERNAME || github.repository_owner }}
           public-password: ${{ env.DOCKER_PASSWORD || secrets.DOCKER_PASSWORD }}
 
-          push-to-prime: ${{ github.repository == 'rancher/scc-operator' }}
+          push-to-prime: true
           prime-registry: ${{ env.PRIME_STG_REGISTRY }}
-          prime-repo: ${{ env.REPO }}
+          prime-repo: rancher
           prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
           prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
-          identity-registry: ${{ env.PRIME_REGISTRY }}
+      - name: Build and push BRO image (prime prod)
+        if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
+        uses: rancher/ecm-distro-tools/actions/publish-image@master
+        with:
+          image: "backup-restore-operator"
+          tag: ${{ github.ref_name }}
+
+          push-to-public: false
+
+          push-to-prime: true
+          prime-registry: ${{ env.PRIME_REGISTRY }}
+          prime-repo: rancher
+          prime-username: ${{ env.PRIME_REGISTRY_USERNAME }}
+          prime-password: ${{ env.PRIME_REGISTRY_PASSWORD }}
