@@ -1,0 +1,101 @@
+name : Publish Images & artifacts (via goreleaser)
+
+on:
+  push:
+    tags:
+      - "*"
+
+env:
+  PUBLIC_REGISTRY: docker.io
+  REPO : rancher
+
+permissions:
+  contents: write
+
+jobs:
+  ci :
+    uses: ./.github/workflows/ci.yaml
+    permissions:
+      contents: read
+  goreleaser:
+    needs: [
+      ci
+    ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          fetch-depth: 0
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+        with:
+          go-version: 1.24
+      - name : Package release helm charts
+        run : make package-helm
+      - run : mkdir -p ./build/artifacts/ && mv -v ./dist/artifacts/ ./build/
+      - uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552 # v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+  push:
+    needs : [
+      ci
+    ]
+    permissions:
+      contents : read
+      id-token: write
+    name : Build and push BRO images
+    runs-on : runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
+    steps:
+      - name : "Read vault secrets"
+        uses : rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials registry | PRIME_REGISTRY ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials registry |  PRIME_STG_REGISTRY;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username |  PRIME_STG_REGISTRY_USERNAME;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password |  PRIME_STG_REGISTRY_PASSWORD;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD
+      - name : Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      - name: Check SemVer Characteristics
+        id: semver_check
+        run: bash ./.github/scripts/check-semver "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+        # This encapsulates: login, qemu, build/push
+      - name: Build and push BRO image (dockerhub and prime stg)
+        uses: rancher/ecm-distro-tools/actions/publish-image@master
+        with:
+          image: "backup-restore-operator"
+          tag: ${{ github.ref_name }}
+
+          public-registry: ${{ env.PUBLIC_REGISTRY }}
+          public-repo: ${{ env.PUBLIC_REPO }}
+          public-username: ${{ env.DOCKER_USERNAME || vars.DOCKER_USERNAME || github.repository_owner }}
+          public-password: ${{ env.DOCKER_PASSWORD || secrets.DOCKER_PASSWORD }}
+
+          push-to-prime: true
+          prime-registry: ${{ env.PRIME_STG_REGISTRY }}
+          prime-repo: rancher
+          prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
+          prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
+      - name: Build and push BRO image (prime prod)
+        if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
+        uses: rancher/ecm-distro-tools/actions/publish-image@master
+        with:
+          image: "backup-restore-operator"
+          tag: ${{ github.ref_name }}
+
+          push-to-public: false
+
+          push-to-prime: true
+          prime-registry: ${{ env.PRIME_REGISTRY }}
+          prime-repo: rancher
+          prime-username: ${{ env.PRIME_REGISTRY_USERNAME }}
+          prime-password: ${{ env.PRIME_REGISTRY_PASSWORD }}
