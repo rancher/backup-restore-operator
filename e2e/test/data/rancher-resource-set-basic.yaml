@@ -182,7 +182,7 @@ resourceSelectors:
     kindsRegexp: "."
   - apiVersion: "rke.cattle.io/v1"
     kindsRegexp: "."
-  - apiVersion: "cluster.x-k8s.io/v1beta1"
+  - apiVersion: "cluster.x-k8s.io/v1beta2"
     kindsRegexp: "."
   - apiVersion: "v1"
     kindsRegexp: "^configmaps$"
