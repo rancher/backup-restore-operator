@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rancher/backup-restore-operator/cmd/tool/internal/cmd/resourcesetcheck"
 	"github.com/rancher/backup-restore-operator/cmd/tool/internal/cmd/resourcesetview"
 	"github.com/rancher/backup-restore-operator/pkg/version"
 	"github.com/sirupsen/logrus"
@@ -26,7 +27,8 @@ func usage() {
 	fmt.Fprintf(os.Stderr, "Versioned alongside BRO; see BRO docs for compatibility notes.\n\n")
 	fmt.Fprintf(os.Stderr, "Usage: bro-tool [flags] <command> [command flags]\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
-	fmt.Fprintf(os.Stderr, "  resource-set:view  View the ResourceSets defined by a BRO helm chart.\n\n")
+	fmt.Fprintf(os.Stderr, "  resource-set:view   View the ResourceSets defined by a BRO helm chart.\n")
+	fmt.Fprintf(os.Stderr, "  resource-set:check  Check whether a resource would be covered by any ResourceSet rule.\n\n")
 	fmt.Fprintf(os.Stderr, "Flags:\n")
 	flag.PrintDefaults()
 }
@@ -54,6 +56,8 @@ func main() {
 	switch args[0] {
 	case "resource-set:view":
 		err = resourcesetview.Run(args[1:])
+	case "resource-set:check":
+		err = resourcesetcheck.Run(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %q\n\n", args[0])
 		flag.Usage()
