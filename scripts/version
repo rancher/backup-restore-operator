@@ -1,11 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+export KUBECONFIG=$KUBECONFIG
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     DIRTY="-dirty"
 fi
 
 COMMIT=$(git rev-parse --short HEAD)
-GIT_TAG=$(git tag -l --contains HEAD | head -n 1)
+GIT_TAG=${GIT_TAG:-$(git tag -l --contains HEAD | tail -n 1)}
 
 if [[ -z "$DIRTY" && -n "$GIT_TAG" ]]; then
     VERSION=$GIT_TAG
@@ -18,12 +20,14 @@ if [ -z "$ARCH" ]; then
     ARCH=$(go env GOHOSTARCH)
 fi
 
-TAG=${TAG:-${VERSION}}
+SUFFIX="-${ARCH}"
+
+TAG=${TAG:-${BRANCH_TAG:-${VERSION}}}
 REPO=${REPO:-rancher}
 
 HELM_IMAGE_TAG=${HELM_IMAGE_TAG:-${TAG}}
 if [ "$TAG" == "$COMMIT" ]; then
-  HELM_CHART_VERSION="0.0.0-dev.${COMMIT}"
+  HELM_CHART_VERSION="0.0.0-dev+${COMMIT}"
 else
   HELM_CHART_VERSION=${HELM_IMAGE_TAG/v/}
 fi
@@ -33,13 +37,23 @@ if echo "$TAG" | grep -q dirty; then
     HELM_IMAGE_TAG=$TAG
     HELM_CHART_VERSION=${HELM_CHART_VERSION_DEV:-${HELM_IMAGE_TAG/v/}}
 fi
-IMAGE=${IMAGE:-"$REPO/backup-restore-operator:${TAG}"}
+IMAGE=${IMAGE:-"backup-restore-operator"}
+IMAGE_NAME=${IMAGE_NAME:-"${REPO}/${IMAGE}"}
+FULL_IMAGE=${FULL_IMAGE:-"${IMAGE_NAME}:${TAG}"}
+
+if [[ "$1" == "--short" && -n "$2" ]]; then
+  var_name="$2"
+  echo "${!var_name}"
+  exit 0
+fi
 
 function print_version_debug() {
     echo "DIRTY: $DIRTY"
+    echo "SUFFIX: $SUFFIX";
     echo "HELM_IMAGE_TAG: $HELM_IMAGE_TAG";
     echo "HELM_CHART_VERSION: $HELM_CHART_VERSION";
-    echo "REPO: $REPO; TAG: $TAG";
-    echo "IMAGE: $IMAGE";
+    echo "REPO: $REPO; IMAGE: $IMAGE; TAG: $TAG";
+    echo "IMAGE_NAME: $IMAGE_NAME"
+    echo "FULL_IMAGE: $FULL_IMAGE";
 }
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then print_version_debug "$1"; fi
