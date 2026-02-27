@@ -7,7 +7,7 @@ on:
 
 env:
   PUBLIC_REGISTRY: docker.io
-  REPO : rancher
+  PUBLIC_REPO: rancher
 
 permissions:
   contents: write
