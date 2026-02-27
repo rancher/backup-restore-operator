@@ -16,9 +16,9 @@ builds:
         - -extldflags
         - -static
         - -s
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Version={{.Version}}
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.GitCommit={{.Commit}}
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Date={{.Date}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Version={{.Version}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.GitCommit={{.Commit}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Date={{.Date}}
       flags:
         - -trimpath
       env:
@@ -35,9 +35,9 @@ builds:
       binary: backup-restore-operator
       ldflags:
         - -s
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Version={{.Version}}
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.GitCommit={{.Commit}}
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Date={{.Date}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Version={{.Version}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.GitCommit={{.Commit}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Date={{.Date}}
       flags:
         - -trimpath
       env:
