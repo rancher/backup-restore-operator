@@ -44,6 +44,23 @@ builds:
         - CGO_ENABLED=0
       skip: '{{ not (index .Env "GOOS_DARWIN_DEV") }}'
 
+    - id: bro-tool
+      main: ./cmd/tool/main.go
+      goos:
+        - linux
+        - darwin
+        - windows
+      binary: bro-tool
+      ldflags:
+        - -s
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Version={{.Version}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.GitCommit={{.Commit}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Date={{.Date}}
+      flags:
+        - -trimpath
+      env:
+        - CGO_ENABLED=0
+
 archives:
     - id: backup-restore-operator
       builds:

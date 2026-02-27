@@ -6,8 +6,9 @@
 *.swp
 .idea
 ./backup
-./backup-restore-operator
 backup-restore-operator
+operator
+tool
 /secretExamples
 test-backup-location-local/
 .DS_Store
