@@ -8,7 +8,9 @@
 ./backup
 backup-restore-operator
 operator
+!cmd/operator
 tool
+!cmd/tool
 /secretExamples
 test-backup-location-local/
 .DS_Store

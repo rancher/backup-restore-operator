@@ -1,0 +1,58 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+
+	"github.com/rancher/backup-restore-operator/pkg/version"
+	"github.com/sirupsen/logrus"
+)
+
+var (
+	Debug        bool
+	PrintVersion bool
+)
+
+func init() {
+	flag.BoolVar(&Debug, "debug", false, "Enable debug logging.")
+	flag.BoolVar(&PrintVersion, "version", false, "Print version information and exit.")
+	flag.Usage = usage
+}
+
+func usage() {
+	fmt.Fprintf(os.Stderr, "bro-tool — CLI helper for the backup-restore-operator.\n")
+	fmt.Fprintf(os.Stderr, "Versioned alongside BRO; see BRO docs for compatibility notes.\n\n")
+	fmt.Fprintf(os.Stderr, "Usage: bro-tool [flags] <command> [command flags]\n\n")
+	fmt.Fprintf(os.Stderr, "Commands:\n")
+	fmt.Fprintf(os.Stderr, "  (none yet)\n\n")
+	fmt.Fprintf(os.Stderr, "Flags:\n")
+	flag.PrintDefaults()
+}
+
+func main() {
+	flag.Parse()
+
+	if PrintVersion {
+		fmt.Println(version.FmtVersionInfo("bro-tool"))
+		return
+	}
+
+	if Debug {
+		logrus.SetLevel(logrus.DebugLevel)
+		logrus.Debugf("Loglevel set to [%v]", logrus.DebugLevel)
+	}
+
+	args := flag.Args()
+	if len(args) == 0 {
+		flag.Usage()
+		return
+	}
+
+	switch args[0] {
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command: %q\n\n", args[0])
+		flag.Usage()
+		os.Exit(1)
+	}
+}
