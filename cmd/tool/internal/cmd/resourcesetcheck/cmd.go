@@ -106,8 +106,14 @@ func parseResourceFlag(s, namespace, apiVersion string) (chart.ResourceInfo, err
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return chart.ResourceInfo{}, fmt.Errorf("--resource must be in kind/name format (e.g. Deployment/my-app), got %q", s)
 	}
+
+	av := apiVersion
+	if av == "" {
+		av = inferAPIVersionForKind(parts[0])
+	}
+
 	return chart.ResourceInfo{
-		APIVersion: apiVersion,
+		APIVersion: av,
 		Kind:       parts[0],
 		Name:       parts[1],
 		Namespace:  namespace,
@@ -149,6 +155,10 @@ func parseResourceFile(path, nsOverride, avOverride string) (chart.ResourceInfo,
 	if avOverride != "" {
 		av = avOverride
 	}
+	if av == "" {
+		av = inferAPIVersionForKind(obj.Kind)
+	}
+
 	ns := obj.Metadata.Namespace
 	if nsOverride != "" {
 		ns = nsOverride

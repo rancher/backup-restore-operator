@@ -3,7 +3,6 @@ package chart
 import (
 	"encoding/json"
 	"fmt"
-	"path"
 	"strings"
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
@@ -89,7 +88,7 @@ func buildSourceIndex(files []*helmchart.File) map[string]string {
 		if err := yaml.Unmarshal(f.Data, &selectors); err != nil || len(selectors) == 0 {
 			continue
 		}
-		base := path.Base(f.Name)
+		base := getBaseIndex(f.Name)
 		for _, sel := range selectors {
 			if fp, err := selectorFingerprint(sel); err == nil {
 				index[fp] = base
@@ -97,6 +96,10 @@ func buildSourceIndex(files []*helmchart.File) map[string]string {
 		}
 	}
 	return index
+}
+
+func getBaseIndex(filePath string) string {
+	return strings.TrimPrefix(filePath, "files/")
 }
 
 // selectorFingerprint returns a canonical JSON string for sel, used as a map key.
