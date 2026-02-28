@@ -1,4 +1,4 @@
-FROM registry.suse.com/bci/golang:1.24 AS builder
+FROM registry.suse.com/bci/golang:1.25 AS builder
 
 ARG TAG=''
 ARG REPO=''
