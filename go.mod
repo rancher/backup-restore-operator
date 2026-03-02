@@ -5,7 +5,7 @@ go 1.25.0
 toolchain go1.25.7
 
 replace (
-	golang.org/x/crypto => golang.org/x/crypto v0.35.0
+	golang.org/x/crypto => golang.org/x/crypto v0.45.0
 	google.golang.org/grpc => google.golang.org/grpc v1.71.0
 )
 
