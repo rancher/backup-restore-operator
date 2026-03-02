@@ -2,7 +2,7 @@ module github.com/rancher/backup-restore-operator
 
 go 1.24.0
 
-toolchain go1.24.10
+toolchain go1.24.13
 
 replace (
 	golang.org/x/crypto => golang.org/x/crypto v0.35.0
@@ -11,17 +11,17 @@ replace (
 
 require (
 	github.com/minio/minio-go/v7 v7.0.87
-	github.com/rancher/lasso v0.2.2
-	github.com/rancher/wrangler/v3 v3.2.1
+	github.com/rancher/lasso v0.2.3
+	github.com/rancher/wrangler/v3 v3.2.4
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.10.0
+	github.com/sirupsen/logrus v1.9.4
+	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.12.0
-	k8s.io/api v0.33.1
-	k8s.io/apiextensions-apiserver v0.33.1
-	k8s.io/apimachinery v0.33.1
-	k8s.io/apiserver v0.33.1
-	k8s.io/client-go v0.33.1
+	k8s.io/api v0.33.7
+	k8s.io/apiextensions-apiserver v0.33.7
+	k8s.io/apimachinery v0.33.7
+	k8s.io/apiserver v0.33.7
+	k8s.io/client-go v0.33.7
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect with v0.30.0
 )
 
@@ -95,11 +95,11 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/code-generator v0.33.1 // indirect
-	k8s.io/component-base v0.33.1 // indirect
+	k8s.io/code-generator v0.33.7 // indirect
+	k8s.io/component-base v0.33.7 // indirect
 	k8s.io/gengo v0.0.0-20250130153323-76c5745d3511 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kms v0.33.1 // indirect
+	k8s.io/kms v0.33.7 // indirect
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
