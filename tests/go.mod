@@ -9,8 +9,8 @@ require (
 	github.com/rancher/backup-restore-operator v1.2.1
 	github.com/rancher/hull v0.0.0-20251003204704-ebebbc84bf16
 	github.com/stretchr/testify v1.11.1
-	k8s.io/api v0.34.1
-	k8s.io/apimachinery v0.34.1
+	k8s.io/api v0.35.1
+	k8s.io/apimachinery v0.35.2
 )
 
 require (
