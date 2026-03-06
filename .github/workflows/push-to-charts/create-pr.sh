@@ -18,7 +18,19 @@ require_var TAG
 
 SOURCE_REPO="${SOURCE_REPO:-rancher/backup-restore-operator}"
 
-PR_TITLE="chore(charts): Update rancher-backup to ${TAG} for ${TARGET_BRANCH}"
+# Build the combined version string: {charts_version}+up{bro_version_without_v}
+TAG_NO_V="${TAG#v}"
+CHARTS_VERSION=$(yq e '.version' "$CHARTS_DIR/packages/$PACKAGE/package.yaml")
+COMBINED_VERSION="${CHARTS_VERSION}+up${TAG_NO_V}"
+
+# Determine action: prerelease tags are a "bump", stable tags are an "UnRC"
+if [[ "$TAG_NO_V" == *"-"* ]]; then
+  ACTION="bump"
+else
+  ACTION="UnRC"
+fi
+
+PR_TITLE="[${TARGET_BRANCH}] rancher-backup ${COMBINED_VERSION} ${ACTION}"
 PR_BODY="Automated PR to update \`rancher-backup\` and \`rancher-backup-crd\` charts from [${SOURCE_REPO}](https://github.com/${SOURCE_REPO}/releases/tag/${TAG}) release \`${TAG}\`."
 
 if [ "$DRY_RUN" = "true" ]; then
@@ -26,6 +38,7 @@ if [ "$DRY_RUN" = "true" ]; then
   echo "  Branch: $BRANCH_NAME"
   echo "  Title:  $PR_TITLE"
   echo "  Base:   $TARGET_BRANCH"
+  echo "  Version: $COMBINED_VERSION"
   echo "All commits are in your local $CHARTS_DIR checkout."
   exit 0
 fi

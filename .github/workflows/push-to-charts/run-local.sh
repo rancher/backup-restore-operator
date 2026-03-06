@@ -66,6 +66,9 @@ bash "$SCRIPT_DIR/update-patches.sh"
 echo "--- Generating chart assets ---"
 bash "$SCRIPT_DIR/generate-assets.sh"
 
+echo "--- Updating release.yaml ---"
+bash "$SCRIPT_DIR/update-release-yaml.sh"
+
 echo "--- Creating PR ---"
 bash "$SCRIPT_DIR/create-pr.sh"
 
