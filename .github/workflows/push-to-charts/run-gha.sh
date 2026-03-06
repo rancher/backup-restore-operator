@@ -25,6 +25,19 @@ summary "## Push to rancher/charts"
 summary "- Tag: \`$TAG\`"
 summary "- Target branch: \`$TARGET_BRANCH\`"
 
+# --- Check code freeze ---
+FREEZE_MANIFEST="/tmp/bro-push/code-freeze.yaml"
+mkdir -p "$(dirname "$FREEZE_MANIFEST")"
+curl -sf -H "Authorization: token $GH_TOKEN" \
+  "https://raw.githubusercontent.com/rancher/org/refs/heads/main/manifests/resources/RepositoryRuleset/rancher/code-freeze.yaml" \
+  -o "$FREEZE_MANIFEST" || echo "WARNING: Could not fetch code-freeze manifest, freeze check skipped" >&2
+
+if is_branch_frozen "$TARGET_BRANCH" "$FREEZE_MANIFEST"; then
+  MANIFEST_BRANCH=$(echo "$TARGET_BRANCH" | sed 's|dev-v|release/v|')
+  summary "- Branch \`$MANIFEST_BRANCH\` is currently frozen. Skipping."
+  exit 0
+fi
+
 # --- Clone downstream repo ---
 git clone "https://oauth2:${GH_TOKEN}@github.com/rancher/charts.git" "$CHARTS_DIR"
 git -C "$CHARTS_DIR" config user.name "github-actions[bot]"
