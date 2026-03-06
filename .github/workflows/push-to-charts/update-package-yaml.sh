@@ -9,7 +9,7 @@
 # Updates:
 #   url                              → new chart tarball URL for TAG
 #   additionalCharts[0].upstreamOptions.url → new CRD chart tarball URL for TAG
-#   version                          → auto-incremented (minor bump if BRO minor changed, else patch)
+#   version                          → auto-incremented: major if BRO major changed, minor if BRO minor changed, else patch
 #
 # Output: git commit in CHARTS_DIR
 set -euo pipefail
@@ -45,10 +45,18 @@ CHARTS_MAJOR=$(echo "$CURRENT_CHARTS_VERSION" | cut -d. -f1)
 CHARTS_MINOR=$(echo "$CURRENT_CHARTS_VERSION" | cut -d. -f2)
 CHARTS_PATCH=$(echo "$CURRENT_CHARTS_VERSION" | cut -d. -f3)
 
+OLD_BRO_MAJOR=$(echo "$OLD_BRO_BASE" | cut -d. -f1)
+NEW_BRO_MAJOR=$(echo "$NEW_BRO_BASE" | cut -d. -f1)
+OLD_BRO_MINOR=$(echo "$OLD_BRO_BASE" | cut -d. -f2)
+NEW_BRO_MINOR=$(echo "$NEW_BRO_BASE" | cut -d. -f2)
+
 if [ "$OLD_BRO_BASE" = "$NEW_BRO_BASE" ]; then
   # Same base BRO version (RC→RC or RC→stable): version was already bumped, keep it
   NEW_CHARTS_VERSION="$CURRENT_CHARTS_VERSION"
-elif [ "$(echo "$NEW_BRO_BASE" | cut -d. -f2)" != "$(echo "$OLD_BRO_BASE" | cut -d. -f2)" ]; then
+elif [ "$NEW_BRO_MAJOR" != "$OLD_BRO_MAJOR" ]; then
+  # BRO major version changed (new Rancher version line seeded from previous branch)
+  NEW_CHARTS_VERSION="$((CHARTS_MAJOR + 1)).0.0"
+elif [ "$NEW_BRO_MINOR" != "$OLD_BRO_MINOR" ]; then
   # BRO minor version changed
   NEW_CHARTS_VERSION="${CHARTS_MAJOR}.$((CHARTS_MINOR + 1)).0"
 else

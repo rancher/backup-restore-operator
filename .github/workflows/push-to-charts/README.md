@@ -47,6 +47,7 @@ Edit `common.sh` and add an entry to `CHARTS_BRANCH_MAP`:
 | `9.0.2-rc.1` → `9.0.2-rc.5` | no bump: stays `108.0.2` |
 | `9.0.2-rc.5` → `9.0.2` | no bump: stays `108.0.2` |
 | `9.0.2` → `9.1.0-rc.1` | minor bump: `108.0.2` → `108.1.0` |
+| `9.x.x` → `10.0.0-rc.1` | major bump: `108.x.x` → `109.0.0` |
 
 ## Key env vars
 
