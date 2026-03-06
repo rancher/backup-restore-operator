@@ -1,0 +1,53 @@
+name: Push to rancher/charts
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to process (e.g. v9.0.2-rc.5)'
+        required: true
+        type: string
+
+jobs:
+  push-to-charts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install yq and gh
+        run: |
+          ARCH=$(uname -m)
+          if [ "$ARCH" = "x86_64" ]; then SYSTEM_ARCH="amd64"; elif [ "$ARCH" = "aarch64" ]; then SYSTEM_ARCH="arm64"; else echo "Unsupported architecture: $ARCH"; exit 1; fi
+          curl -L "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${SYSTEM_ARCH}" -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq
+          curl -L "https://github.com/cli/cli/releases/download/v2.82.0/gh_2.82.0_linux_${SYSTEM_ARCH}.tar.gz" -o gh.tar.gz && tar -zxvf gh.tar.gz && mv "gh_2.82.0_linux_${SYSTEM_ARCH}/bin/gh" /usr/local/bin/gh && rm -rf gh.tar.gz "gh_2.82.0_linux_${SYSTEM_ARCH}"
+
+      - name: Read App Credentials from Vault
+        uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APPID;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATEKEY
+
+      - name: Generate GitHub App Token
+        id: generate_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ env.APPID }}
+          private-key: ${{ env.PRIVATEKEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: charts
+
+      - name: Push chart update to rancher/charts
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+          SOURCE_REPO: ${{ github.repository }}
+          BRO_DIR: ${{ github.workspace }}
+          CHARTS_DIR: ${{ github.workspace }}/charts-repo
+        run: ./.github/workflows/push-to-charts/run-gha.sh
