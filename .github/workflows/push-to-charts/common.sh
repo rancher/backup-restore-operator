@@ -67,6 +67,21 @@ require_charts_dir() {
   fi
 }
 
+# Returns 0 if the given TARGET_BRANCH is frozen, 1 otherwise.
+is_branch_frozen() {
+  local target_branch="$1"
+  local freeze_manifest="${2:-/tmp/bro-push/code-freeze.yaml}"
+  if [ ! -f "$freeze_manifest" ]; then
+    return 1
+  fi
+  local manifest_branch_name
+  manifest_branch_name=$(echo "$target_branch" | sed 's|dev-v|release/v|')
+  local manifest_ref="refs/heads/$manifest_branch_name"
+  local result
+  result=$(yq e ".spec.forProvider.conditions[].refName[].include[] | select(. == \"$manifest_ref\")" "$freeze_manifest")
+  [ -n "$result" ]
+}
+
 # Commit all changes in CHARTS_DIR if any exist. Does nothing if tree is clean.
 commit_if_changed() {
   local message="$1"
