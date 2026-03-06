@@ -36,6 +36,7 @@ Edit `common.sh` and add an entry to `CHARTS_BRANCH_MAP`:
 | `update-package-yaml.sh` | Updates `url` and `additionalCharts[0].upstreamOptions.url` to the new release artifacts. Bumps charts version (minor or patch) unless the base BRO version is unchanged (RC→RC or RC→stable). |
 | `update-patches.sh` | Updates `appVersion` in `Chart.yaml.patch`, then runs `make prepare`, `make patch`, `make clean`. |
 | `generate-assets.sh` | Runs `make charts USE_CACHE=true`. |
+| `update-release-yaml.sh` | Prepends the new combined version (`{charts_version}+up{bro_version}`) to `rancher-backup` and `rancher-backup-crd` entries in `release.yaml`. |
 | `create-pr.sh` | Pushes the branch and opens a PR against the target branch in rancher/charts. |
 
 ## Version bump rules

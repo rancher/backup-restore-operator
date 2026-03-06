@@ -51,6 +51,9 @@ bash "$SCRIPT_DIR/update-patches.sh"
 summary "- Generating chart assets..."
 bash "$SCRIPT_DIR/generate-assets.sh"
 
+summary "- Updating release.yaml..."
+bash "$SCRIPT_DIR/update-release-yaml.sh"
+
 summary "- Pushing changes and creating PR..."
 export SOURCE_REPO="${SOURCE_REPO:-rancher/backup-restore-operator}"
 bash "$SCRIPT_DIR/create-pr.sh"
