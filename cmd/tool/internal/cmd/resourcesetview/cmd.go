@@ -91,14 +91,13 @@ func printYAML(w io.Writer, resourceSets []*chart.AnnotatedResourceSet) error {
 }
 
 func printJSON(w io.Writer, resourceSets []*chart.AnnotatedResourceSet) error {
+	out := make([]interface{}, len(resourceSets))
+	for i, ars := range resourceSets {
+		out[i] = ars.ResourceSet
+	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	for _, ars := range resourceSets {
-		if err := enc.Encode(ars.ResourceSet); err != nil {
-			return fmt.Errorf("encoding ResourceSet %q: %w", ars.Name, err)
-		}
-	}
-	return nil
+	return enc.Encode(out)
 }
 
 func printTable(w io.Writer, resourceSets []*chart.AnnotatedResourceSet) error {

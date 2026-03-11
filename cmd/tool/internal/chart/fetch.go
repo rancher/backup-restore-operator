@@ -6,10 +6,18 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
+
+// versionRe restricts version tags to the expected semver-with-v format (e.g. v9.0.0, v2.1.0-rc.1).
+// This prevents path-traversal attacks when the version is used as a cache directory segment.
+var versionRe = regexp.MustCompile(`^v\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$`)
+
+var httpClient = &http.Client{Timeout: 60 * time.Second}
 
 // githubReleaseFmt is the URL for a packaged rancher-backup helm chart on a GitHub release.
 // The version path segment keeps the "v" prefix; the filename strips it (matching HELM_CHART_VERSION).
@@ -27,6 +35,10 @@ func CacheDir() (string, error) {
 // FetchChartByVersion returns the path to the packaged rancher-backup chart for the given BRO
 // version tag (e.g. "v2.1.0"). Downloads and caches the .tgz from GitHub if not already present.
 func FetchChartByVersion(version string) (string, error) {
+	if !versionRe.MatchString(version) {
+		return "", fmt.Errorf("invalid version %q: must match %s", version, versionRe)
+	}
+
 	cacheBase, err := CacheDir()
 	if err != nil {
 		return "", err
@@ -54,7 +66,7 @@ func FetchChartByVersion(version string) (string, error) {
 }
 
 func downloadFile(url, destPath string) error {
-	resp, err := http.Get(url) // #nosec G107 -- URL is constructed from a validated version string
+	resp, err := httpClient.Get(url) // #nosec G107 -- URL is constructed from a validated version string
 	if err != nil {
 		return fmt.Errorf("GET %s: %w", url, err)
 	}
