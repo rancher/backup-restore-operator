@@ -149,27 +149,24 @@ func withAllOptionalsEnabled(vals map[string]interface{}) map[string]interface{}
 func extractResourceSets(rendered map[string]string) ([]*v1.ResourceSet, error) {
 	var out []*v1.ResourceSet
 
-	for _, content := range rendered {
-		for _, doc := range strings.Split(content, "\n---") {
-			doc = strings.TrimSpace(doc)
-			if doc == "" {
-				continue
-			}
-
-			// Quick kind check before full unmarshal.
-			var meta struct {
-				Kind string `json:"kind"`
-			}
-			if err := yaml.Unmarshal([]byte(doc), &meta); err != nil || meta.Kind != "ResourceSet" {
-				continue
-			}
-
-			var rs v1.ResourceSet
-			if err := yaml.Unmarshal([]byte(doc), &rs); err != nil {
-				return nil, fmt.Errorf("parsing ResourceSet: %w", err)
-			}
-			out = append(out, &rs)
+	for key, content := range rendered {
+		if !strings.Contains(key, "resourceset") {
+			continue
 		}
+
+		// Quick kind check before full unmarshal.
+		var meta struct {
+			Kind string `json:"kind"`
+		}
+		if err := yaml.Unmarshal([]byte(content), &meta); err != nil || meta.Kind != "ResourceSet" {
+			continue
+		}
+
+		var rs v1.ResourceSet
+		if err := yaml.Unmarshal([]byte(content), &rs); err != nil {
+			return nil, fmt.Errorf("parsing ResourceSet: %w", err)
+		}
+		out = append(out, &rs)
 	}
 
 	return out, nil
