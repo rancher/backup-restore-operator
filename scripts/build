@@ -15,3 +15,5 @@ LINKFLAGS="-X github.com/rancher/backup-restore-operator/pkg/version.GitCommit=$
 LINKFLAGS="-X github.com/rancher/backup-restore-operator/pkg/version.Date=$(date -u +"%Y-%m-%dT%H:%M:%SZ") $LINKFLAGS"
 
 CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o "bin/backup-restore-operator" ./cmd/operator/main.go
+
+CGO_ENABLED=0 go build -C cmd/tool -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o "../../bin/bro-tool" .

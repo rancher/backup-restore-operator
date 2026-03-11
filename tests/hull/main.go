@@ -351,14 +351,14 @@ var suite = test.Suite{
 				).
 				Set(
 					"monitoring.serviceMonitor.metricRelabelings", []map[string]string{
-						map[string]string{
+						{
 							"action": "replace",
 						},
 					},
 				).
 				Set(
 					"monitoring.serviceMonitor.relabelings", []map[string]string{
-						map[string]string{
+						{
 							"action": "replace",
 						},
 					},
@@ -376,7 +376,7 @@ var suite = test.Suite{
 				).
 				Set(
 					"monitoring.prometheusRules.defaultAlert.labels", []map[string]string{
-						map[string]string{
+						{
 							"severity": "critical",
 						},
 					},
@@ -391,7 +391,7 @@ var suite = test.Suite{
 				).
 				Set(
 					"monitoring.prometheusRules.customRules.rules", []map[string]string{
-						map[string]string{
+						{
 							"record": "test_record",
 							"expr":   "rancher_backups_test_record",
 						},
@@ -554,7 +554,7 @@ var suite = test.Suite{
 			},
 
 			Checks: test.Checks{
-				checker.PerWorkload(func(tc *checker.TestContext, obj metav1.Object, podTemplateSpec corev1.PodTemplateSpec) {
+				checker.PerWorkload(func(tc *checker.TestContext, _ metav1.Object, podTemplateSpec corev1.PodTemplateSpec) {
 					persistenceEnabled := checker.MustRenderValue[bool](tc, ".Values.persistence.enabled")
 					if !persistenceEnabled {
 						assert.Equal(tc.T, len(podTemplateSpec.Spec.Volumes), 0, "Length of deployment.Spec.Template.Spec.Volumes is not zero when persistence is disabled")
@@ -597,7 +597,7 @@ var suite = test.Suite{
 
 			Checks: test.Checks{
 				checker.PerWorkload(func(tc *checker.TestContext, obj metav1.Object, podTemplateSpec corev1.PodTemplateSpec) {
-					envVar := []corev1.EnvVar([]corev1.EnvVar{corev1.EnvVar{Name: "CHART_NAMESPACE", Value: "cattle-resources-system", ValueFrom: (*corev1.EnvVarSource)(nil)}, corev1.EnvVar{Name: "DEFAULT_S3_BACKUP_STORAGE_LOCATION", Value: "rancher-backup-s3", ValueFrom: (*corev1.EnvVarSource)(nil)}, corev1.EnvVar{Name: "ENCRYPTION_PROVIDER_LOCATION", Value: "/encryption", ValueFrom: (*corev1.EnvVarSource)(nil)}})
+					envVar := []corev1.EnvVar([]corev1.EnvVar{{Name: "CHART_NAMESPACE", Value: "cattle-resources-system", ValueFrom: (*corev1.EnvVarSource)(nil)}, {Name: "DEFAULT_S3_BACKUP_STORAGE_LOCATION", Value: "rancher-backup-s3", ValueFrom: (*corev1.EnvVarSource)(nil)}, {Name: "ENCRYPTION_PROVIDER_LOCATION", Value: "/encryption", ValueFrom: (*corev1.EnvVarSource)(nil)}})
 					s3Enabled := checker.MustRenderValue[bool](tc, ".Values.s3.enabled")
 					if s3Enabled {
 						for _, container := range podTemplateSpec.Spec.Containers {
@@ -801,27 +801,27 @@ var suite = test.Suite{
 						return
 					}
 					envVar := []corev1.EnvVar([]corev1.EnvVar{
-						corev1.EnvVar{
+						{
 							Name:      "CHART_NAMESPACE",
 							Value:     "cattle-resources-system",
 							ValueFrom: (*corev1.EnvVarSource)(nil),
 						},
-						corev1.EnvVar{
+						{
 							Name:      "HTTP_PROXY",
 							Value:     proxy,
 							ValueFrom: (*corev1.EnvVarSource)(nil),
 						},
-						corev1.EnvVar{
+						{
 							Name:      "HTTPS_PROXY",
 							Value:     proxy,
 							ValueFrom: (*corev1.EnvVarSource)(nil),
 						},
-						corev1.EnvVar{
+						{
 							Name:      "NO_PROXY",
 							Value:     noProxy,
 							ValueFrom: (*corev1.EnvVarSource)(nil),
 						},
-						corev1.EnvVar{
+						{
 							Name:      "ENCRYPTION_PROVIDER_LOCATION",
 							Value:     "/encryption",
 							ValueFrom: (*corev1.EnvVarSource)(nil),
@@ -855,17 +855,17 @@ var suite = test.Suite{
 						return
 					}
 					envVar := []corev1.EnvVar([]corev1.EnvVar{
-						corev1.EnvVar{
+						{
 							Name:      "METRICS_SERVER",
 							Value:     metricsServer,
 							ValueFrom: (*corev1.EnvVarSource)(nil),
 						},
-						corev1.EnvVar{
+						{
 							Name:      "BACKUP_DURATION_BUCKETS",
 							Value:     rancherBackupDurationBuckets,
 							ValueFrom: (*corev1.EnvVarSource)(nil),
 						},
-						corev1.EnvVar{
+						{
 							Name:      "ENCRYPTION_PROVIDER_LOCATION",
 							Value:     "/encryption",
 							ValueFrom: (*corev1.EnvVarSource)(nil),
@@ -887,12 +887,12 @@ var suite = test.Suite{
 					smAdditionalLabels := checker.MustRenderValue[map[string]string](tc, ".Values.monitoring.serviceMonitor.additionalLabels")
 
 					relabelings := []monitoringv1.RelabelConfig{
-						monitoringv1.RelabelConfig{
+						{
 							Action: "replace",
 						},
 					}
 					metricRelabelings := []monitoringv1.RelabelConfig{
-						monitoringv1.RelabelConfig{
+						{
 							Action: "replace",
 						},
 					}

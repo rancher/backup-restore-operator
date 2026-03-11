@@ -136,3 +136,13 @@ Refer to [DEVELOPING.md](./DEVELOPING.md) for developer tips, tricks, and workfl
 ### Troubleshooting
 
 Refer to [troubleshooting.md](./docs/troubleshooting.md) for troubleshooting commands.
+
+---
+
+### bro-tool
+
+`bro-tool` is an unofficial companion CLI for support engineers and developers. It lets you inspect BRO ResourceSet configuration and check resource coverage **without a live cluster**.
+
+> **No Warranty.** `bro-tool` is provided as-is and is **not** a supported SUSE/Rancher product. It carries no SLA and is not covered by any support agreement. This is in contrast to BRO itself, which is a supported product for paying customers.
+
+Refer to [docs/bro-tool.md](./docs/bro-tool.md) for full usage documentation.

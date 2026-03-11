@@ -24,6 +24,10 @@ linters:
           - revive
         path: cmd/operator/version/version.go
         text: var-naming
+      - linters:
+          - revive
+        path: pkg/version/version.go
+        text: var-naming
     paths:
       - /zz_generated_
 formatters:
