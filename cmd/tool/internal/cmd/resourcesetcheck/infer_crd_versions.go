@@ -47,23 +47,24 @@ func buildKindToAPIVersionMap() map[string]string {
 	}
 
 	for gk, gvks := range byGroupKind {
-		// Prefer the scheme's prioritized versions for that API group.
-		for _, gv := range scheme.Scheme.PrioritizedVersionsForGroup(gk.Group) {
-			for _, gvk := range gvks {
-				if gvk.Group == gv.Group && gvk.Version == gv.Version {
-					out[strings.ToLower(gvk.Kind)] = gv.String()
-					goto nextKind
-				}
-			}
-		}
-
-		// Fallback: pick the first external version we saw.
-		out[strings.ToLower(gvks[0].Kind)] = gvks[0].GroupVersion().String()
-
-	nextKind:
+		out[gk.Kind] = preferredAPIVersion(gk.Group, gvks)
 	}
 
 	return out
+}
+
+// preferredAPIVersion returns the canonical apiVersion string for a set of GVKs sharing
+// the same group+kind. It prefers the scheme's prioritized version order, falling back
+// to the first external version seen.
+func preferredAPIVersion(group string, gvks []schema.GroupVersionKind) string {
+	for _, gv := range scheme.Scheme.PrioritizedVersionsForGroup(group) {
+		for _, gvk := range gvks {
+			if gvk.Group == gv.Group && gvk.Version == gv.Version {
+				return gv.String()
+			}
+		}
+	}
+	return gvks[0].GroupVersion().String()
 }
 
 func kindCandidates(kind string) []string {
