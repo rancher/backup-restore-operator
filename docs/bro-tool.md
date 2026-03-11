@@ -34,7 +34,7 @@ The tool answers these questions **offline** — it fetches or reads the BRO hel
 
 ## Installation
 
-`bro-tool` is a Go binary. Build it from source using the Go toolchain (Go 1.22+):
+`bro-tool` is a Go binary. Build it from source using the Go toolchain (Go 1.25+):
 
 ```bash
 git clone https://github.com/rancher/backup-restore-operator.git

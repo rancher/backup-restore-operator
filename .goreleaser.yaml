@@ -2,7 +2,7 @@
 version: 2 # the goreleaser config version
 before:
   hooks:
-    - go mod tidy
+    - ./scripts/tidy
 builds:
     - id: backup-restore-operator
       main: ./cmd/operator/main.go

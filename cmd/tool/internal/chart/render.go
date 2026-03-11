@@ -16,9 +16,10 @@ import (
 // AnnotatedResourceSet wraps a ResourceSet with per-selector source file attribution.
 type AnnotatedResourceSet struct {
 	*v1.ResourceSet
-	// SelectorSources is parallel to ResourceSelectors. Each entry is the base filename
-	// of the chart source file the selector originated from (e.g. "aks.yaml"), or ""
-	// if the source could not be determined.
+	// SelectorSources is parallel to ResourceSelectors. Each entry is the chart-relative
+	// path of the source file the selector originated from, with the leading "files/" prefix
+	// stripped (e.g. "default/basic-resourceset-contents/aks.yaml"), or "" if the source
+	// could not be determined.
 	SelectorSources []string
 }
 
@@ -77,7 +78,8 @@ func annotate(resourceSets []*v1.ResourceSet, sourceIndex map[string]string) []*
 
 // buildSourceIndex parses all files/**/*.yaml entries from the chart's Files collection,
 // interprets each as a list of ResourceSelectors, and returns a map of
-// fingerprint → base filename (e.g. "aks.yaml").
+// fingerprint → chart-relative path with the "files/" prefix stripped
+// (e.g. "default/basic-resourceset-contents/aks.yaml").
 func buildSourceIndex(files []*helmchart.File) map[string]string {
 	index := make(map[string]string)
 	for _, f := range files {
@@ -88,7 +90,7 @@ func buildSourceIndex(files []*helmchart.File) map[string]string {
 		if err := yaml.Unmarshal(f.Data, &selectors); err != nil || len(selectors) == 0 {
 			continue
 		}
-		base := getBaseIndex(f.Name)
+		base := stripFilesPrefix(f.Name)
 		for _, sel := range selectors {
 			if fp, err := selectorFingerprint(sel); err == nil {
 				index[fp] = base
@@ -98,7 +100,7 @@ func buildSourceIndex(files []*helmchart.File) map[string]string {
 	return index
 }
 
-func getBaseIndex(filePath string) string {
+func stripFilesPrefix(filePath string) string {
 	return strings.TrimPrefix(filePath, "files/")
 }
 
