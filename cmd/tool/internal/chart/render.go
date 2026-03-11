@@ -83,7 +83,7 @@ func annotate(resourceSets []*v1.ResourceSet, sourceIndex map[string]string) []*
 func buildSourceIndex(files []*helmchart.File) map[string]string {
 	index := make(map[string]string)
 	for _, f := range files {
-		if !strings.HasPrefix(f.Name, "files/") || !strings.HasSuffix(f.Name, ".yaml") {
+		if !strings.HasPrefix(f.Name, "files/") || !strings.HasSuffix(f.Name, ".yaml") || !strings.HasSuffix(f.Name, ".yml") {
 			continue
 		}
 		var selectors []v1.ResourceSelector
