@@ -35,23 +35,20 @@ func buildKindToAPIVersionMap() map[string]string {
 	out := map[string]string{}
 
 	known := scheme.Scheme.AllKnownTypes() // map[GVK]reflect.Type
-	byGroupKind := map[string][]schema.GroupVersionKind{}
+	byGroupKind := map[schema.GroupKind][]schema.GroupVersionKind{}
 
 	for gvk := range known {
 		// Ignore internal/legacy forms.
 		if gvk.Version == "" || gvk.Version == "__internal" {
 			continue
 		}
-		key := strings.ToLower(gvk.Group + "/" + gvk.Kind)
-		byGroupKind[key] = append(byGroupKind[key], gvk)
+		gk := schema.GroupKind{Group: strings.ToLower(gvk.Group), Kind: strings.ToLower(gvk.Kind)}
+		byGroupKind[gk] = append(byGroupKind[gk], gvk)
 	}
 
-	for key, gvks := range byGroupKind {
-		parts := strings.SplitN(key, "/", 2)
-		group := parts[0]
-
+	for gk, gvks := range byGroupKind {
 		// Prefer the scheme's prioritized versions for that API group.
-		for _, gv := range scheme.Scheme.PrioritizedVersionsForGroup(group) {
+		for _, gv := range scheme.Scheme.PrioritizedVersionsForGroup(gk.Group) {
 			for _, gvk := range gvks {
 				if gvk.Group == gv.Group && gvk.Version == gv.Version {
 					out[strings.ToLower(gvk.Kind)] = gv.String()
