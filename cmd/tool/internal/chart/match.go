@@ -24,8 +24,8 @@ type ResourceInfo struct {
 // MatchResult describes a ResourceSelector rule that matched the resource.
 type MatchResult struct {
 	ResourceSetName string
-	SelectorIndex   int    // 1-based display index
-	SelectorSource  string // base filename of the chart source file
+	SelectorIndex   int      // 1-based display index
+	SelectorSources []string // chart-relative source files the selector originated from
 	Selector        v1.ResourceSelector
 	// Caveats lists selector conditions that could not be checked offline
 	// (e.g. namespace not provided, label selectors without labels, field selectors).
@@ -62,11 +62,11 @@ func Check(res ResourceInfo, resourceSets []*AnnotatedResourceSet) ([]MatchResul
 	return results, nil
 }
 
-func tryMatch(res ResourceInfo, sel v1.ResourceSelector, idx int, rsName, source string) (MatchResult, bool, error) {
+func tryMatch(res ResourceInfo, sel v1.ResourceSelector, idx int, rsName string, sources []string) (MatchResult, bool, error) {
 	r := MatchResult{
 		ResourceSetName: rsName,
 		SelectorIndex:   idx,
-		SelectorSource:  source,
+		SelectorSources: sources,
 		Selector:        sel,
 	}
 
@@ -185,8 +185,8 @@ func kindCandidates(kind string) []string {
 		}
 	}
 	add(kind)
-	add(strings.ToLower(kind))
 	lower := strings.ToLower(kind)
+	add(lower)
 	if !strings.HasSuffix(lower, "s") {
 		add(lower + "s")
 	}

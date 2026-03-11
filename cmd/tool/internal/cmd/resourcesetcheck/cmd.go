@@ -218,7 +218,7 @@ func printTable(w io.Writer, res chart.ResourceInfo, results []chart.MatchResult
 		fmt.Fprintf(tw, "  %s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			m.ResourceSetName,
 			m.SelectorIndex,
-			m.SelectorSource,
+			strings.Join(m.SelectorSources, ","),
 			sel.APIVersion,
 			fmtSelector(sel.Kinds, sel.KindsRegexp),
 			fmtSelector(sel.ResourceNames, sel.ResourceNameRegexp),

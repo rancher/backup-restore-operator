@@ -111,7 +111,7 @@ func printTable(w io.Writer, resourceSets []*chart.AnnotatedResourceSet) error {
 		for i, sel := range ars.ResourceSelectors {
 			fmt.Fprintf(tw, "  %d\t%s\t%s\t%s\t%s\t%s\n",
 				i+1,
-				ars.SelectorSources[i],
+				strings.Join(ars.SelectorSources[i], ","),
 				sel.APIVersion,
 				fmtSelector(sel.Kinds, sel.KindsRegexp),
 				fmtSelector(sel.ResourceNames, sel.ResourceNameRegexp),

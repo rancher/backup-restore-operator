@@ -16,11 +16,12 @@ import (
 // AnnotatedResourceSet wraps a ResourceSet with per-selector source file attribution.
 type AnnotatedResourceSet struct {
 	*v1.ResourceSet
-	// SelectorSources is parallel to ResourceSelectors. Each entry is the chart-relative
-	// path of the source file the selector originated from, with the leading "files/" prefix
-	// stripped (e.g. "default/basic-resourceset-contents/aks.yaml"), or "" if the source
-	// could not be determined.
-	SelectorSources []string
+	// SelectorSources is parallel to ResourceSelectors. Each entry is the set of
+	// chart-relative paths (with the leading "files/" prefix stripped) of the source
+	// files the selector originated from (e.g. ["default/basic-resourceset-contents/aks.yaml"]).
+	// Multiple entries indicate the same selector appeared verbatim in more than one file.
+	// An empty slice means the source could not be determined.
+	SelectorSources [][]string
 }
 
 // LoadAndRenderResourceSets loads the rancher-backup chart from chartPath (a directory or .tgz),
@@ -61,11 +62,11 @@ func LoadAndRenderResourceSets(chartPath string) ([]*AnnotatedResourceSet, error
 	return annotate(resourceSets, sourceIndex), nil
 }
 
-// annotate pairs each selector in each ResourceSet with its source file from the index.
-func annotate(resourceSets []*v1.ResourceSet, sourceIndex map[string]string) []*AnnotatedResourceSet {
+// annotate pairs each selector in each ResourceSet with its source files from the index.
+func annotate(resourceSets []*v1.ResourceSet, sourceIndex map[string][]string) []*AnnotatedResourceSet {
 	out := make([]*AnnotatedResourceSet, len(resourceSets))
 	for i, rs := range resourceSets {
-		sources := make([]string, len(rs.ResourceSelectors))
+		sources := make([][]string, len(rs.ResourceSelectors))
 		for j, sel := range rs.ResourceSelectors {
 			if fp, err := selectorFingerprint(sel); err == nil {
 				sources[j] = sourceIndex[fp]
@@ -78,10 +79,11 @@ func annotate(resourceSets []*v1.ResourceSet, sourceIndex map[string]string) []*
 
 // buildSourceIndex parses all files/**/*.yaml entries from the chart's Files collection,
 // interprets each as a list of ResourceSelectors, and returns a map of
-// fingerprint → chart-relative path with the "files/" prefix stripped
+// fingerprint → chart-relative paths with the "files/" prefix stripped
 // (e.g. "default/basic-resourceset-contents/aks.yaml").
-func buildSourceIndex(files []*helmchart.File) map[string]string {
-	index := make(map[string]string)
+// Multiple paths per fingerprint occur when the same selector appears verbatim in more than one file.
+func buildSourceIndex(files []*helmchart.File) map[string][]string {
+	index := make(map[string][]string)
 	for _, f := range files {
 		if !strings.HasPrefix(f.Name, "files/") || !strings.HasSuffix(f.Name, ".yaml") || !strings.HasSuffix(f.Name, ".yml") {
 			continue
@@ -93,7 +95,7 @@ func buildSourceIndex(files []*helmchart.File) map[string]string {
 		base := stripFilesPrefix(f.Name)
 		for _, sel := range selectors {
 			if fp, err := selectorFingerprint(sel); err == nil {
-				index[fp] = base
+				index[fp] = append(index[fp], base)
 			}
 		}
 	}
