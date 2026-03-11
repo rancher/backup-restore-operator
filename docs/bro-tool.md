@@ -209,7 +209,7 @@ fi
 | Column | Meaning |
 |---|---|
 | `ResourceSet` | Name of the ResourceSet containing the matching rule |
-| `#` | Rule index within the ResourceSet (0-based) |
+| `#` | Rule index within the ResourceSet (1-based) |
 | `Source` | Chart source file that defines the rule |
 | `APIVersion` | API group/version in the rule |
 | `Kinds` | Kinds matched by the rule |
