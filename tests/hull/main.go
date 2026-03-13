@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"github.com/rancher/backup-restore-operator/internal/consts"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/consts"
 	"github.com/rancher/hull/pkg/chart"
 	"github.com/rancher/hull/pkg/checker"
 	"github.com/rancher/hull/pkg/test"
