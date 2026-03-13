@@ -44,6 +44,10 @@ type RunOptions struct {
 }
 
 func (o *RunOptions) Validate() error {
+	if o.ChartNamespace == "" {
+		return fmt.Errorf("chart namespace is required")
+	}
+
 	if o.OperatorPVCEnabled && o.OperatorS3BackupStorageLocation != "" {
 		return fmt.Errorf("cannot configure PVC and S3 both as default backup storage locations")
 	}
@@ -194,6 +198,15 @@ func Run(
 	c, err := setup(kubeconfig)
 	if err != nil {
 		return err
+	}
+
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.Debugf("cluster: server: %s", kubeconfig.Host)
+		if sv, err := c.k8sClient.Discovery().ServerVersion(); err == nil {
+			logrus.Debugf("cluster: server version: %s.%s (platform: %s)", sv.Major, sv.Minor, sv.Platform)
+		} else {
+			logrus.Debugf("cluster: server version unavailable: %v", err)
+		}
 	}
 
 	if options.shouldUseLocalDriver() {

@@ -306,6 +306,11 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 
 func (h *handler) restoreCRDs(created map[string]bool, objFromBackupCR ObjectsFromBackupCR) (crdsWithStatus []string, err error) {
 	for crdInfo, crdData := range objFromBackupCR.crdInfoToData {
+		// Ensure backup CRD spec is compatible with the live cluster's storedVersions before applying.
+		if err := h.mergeVersionsFromLiveCRD(crdInfo, &crdData); err != nil {
+			logrus.Errorf("restoreCRDs: failed to merge live CRD versions for %v: %v", crdInfo.Name, err)
+			return crdsWithStatus, fmt.Errorf("restoreCRDs: %v", err)
+		}
 		err := h.restoreResource(crdInfo, crdData, false)
 		if err != nil {
 			return crdsWithStatus, fmt.Errorf("restoreCRDs: %v", err)
