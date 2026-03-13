@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rancher/backup-restore-operator/internal/consts"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -34,8 +35,8 @@ func LoadAndRenderResourceSets(chartPath string) ([]*AnnotatedResourceSet, error
 	}
 
 	releaseOpts := chartutil.ReleaseOptions{
-		Name:      "rancher-backup",
-		Namespace: "cattle-resources-system",
+		Name:      consts.DefaultReleaseName,
+		Namespace: consts.DefaultNamespace,
 		IsInstall: true,
 	}
 	// Enable all optional resource groups so every possible selector rule is included.
