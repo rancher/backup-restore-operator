@@ -10,8 +10,9 @@ if ! command -v golangci-lint; then
     exit
 fi
 
-echo Running validation
-
-echo Running: golangci-lint
-golangci-lint run
-
+# Lint each workspace module independently so sub-module deps don't bleed into
+# each other's results and each module gets its own golangci config scope.
+for module in . cmd/tool tests; do
+    echo "Running: golangci-lint in $module"
+    (cd "$module" && golangci-lint run)
+done

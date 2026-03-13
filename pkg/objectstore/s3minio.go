@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rancher/backup-restore-operator/cmd/operator/version"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/util"
+	"github.com/rancher/backup-restore-operator/pkg/version"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"

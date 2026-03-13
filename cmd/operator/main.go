@@ -2,13 +2,14 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
+	"github.com/rancher/backup-restore-operator/pkg/version"
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 	"github.com/rancher/wrangler/v3/pkg/signals"
 	"github.com/sirupsen/logrus"
 
-	"github.com/rancher/backup-restore-operator/cmd/operator/version"
 	"github.com/rancher/backup-restore-operator/pkg/operator"
 	backuputil "github.com/rancher/backup-restore-operator/pkg/util"
 )
@@ -27,12 +28,14 @@ var (
 	ChartNamespace                  string
 	Debug                           bool
 	Trace                           bool
+	PrintVersion                    bool
 )
 
 func init() {
 	flag.StringVar(&KubeConfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.BoolVar(&Debug, "debug", false, "Enable debug logging.")
 	flag.BoolVar(&Trace, "trace", false, "Enable trace logging.")
+	flag.BoolVar(&PrintVersion, "version", false, "Print version information and exit.")
 
 	flag.Parse()
 	OperatorPVEnabled = os.Getenv("DEFAULT_PERSISTENCE_ENABLED")
@@ -43,6 +46,11 @@ func init() {
 }
 
 func main() {
+	if PrintVersion {
+		fmt.Println(version.FmtVersionInfo("backup-restore-operator"))
+		return
+	}
+
 	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true, ForceColors: true, TimestampFormat: LogFormat})
 	if Debug {
 		logrus.SetLevel(logrus.DebugLevel)

@@ -2,7 +2,7 @@
 version: 2 # the goreleaser config version
 before:
   hooks:
-    - go mod tidy
+    - ./scripts/tidy
 builds:
     - id: backup-restore-operator
       main: ./cmd/operator/main.go
@@ -16,9 +16,9 @@ builds:
         - -extldflags
         - -static
         - -s
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Version={{.Version}}
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.GitCommit={{.Commit}}
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Date={{.Date}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Version={{.Version}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.GitCommit={{.Commit}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Date={{.Date}}
       flags:
         - -trimpath
       env:
@@ -35,14 +35,31 @@ builds:
       binary: backup-restore-operator
       ldflags:
         - -s
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Version={{.Version}}
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.GitCommit={{.Commit}}
-        - -X github.com/rancher/backup-restore-operator/cmd/operator/version.Date={{.Date}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Version={{.Version}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.GitCommit={{.Commit}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Date={{.Date}}
       flags:
         - -trimpath
       env:
         - CGO_ENABLED=0
       skip: '{{ not (index .Env "GOOS_DARWIN_DEV") }}'
+
+    - id: bro-tool
+      main: ./cmd/tool/main.go
+      goos:
+        - linux
+        - darwin
+        - windows
+      binary: bro-tool
+      ldflags:
+        - -s
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Version={{.Version}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.GitCommit={{.Commit}}
+        - -X github.com/rancher/backup-restore-operator/pkg/version.Date={{.Date}}
+      flags:
+        - -trimpath
+      env:
+        - CGO_ENABLED=0
 
 archives:
     - id: backup-restore-operator

@@ -2,6 +2,66 @@
 
 Developer tips, tricks, and workflows for the [rancher/backup-restore-operator](https://github.com/rancher/backup-restore-operator).
 
+### Go Workspace (go.work)
+
+This repository uses a [Go workspace](https://go.dev/ref/mod#workspaces) (`go.work`) to manage three independent Go modules together:
+
+| Module | Path |
+|---|---|
+| `github.com/rancher/backup-restore-operator` | `.` (root) |
+| `github.com/rancher/backup-restore-operator/cmd/tool` | `./cmd/tool` |
+| `github.com/rancher/backup-restore-operator/tests` | `./tests` |
+
+The workspace means you can run `go` commands from the repository root and have them resolve cross-module dependencies without needing to publish anything.
+
+#### Day-to-day commands
+
+```bash
+# Build everything in the workspace (operator + bro-tool)
+make build
+
+# Build just bro-tool (from repo root via workspace)
+go build -C cmd/tool -o bin/bro-tool .
+
+# Test everything in the workspace
+go test ./...
+
+# Tidy all modules and sync go.work.sum in one step
+make tidy
+
+# Tidy a single module manually (run from that module's directory)
+cd cmd/tool && go mod tidy
+
+# Update go.work.sum after any go.mod change
+go work sync
+```
+
+#### Adding dependencies
+
+Always add dependencies to the **correct module's** `go.mod`, not the root. The rule of thumb:
+
+- Dependency only used by `bro-tool` → `cd cmd/tool && go get <pkg>`
+- Dependency only used by integration tests → `cd tests && go get <pkg>`
+- Dependency used by the operator itself → `go get <pkg>` from the root
+
+Never add `bro-tool`- or test-only dependencies to the root module. The root module is the BRO operator binary; bloating it affects the production image.
+
+#### Workspace vs. standalone
+
+The `go.work` file is checked in and should always be present for local development. Each sub-module also carries a `replace` directive in its own `go.mod` (e.g. `cmd/tool/go.mod` replaces the root module with `../../`) so the modules still resolve correctly in contexts where `go.work` is not active — such as individual module CI jobs or `go get` from external consumers.
+
+If you ever need to test a module in true standalone mode (without the workspace), use `GOWORK=off`:
+
+```bash
+GOWORK=off go build ./...
+```
+
+#### IDE / gopls
+
+Most editors using `gopls` pick up `go.work` automatically and provide full cross-module navigation and type checking. If your editor shows unresolved imports across modules, check that gopls is running from the repository root (where `go.work` lives), not from inside a sub-module directory.
+
+---
+
 ### Developer Installation
 
 To test your local changes, `cd` to the root of the cloned repository, and execute the following commands:
