@@ -7,7 +7,7 @@ replace github.com/rancher/backup-restore-operator => ../../
 require (
 	github.com/rancher/backup-restore-operator v0.0.0
 	github.com/sirupsen/logrus v1.9.4
-	helm.sh/helm/v3 v3.20.0
+	helm.sh/helm/v4 v4.1.1
 	k8s.io/apimachinery v0.35.0
 	k8s.io/client-go v0.35.0
 	sigs.k8s.io/yaml v1.6.0
