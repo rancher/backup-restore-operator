@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
-          go-version: 1.25
+          go-version: 1.26
       - name: Check go.work.sum is in sync
         run: |
           go work sync
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
-          go-version: 1.25
+          go-version: 1.26
       - name: golangci-lint (${{ matrix.module }})
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
@@ -71,7 +71,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
-          go-version: 1.25
+          go-version: 1.26
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - name: Install helm
@@ -99,7 +99,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
-          go-version: 1.25
+          go-version: 1.26
       - name: Install helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
         with:
