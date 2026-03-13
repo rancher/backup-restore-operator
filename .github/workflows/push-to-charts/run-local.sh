@@ -48,6 +48,7 @@ echo "Charts dir:    $CHARTS_DIR"
 echo "Dry run:       $DRY_RUN"
 echo ""
 
+git -C "$CHARTS_DIR" fetch "$CHARTS_REMOTE"
 git -C "$CHARTS_DIR" checkout -B "$TARGET_BRANCH" "$CHARTS_REMOTE/$TARGET_BRANCH"
 
 BRANCH_NAME="bot/bro-${TAG}-$(date +%s)"
