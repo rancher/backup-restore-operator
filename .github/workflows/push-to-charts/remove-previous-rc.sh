@@ -38,10 +38,16 @@ if [[ "$OLD_BRO_VERSION" != *"-"* ]]; then
   exit 0
 fi
 
-PREV_CHARTS_VERSION=$(yq e '.version' "$PACKAGE_YAML")
+PREV_CHARTS_BASE_VERSION=$(yq e '.version' "$PACKAGE_YAML")
+PREV_CHARTS_VERSION="${PREV_CHARTS_BASE_VERSION}+up${OLD_BRO_VERSION}"
 summary "  - Removing previous RC: $PACKAGE $PREV_CHARTS_VERSION"
 
-make -C "$CHARTS_DIR" remove CHART="$PACKAGE" VERSION="$PREV_CHARTS_VERSION"
-make -C "$CHARTS_DIR" remove CHART="${PACKAGE}-crd" VERSION="$PREV_CHARTS_VERSION"
+make -C "$CHARTS_DIR" remove CHART="$PACKAGE" VERSION="$PREV_CHARTS_VERSION" || true
+make -C "$CHARTS_DIR" remove CHART="${PACKAGE}-crd" VERSION="$PREV_CHARTS_VERSION" || true
+
+# Also remove from release.yaml (make remove does not touch it)
+RELEASE_YAML="$CHARTS_DIR/release.yaml"
+yq e -i ".${PACKAGE} |= map(select(. != \"${PREV_CHARTS_VERSION}\"))" "$RELEASE_YAML"
+yq e -i ".${PACKAGE}-crd |= map(select(. != \"${PREV_CHARTS_VERSION}\"))" "$RELEASE_YAML"
 
 commit_if_changed "chore(charts): Remove previous RC rancher-backup $PREV_CHARTS_VERSION"
