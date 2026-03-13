@@ -4,9 +4,11 @@ go 1.25.0
 
 toolchain go1.25.7
 
+replace github.com/rancher/backup-restore-operator => ../
+
 require (
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.80.1
-	github.com/rancher/backup-restore-operator v1.2.1
+	github.com/rancher/backup-restore-operator v0.0.0
 	github.com/rancher/hull v0.0.0-20251003204704-ebebbc84bf16
 	github.com/stretchr/testify v1.11.1
 	k8s.io/api v0.35.0
@@ -78,8 +80,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onsi/ginkgo/v2 v2.28.1 // indirect
-	github.com/onsi/gomega v1.39.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
@@ -90,7 +90,6 @@ require (
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/rancher/lasso v0.2.6 // indirect
-	github.com/rancher/wrangler v1.0.0 // indirect
 	github.com/rancher/wrangler/v3 v3.4.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rubenv/sql-migrate v1.8.1 // indirect

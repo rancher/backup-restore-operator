@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rancher/backup-restore-operator/internal/consts"
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/consts"
 	helmchart "helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
