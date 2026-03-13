@@ -8,6 +8,7 @@ import (
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
+	"github.com/rancher/backup-restore-operator/pkg/consts"
 	"github.com/rancher/hull/pkg/chart"
 	"github.com/rancher/hull/pkg/checker"
 	"github.com/rancher/hull/pkg/test"
@@ -23,8 +24,8 @@ import (
 
 var ChartPath = utils.MustGetPathFromModuleRoot("..", "dist", "artifacts", GetChartVersionFromEnv())
 var (
-	DefaultReleaseName = "rancher-backup"
-	DefaultNamespace   = "cattle-resources-system"
+	DefaultReleaseName = consts.DefaultReleaseName
+	DefaultNamespace   = consts.DefaultNamespace
 )
 
 var suite = test.Suite{
