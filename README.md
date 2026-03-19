@@ -22,14 +22,13 @@ What the Backup Restore Operator is not:
 ### Branches and Releases
 This is the current branch strategy for `rancher/backup-restore-operator`, it may change in the future.
 
-| Branch         | Tag      | Rancher                |
-|----------------|----------|------------------------|
-| `main`         | `head`   | `main` branch (`head`) |
-| `release/v8.x` | `v8.x.x` | `v2.12.x`              |
-| `release/v7.x` | `v7.x.x` | `v2.11.x`              |
-| `release/v6.x` | `v6.x.x` | `v2.10.x`              |
-| `release/v5.0` | `v5.x.x` | `v2.9.x`               |
-| `release/v4.0` | `v4.x.x` | `v2.8.x`               |
+| Branch          | Tag       | Rancher                |
+|-----------------|-----------|------------------------|
+| `main`          | `head`    | `main` branch (`head`) |
+| `release/v9.x`  | `v9.x.x`  | `v2.13.x`              |
+| `release/v8.x`  | `v8.x.x`  | `v2.12.x`              |
+| `release/v7.x`  | `v7.x.x`  | `v2.11.x`              |
+| `release/v6.x`  | `v6.x.x`  | `v2.10.x`              |
 
 ----
 
