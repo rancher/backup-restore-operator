@@ -56,7 +56,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name : "Read vault secrets"
-        uses : rancher-eio/read-vault-secrets@main
+        uses : rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
@@ -67,7 +67,7 @@ jobs:
 
         # This encapsulates: login, qemu, build/push
       - name: Build and push BRO image (dockerhub and prime stg)
-        uses: rancher/ecm-distro-tools/actions/publish-image@master
+        uses: rancher/ecm-distro-tools/actions/publish-image@575bb831c67edd950bfedb59d41dd127bd0005d6 # v0.65.2
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
@@ -89,7 +89,7 @@ jobs:
 
       - name : "Read vault secrets"
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
-        uses : rancher-eio/read-vault-secrets@main
+        uses : rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials registry | PRIME_REGISTRY ;
@@ -98,7 +98,7 @@ jobs:
 
       - name: Build and push BRO image (prime prod)
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
-        uses: rancher/ecm-distro-tools/actions/publish-image@master
+        uses: rancher/ecm-distro-tools/actions/publish-image@575bb831c67edd950bfedb59d41dd127bd0005d6 # v0.65.2
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
