@@ -42,7 +42,7 @@ jobs:
     runs-on : runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
     steps:
       - name : "Read vault secrets"
-        uses : rancher-eio/read-vault-secrets@main
+        uses : rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         if: ${{ github.repository_owner == 'rancher' }}
         with:
           secrets: |
