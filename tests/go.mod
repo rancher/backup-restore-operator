@@ -2,7 +2,7 @@ module github.com/rancher/backup-restore-operator/tests
 
 go 1.24.3
 
-toolchain go1.24.4
+toolchain go1.25.8
 
 replace github.com/rancher/backup-restore-operator => ../
 
