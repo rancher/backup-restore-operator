@@ -45,7 +45,7 @@ archives:
     - id: backup-restore-operator
       builds:
         - backup-restore-operator
-      name_template: '{{ .Binary }}-{{ .Arch }}'
+      name_template: '{{ .Binary }}_{{ .Arch }}'
 release:
   prerelease: auto
   draft: true
