@@ -10,4 +10,3 @@ cd $(dirname $0)
 ./package
 ./package-helm
 ./chart/test
-./hull

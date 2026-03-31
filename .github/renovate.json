@@ -12,7 +12,6 @@
     "release/v5.0"
   ],
   "ignoreDeps": [
-    "github.com/rancher/hull",
     "github.com/rancher/lasso",
     "github.com/rancher/wrangler",
     "github.com/rancher/wrangler/v2",
