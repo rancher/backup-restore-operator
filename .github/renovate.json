@@ -13,7 +13,7 @@
       "description": "Digest lines for github-release-attachments tools (k3d, oras) — Renovate auto-updates these",
       "fileMatch": ["^\\.github/workflows/scripts/tool-versions\\.sh$"],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>github-release-attachments) depName=(?<depName>[^\\s]+) digestVersion=(?<currentValue>[^\\s]+)\\n[A-Z_]+=\"(?<currentDigest>[^\"]+)\""
+        "# renovate: datasource=(?<datasource>github-release-attachments) depName=(?<depName>[^\\s]+) digestVersion=(?<currentValue>[^\\s]+)\\n[A-Za-z0-9_]+=\"(?<currentDigest>[^\"]+)\""
       ],
       "datasourceTemplate": "{{datasource}}",
       "depNameTemplate": "{{depName}}"
