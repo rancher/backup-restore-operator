@@ -76,6 +76,8 @@ jobs:
         run: |
           VERSION="1.2.0"
           curl -LO "https://github.com/oras-project/oras/releases/download/v${VERSION}/oras_${VERSION}_linux_amd64.tar.gz"
+          curl -LO "https://github.com/oras-project/oras/releases/download/v${VERSION}/oras_${VERSION}_checksums.txt"
+          grep "oras_${VERSION}_linux_amd64.tar.gz" "oras_${VERSION}_checksums.txt" | sha256sum -c
           mkdir -p oras-install/
           tar -zxf oras_${VERSION}_*.tar.gz -C oras-install/
           oras-install/oras copy ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_static_tag }} ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_tag }}
