@@ -1,0 +1,14 @@
+rules:
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+  colons:
+    max-spaces-before: 0
+  indentation:
+    spaces: consistent
+    indent-sequences: whatever
+  key-duplicates: enable
+  line-length: disable
+  trailing-spaces: disable
+  truthy:
+    level: warning

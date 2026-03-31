@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -e
+
+echo "-- chart/lint --"
+
+echo "Must build charts first..."
+$(dirname $0)/../package-helm
+
+# skipping lint for s390x since helm v2 doesn't support s390x yet
+if [ "${ARCH}" == s390x ]; then
+    exit 0
+fi
+
+if ! type -p ct > /dev/null 2>&1; then
+    echo "ct not found. Install chart-testing: https://github.com/helm/chart-testing"
+    exit 1
+fi
+
+CHART_PATH=$(realpath $(dirname $0)/../../build/charts/rancher-backup)
+
+echo "Running ct lint..."
+ct lint --charts "$CHART_PATH"
