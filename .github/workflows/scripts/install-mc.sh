@@ -17,9 +17,14 @@ initArch() {
 
 initArch
 
-curl -sL --fail https://dl.min.io/client/mc/release/linux-${ARCH}/mc > mc;
-chmod +x mc;
+BASE_URL="https://dl.min.io/client/mc/release/linux-${ARCH}"
 
+curl -sL --fail "${BASE_URL}/mc" > mc
+curl -sL --fail "${BASE_URL}/mc.sha256sum" > mc.sha256sum
+
+sha256sum -c mc.sha256sum
+
+chmod +x mc
 cp mc /usr/local/bin/mc
 
 mc --version
