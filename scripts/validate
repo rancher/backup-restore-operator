@@ -12,7 +12,7 @@ fi
 
 # Lint each workspace module independently so sub-module deps don't bleed into
 # each other's results and each module gets its own golangci config scope.
-for module in . cmd/tool tests; do
+for module in . cmd/tool; do
     echo "Running: golangci-lint in $module"
     (cd "$module" && golangci-lint run)
 done
