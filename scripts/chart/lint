@@ -17,6 +17,7 @@ if ! type -p ct > /dev/null 2>&1; then
 fi
 
 CHART_PATH=$(realpath $(dirname $0)/../../build/charts/rancher-backup)
+CONFIG_PATH=$(realpath $(dirname $0)/../../ct.yaml)
 
 echo "Running ct lint..."
-ct lint --charts "$CHART_PATH"
+ct lint --charts "$CHART_PATH" --config "$CONFIG_PATH"
