@@ -79,6 +79,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Helm-unittest
         run: helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
       - name: CI
         run: make ci
   test:
