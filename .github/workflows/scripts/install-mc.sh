@@ -3,6 +3,9 @@
 set -e
 set -x
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=tool-versions.sh
+source "${SCRIPT_DIR}/tool-versions.sh"
 
 # initArch discovers the architecture for this system.
 initArch() {
@@ -14,15 +17,19 @@ initArch() {
   esac
 }
 
-
 initArch
 
-BASE_URL="https://dl.min.io/client/mc/release/linux-${ARCH}"
+expected_sha256_var="MC_SHA256_${ARCH}"
+expected_sha256="${!expected_sha256_var}"
 
-curl -sL --fail "${BASE_URL}/mc" > mc
-curl -sL --fail "${BASE_URL}/mc.sha256sum" > mc.sha256sum
+if [[ -z "${expected_sha256}" ]]; then
+  echo "No hardcoded SHA256 for arch ${ARCH} — run update-checksums.sh after bumping MC_VERSION"
+  exit 1
+fi
 
-sha256sum -c mc.sha256sum
+curl -sL --fail "https://dl.min.io/client/mc/release/linux-${ARCH}/archive/mc.${MC_VERSION}" > mc
+
+echo "${expected_sha256}  mc" | sha256sum -c
 
 chmod +x mc
 cp mc /usr/local/bin/mc
