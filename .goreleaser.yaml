@@ -24,26 +24,6 @@ builds:
       env:
         - CGO_ENABLED=0
 
-  # macOS build, only when GOOS_DARWIN_DEV is set
-    - id: backup-restore-operator-darwin
-      main: ./cmd/operator/main.go
-      goos:
-        - darwin
-      goarch:
-        - amd64
-        - arm64
-      binary: backup-restore-operator
-      ldflags:
-        - -s
-        - -X github.com/rancher/backup-restore-operator/pkg/version.Version={{.Version}}
-        - -X github.com/rancher/backup-restore-operator/pkg/version.GitCommit={{.Commit}}
-        - -X github.com/rancher/backup-restore-operator/pkg/version.Date={{.Date}}
-      flags:
-        - -trimpath
-      env:
-        - CGO_ENABLED=0
-      skip: '{{ not (index .Env "GOOS_DARWIN_DEV") }}'
-
     - id: bro-tool
       main: ./cmd/tool/main.go
       goos:
@@ -64,10 +44,11 @@ builds:
 archives:
     - id: backup-restore-operator
       builds:
-        - backup-restore-operator 
-      name_template: '{{ .Binary }}-{{ .Arch }}'
+        - backup-restore-operator
+      name_template: '{{ .Binary }}_{{ .Arch }}'
 release:
   prerelease: auto
+  draft: true
   extra_files:
     - glob : ./build/artifacts/*.tgz
 checksum:
