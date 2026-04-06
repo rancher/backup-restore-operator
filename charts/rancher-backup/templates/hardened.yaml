@@ -12,6 +12,10 @@ spec:
   template:
     spec:
       serviceAccountName: {{ include "backupRestore.fullname" . }}-patch-sa
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+{{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
