@@ -88,8 +88,20 @@ jobs:
         uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b # v2.7.0
       - name: CI
         run: make ci
+  check-e2e:
+    name: Check for e2e tests
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Check for e2e directory
+        id: check
+        run: echo "exists=$([ -d e2e ] && echo true || echo false)" >> $GITHUB_OUTPUT
   test:
     name: integration-test
+    needs: check-e2e
+    if: needs.check-e2e.outputs.exists == 'true'
     runs-on: runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     strategy:
       matrix:

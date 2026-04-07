@@ -3,6 +3,11 @@
 # !! Deprecated, but kept for reference and for manual testing
 
 set -ex
+
+if [ ! -d e2e ]; then
+    echo "No e2e directory found, skipping integration tests"
+    exit 0
+fi
 function echo_with_time {
     echo "$(date --utc +%Y-%m-%dT%H:%M:%SZ) $*"
 }
