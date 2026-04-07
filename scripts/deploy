@@ -182,10 +182,10 @@ deploy_backup_restore() {
         -n cattle-resources-system \
         rancher-backup rancher-charts/rancher-backup
   else
-    helm install --wait --create-namespace -n cattle-resources-system rancher-backup-crd dist/artifacts/rancher-backup-crd-"${HELM_VERSION_DEV}".tgz
-    helm install --wait -n cattle-resources-system rancher-backup dist/artifacts/rancher-backup-"${HELM_VERSION_DEV}".tgz \
+    helm install --wait --create-namespace -n cattle-resources-system rancher-backup-crd dist/artifacts/rancher-backup-crd-"${HELM_CHART_VERSION}".tgz
+    helm install --wait -n cattle-resources-system rancher-backup dist/artifacts/rancher-backup-"${HELM_CHART_VERSION}".tgz \
         --set image.tag="${TAG}" \
-        --set image.repository=${DOCKERHUB_USER}/backup-restore-operator \
+        --set image.repository=${REPO}/backup-restore-operator \
         --set imagePullPolicy=IfNotPresent
   fi
 }
