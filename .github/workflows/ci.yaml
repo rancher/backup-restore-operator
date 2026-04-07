@@ -34,6 +34,7 @@ jobs:
           go-version: 1.25
       - name: Check go.work.sum is in sync
         run: |
+          [ -f go.work ] || { echo "No go.work found, skipping workspace sync check"; exit 0; }
           go work sync
           git diff --exit-code go.work.sum || (echo "go.work.sum is out of sync — run 'make tidy' and commit the result" && exit 1)
 
@@ -50,7 +51,11 @@ jobs:
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version: 1.25
+      - name: Check module exists
+        id: check
+        run: echo "exists=$([ -f '${{ matrix.module }}/go.mod' ] && echo true || echo false)" >> $GITHUB_OUTPUT
       - name: golangci-lint (${{ matrix.module }})
+        if: steps.check.outputs.exists == 'true'
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
           working-directory: ${{ matrix.module }}
