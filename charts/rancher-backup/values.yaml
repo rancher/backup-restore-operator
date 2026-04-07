@@ -61,7 +61,7 @@ global:
   cattle:
     systemDefaultRegistry: ""
     psp:
-      enabled: false # PSP enablement should default to false
+      enabled: false  # PSP enablement should default to false
   kubectl:
     repository: rancher/kuberlr-kubectl
     tag: v6.0.3
