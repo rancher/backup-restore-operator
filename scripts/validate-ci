@@ -7,7 +7,9 @@ go generate
 
 # Ensure go.work.sum is in sync with all workspace modules.
 # If a go.mod was updated without running `go work sync`, this will catch it.
-go work sync
+if [ -f go.work ]; then
+    go work sync
+fi
 
 source ./scripts/version
 
