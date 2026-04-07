@@ -12,10 +12,9 @@ spec:
   template:
     spec:
       serviceAccountName: {{ include "backupRestore.fullname" . }}-patch-sa
-{{- $pullSecrets := .Values.imagePullSecrets | default .Values.global.imagePullSecrets }}
-{{- if $pullSecrets }}
+{{- if .Values.imagePullSecrets }}
       imagePullSecrets:
-{{ toYaml $pullSecrets | indent 8 }}
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
 {{- end }}
       securityContext:
         runAsNonRoot: true
@@ -44,9 +43,9 @@ metadata:
   annotations:
     "helm.sh/hook": post-install, post-upgrade
     "helm.sh/hook-delete-policy": hook-succeeded, before-hook-creation
-{{- if $pullSecrets }}
+{{- if .Values.imagePullSecrets }}
 imagePullSecrets:
-{{ toYaml $pullSecrets | indent 2 }}
+{{ toYaml .Values.imagePullSecrets | indent 2 }}
 {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

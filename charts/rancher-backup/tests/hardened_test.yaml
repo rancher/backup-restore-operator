@@ -20,18 +20,6 @@ tests:
         path: spec.template.spec.imagePullSecrets[0].name
         value: my-secret
 
-- it: should use global.imagePullSecrets in Job when local not set
-  template: hardened.yaml
-  documentIndex: 0
-  set:
-    global:
-      imagePullSecrets:
-        - name: global-secret
-  asserts:
-    - equal:
-        path: spec.template.spec.imagePullSecrets[0].name
-        value: global-secret
-
 - it: should not set imagePullSecrets by default in ServiceAccount
   template: hardened.yaml
   documentIndex: 1
@@ -49,15 +37,3 @@ tests:
     - equal:
         path: imagePullSecrets[0].name
         value: my-secret
-
-- it: should use global.imagePullSecrets in ServiceAccount
-  template: hardened.yaml
-  documentIndex: 1
-  set:
-    global:
-      imagePullSecrets:
-        - name: global-secret
-  asserts:
-    - equal:
-        path: imagePullSecrets[0].name
-        value: global-secret
