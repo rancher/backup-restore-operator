@@ -10,5 +10,7 @@ for module in . cmd/tool tests; do
     (cd "$module" && go mod tidy)
 done
 
-echo "go work sync"
-go work sync
+if [ -f go.work ]; then
+    echo "go work sync"
+    go work sync
+fi
