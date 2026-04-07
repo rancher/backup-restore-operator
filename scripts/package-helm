@@ -3,20 +3,18 @@ set -e
 
 
 function edit-charts() {
-    sed -i \
-        -e 's/^version:.*/version: '${1}'/' \
-        -e 's/^appVersion:.*/appVersion: '${1}'/' \
-        -e 's/catalog.cattle.io\/upstream-version:.*/catalog.cattle.io\/upstream-version: '${1}'/' \
-        build/charts/rancher-backup/Chart.yaml
+    perl -i -pe '
+    s/^version:.*/version: '"${1}"'/;
+    s/^appVersion:.*/appVersion: '\"${2}\"'/;
+    s/catalog\.cattle\.io\/upstream-version:.*/catalog.cattle.io\/upstream-version: '"${1}"'/
+' build/charts/rancher-backup/Chart.yaml
 
-    sed -i \
-        -e 's/%TAG%/'${2}'/' \
-        build/charts/rancher-backup/values.yaml
+    perl -i -pe 's/%TAG%/'"${2}"'/' build/charts/rancher-backup/values.yaml
 
-    sed -i \
-        -e 's/^version:.*/version: '${1}'/' \
-        -e 's/^appVersion:.*/appVersion: '${1}'/' \
-        build/charts/rancher-backup-crd/Chart.yaml
+    perl -i -pe '
+    s/^version:.*/version: '"${1}"'/;
+    s/^appVersion:.*/appVersion: '\"${2}\"'/
+' build/charts/rancher-backup-crd/Chart.yaml
 }
 
 function package-charts() {
@@ -37,10 +35,8 @@ rm -rf build/charts
 mkdir -p build dist/artifacts
 cp -rf charts build/
 
-edit-charts ${HELM_VERSION} ${HELM_TAG}
+edit-charts ${HELM_CHART_VERSION} ${HELM_IMAGE_TAG}
 
 if ! package-charts; then
-    echo "package-chart or package-chart-crd failed: trying with dev variable..."
-    edit-charts ${HELM_VERSION_DEV} ${HELM_TAG_DEV}
-    package-charts
+    echo "Packaging the BRO charts failed!"
 fi

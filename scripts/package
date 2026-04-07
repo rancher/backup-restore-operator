@@ -22,4 +22,3 @@ fi
 echo Built ${IMAGE}
 docker image save ${IMAGE} -o ./dist/artifacts/backup-restore-operator.img
 
-./scripts/package-helm
