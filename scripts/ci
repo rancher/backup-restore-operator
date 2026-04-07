@@ -9,5 +9,5 @@ cd $(dirname $0)
 ./validate-ci
 ./package
 ./package-helm
+./chart/lint
 ./chart/test
-./hull

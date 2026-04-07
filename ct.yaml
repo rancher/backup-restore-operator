@@ -1,0 +1,2 @@
+validate-maintainers: false
+helm-extra-args: "--timeout 600s"
