@@ -1,4 +1,34 @@
 {
+  "regexManagers": [
+    {
+      "description": "Version lines for github-release-attachments tools (k3d, oras)",
+      "fileMatch": ["^\\.github/workflows/scripts/tool-versions\\.sh$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>github-release-attachments) depName=(?<depName>[^\\s]+)\\n[A-Z_]+_VERSION=\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "{{datasource}}",
+      "depNameTemplate": "{{depName}}"
+    },
+    {
+      "description": "Digest lines for github-release-attachments tools (k3d, oras) — Renovate auto-updates these",
+      "fileMatch": ["^\\.github/workflows/scripts/tool-versions\\.sh$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>github-release-attachments) depName=(?<depName>[^\\s]+) digestVersion=(?<currentValue>[^\\s]+)\\n[A-Za-z0-9_]+=\"(?<currentDigest>[^\"]+)\""
+      ],
+      "datasourceTemplate": "{{datasource}}",
+      "depNameTemplate": "{{depName}}"
+    },
+    {
+      "description": "mc version (binaries not on GitHub — run update-checksums.sh after bump)",
+      "fileMatch": ["^\\.github/workflows/scripts/tool-versions\\.sh$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+) versioning=(?<versioning>[^\\s]+)\\nMC_VERSION=\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "{{datasource}}",
+      "depNameTemplate": "{{depName}}",
+      "versioningTemplate": "{{versioning}}"
+    }
+  ],
   "extends": [
     "github>rancher/renovate-config#release",
     "group:allNonMajor"
@@ -12,7 +42,6 @@
     "release/v5.0"
   ],
   "ignoreDeps": [
-    "github.com/rancher/hull",
     "github.com/rancher/lasso",
     "github.com/rancher/wrangler",
     "github.com/rancher/wrangler/v2",
