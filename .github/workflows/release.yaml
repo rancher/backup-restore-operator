@@ -1,28 +1,22 @@
-name : Publish Images & artifacts (via goreleaser)
-
+name: Publish Images & artifacts (via goreleaser)
 on:
   push:
     tags:
       - "*"
-
 env:
   PUBLIC_REGISTRY: docker.io
   PUBLIC_REPO: rancher
-
 permissions:
   contents: write
   id-token: write
   attestations: write
-
 jobs:
-  ci :
+  ci:
     uses: ./.github/workflows/ci.yaml
     permissions:
       contents: read
   goreleaser:
-    needs: [
-      ci
-    ]
+    needs: [ci]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -33,17 +27,60 @@ jobs:
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version: 1.25
-      - name : Package release helm charts
-        run : make package-helm
-      - run : mkdir -p ./build/artifacts/ && mv -v ./dist/artifacts/ ./build/
-      - uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
-        env:
+      - name: Package release helm charts
+        run: make package-helm
+      - run: mkdir -p ./build/artifacts/ && mv -v ./dist/artifacts/ ./build/
+      - name: Setup goreleaser
+        shell: bash
+        run: |-
+          OS="Linux"
+          if [[ ${RUNNER_OS} != "Linux" ]]; then
+          	echo "Unsupported OS: ${RUNNER_OS}"
+          	exit 1
+          fi
+
+          # renovate-local: goreleaser-x86_64
+          GORELEASER_VERSION="v2.15.2"
+          # renovate-local: goreleaser-x86_64=v2.15.2
+          GORELEASER_CHECKSUM_x86_64="0ebdbf0353aba566b969dde746cc4e4806f96c27aa2f3971b229a9df7611fedc"
+
+          ARCH=$(uname -m)
+          CHECKSUM="${GORELEASER_CHECKSUM_x86_64}"
+          if [[ "${ARCH}" != "x86_64" ]]; then
+          	echo "Unsupported architecture: ${ARCH}"
+          	exit 1
+          fi
+
+          FILE="goreleaser_${OS}_${ARCH}.tar.gz"
+
+          echo "Installing ${FILE}"
+          curl -LO "https://github.com/goreleaser/goreleaser/releases/download/${GORELEASER_VERSION}/${FILE}"
+          echo "${CHECKSUM} ${FILE}" | sha256sum -c
+          tar -xf "${FILE}" goreleaser
+
+          if sudo -n true &> /dev/null; then
+          	sudo install -m 755 goreleaser /usr/local/bin/goreleaser
+          else
+          	install -m 755 goreleaser /usr/local/bin/goreleaser
+          fi
+          rm -f "${FILE}" goreleaser
+      - env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+        name: Run goreleaser
+        shell: bash
+        run: |-
+          goreleaser release --clean
+          if [[ ! -f dist/metadata.json ]] || [[ ! -s dist/metadata.json ]]; then
+            echo "Missing required file: dist/metadata.json"
+            exit 1
+          fi
+          if [[ ! -f dist/artifacts.json ]] || [[ ! -s dist/artifacts.json ]]; then
+            echo "Missing required file: dist/artifacts.json"
+            exit 1
+          fi
+          echo "metadata=$(tr -d '\n\r' < dist/metadata.json)" >> "${GITHUB_OUTPUT}"
+          echo "artifacts=$(tr -d '\n\r' < dist/artifacts.json)" >> "${GITHUB_OUTPUT}"
       - name: Attest build provenance
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
@@ -53,20 +90,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit ${{ github.ref_name }} --draft=false
   push:
-    needs : [
-      ci
-    ]
+    needs: [ci]
     permissions:
-      contents : read
+      contents: read
       id-token: write
-    name : Build and push BRO images
-    runs-on : runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
+    name: Build and push BRO images
+    runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name : "Read vault secrets"
-        uses : rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+      - name: "Read vault secrets"
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
@@ -74,47 +108,39 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials registry | PRIME_STG_REGISTRY ;
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | PRIME_STG_REGISTRY_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD ;
-
         # This encapsulates: login, qemu, build/push
       - name: Build and push BRO image (dockerhub and prime stg)
         uses: rancher/ecm-distro-tools/actions/publish-image@8821b2e4aa18f762dc334f811f54e8f215771a68 # v0.66.2
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
-
           public-registry: ${{ env.PUBLIC_REGISTRY }}
           public-repo: ${{ env.PUBLIC_REPO }}
           public-username: ${{ env.DOCKER_USERNAME || vars.DOCKER_USERNAME || github.repository_owner }}
           public-password: ${{ env.DOCKER_PASSWORD || secrets.DOCKER_PASSWORD }}
-
           push-to-prime: true
           prime-registry: ${{ env.PRIME_STG_REGISTRY }}
           prime-repo: rancher
           prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
           prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
-
       - name: Check SemVer Characteristics
         id: semver_check
         run: bash ./.github/scripts/check-semver "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-
-      - name : "Read vault secrets"
+      - name: "Read vault secrets"
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
-        uses : rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials registry | PRIME_REGISTRY ;
             secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials username | PRIME_REGISTRY_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials password | PRIME_REGISTRY_PASSWORD ;
-
       - name: Build and push BRO image (prime prod)
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
         uses: rancher/ecm-distro-tools/actions/publish-image@8821b2e4aa18f762dc334f811f54e8f215771a68 # v0.66.2
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
-
           push-to-public: false
-
           push-to-prime: true
           prime-registry: ${{ env.PRIME_REGISTRY }}
           prime-repo: rancher
