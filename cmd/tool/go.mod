@@ -5,7 +5,7 @@ go 1.25.0
 replace github.com/rancher/backup-restore-operator => ../../
 
 require (
-	github.com/rancher/backup-restore-operator v0.0.0
+	github.com/rancher/backup-restore-operator v0.0.1
 	github.com/sirupsen/logrus v1.9.4
 	helm.sh/helm/v3 v3.20.0
 	k8s.io/apimachinery v0.35.0
