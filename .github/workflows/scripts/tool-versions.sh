@@ -19,6 +19,6 @@ MC_SHA256_amd64="01f866e9c5f9b87c2b09116fa5d7c06695b106242d829a8bb32990c00312e89
 MC_SHA256_arm64="14c8c9616cfce4636add161304353244e8de383b2e2752c0e9dad01d4c27c12c"
 
 # renovate: datasource=github-release-attachments depName=oras-project/oras
-ORAS_VERSION="v1.2.0"
-# renovate: datasource=github-release-attachments depName=oras-project/oras digestVersion=v1.2.0
-ORAS_SHA256_amd64="5b3f1cbb86d869eee68120b9b45b9be983f3738442f87ee5f06b00edd0bab336"
+ORAS_VERSION="v1.3.1"
+# renovate: datasource=github-release-attachments depName=oras-project/oras digestVersion=v1.3.1
+ORAS_SHA256_amd64="d52c4af76ce6a3ceb8579e51fb751a43ac051cca67f965f973a0b0e897a2bb86"
