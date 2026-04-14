@@ -2,7 +2,7 @@ module github.com/rancher/backup-restore-operator
 
 go 1.24.0
 
-toolchain go1.24.12
+toolchain go1.25.9
 
 replace (
 	github.com/imdario/mergo => dario.cat/mergo v0.3.16
