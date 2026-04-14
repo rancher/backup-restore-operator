@@ -2,7 +2,7 @@ module github.com/rancher/backup-restore-operator
 
 go 1.24.0
 
-toolchain go1.24.13
+toolchain go1.25.9
 
 replace google.golang.org/grpc => google.golang.org/grpc v1.71.0
 
