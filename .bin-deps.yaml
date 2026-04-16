@@ -1,0 +1,29 @@
+tools:
+  - name: k3d
+    mode: pinned
+    source: k3d-io/k3d
+    # renovate: datasource=github-release-attachments depName=k3d-io/k3d
+    version: v5.8.3
+    checksums:
+      darwin/amd64: "fd0f8e9e8ea4d8bc3674572ca6ed0833b639bf57c43c708616d937377324cfea"
+      darwin/arm64: "8da468daa7dc7cf7cdd4735f90a9bb05179fa27858250f62e3d8cdf5b5ca0698"
+      linux/amd64: "dbaa79a76ace7f4ca230a1ff41dc7d8a5036a8ad0309e9c54f9bf3836dbe853e"
+      linux/arm64: "0b8110f2229631af7402fb828259330985918b08fefd38b7f1b788a1c8687216"
+    release:
+      download_template: "k3d-{os}-{arch}"
+      # asset is the binary itself; no extract path needed
+
+  - name: oras
+    mode: pinned
+    source: oras-project/oras
+    # renovate: datasource=github-release-attachments depName=oras-project/oras
+    version: v1.3.1
+    checksums:
+      darwin/amd64: "22b7d8947d32280283c2e1a2fabc59d3b3c3b3056ec070dabdfe016fda532e52"
+      darwin/arm64: "d545a238f4c8be6dfae6c3d0ff5b09720c5588641d4a5180fb87c38a64500cc4"
+      linux/amd64: "d52c4af76ce6a3ceb8579e51fb751a43ac051cca67f965f973a0b0e897a2bb86"
+      linux/arm64: "79946ad57d732836f9242f903f476b6fa484c451d659f121bce54d931ab2a044"
+    release:
+      download_template: "oras_{version|trimprefix:v}_{os}_{arch}.tar.gz"
+      extract: "oras"
+      checksum_template: "oras_{version|trimprefix:v}_checksums.txt"

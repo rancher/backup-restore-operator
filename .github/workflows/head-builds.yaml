@@ -50,6 +50,9 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD
       - name : Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: rancherlabs/dep-fetch/actions/sync-deps@v0.1.1
+        with:
+          version: v0.1.1
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
       - name: Log in to the Container registry
@@ -74,10 +77,4 @@ jobs:
         env:
           FULL_IMAGE_URL: ${{ env.REGISTRY }}/${{ vars.REPO || env.REPO || github.repository_owner }}/backup-restore-operator
         run: |
-          source "${GITHUB_WORKSPACE}/.github/workflows/scripts/tool-versions.sh"
-          ORAS_VERSION_BARE="${ORAS_VERSION#v}"
-          curl -LO "https://github.com/oras-project/oras/releases/download/${ORAS_VERSION}/oras_${ORAS_VERSION_BARE}_linux_amd64.tar.gz"
-          echo "${ORAS_SHA256_amd64}  oras_${ORAS_VERSION_BARE}_linux_amd64.tar.gz" | sha256sum -c
-          mkdir -p oras-install/
-          tar -zxf "oras_${ORAS_VERSION_BARE}_linux_amd64.tar.gz" -C oras-install/
-          oras-install/oras copy ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_static_tag }} ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_tag }}
+          oras copy ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_static_tag }} ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_tag }}

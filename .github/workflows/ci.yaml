@@ -116,8 +116,9 @@ jobs:
         run: ./scripts/package-helm
       - name: Debug
         run: ls -R ./dist/artifacts
-      - name: Install k3d
-        run: ./.github/workflows/scripts/install-k3d.sh
+      - uses: rancherlabs/dep-fetch/actions/sync-deps@v0.1.1
+        with:
+          version: v0.1.1
       - name: Setup test environment
         run: |
           CLUSTER_NAME=backup-restore K3S_VERSION=${{ matrix.K3S_VERSION }} ./scripts/testenv

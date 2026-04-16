@@ -19,3 +19,5 @@ test-backup-location-local/
 *~
 kubeconfig*.yaml
 .vscode
+.dep-fetch
+bin
