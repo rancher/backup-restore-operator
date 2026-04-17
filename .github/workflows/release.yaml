@@ -33,6 +33,9 @@ jobs:
           version: v0.1.1
 
       - name: Run goreleaser
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
         shell: bash
         run: |-
           goreleaser release --clean
