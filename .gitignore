@@ -19,3 +19,7 @@ test-backup-location-local/
 *~
 kubeconfig*.yaml
 .vscode
+.dep-fetch
+bin/
+# Added by goreleaser init:
+dist/

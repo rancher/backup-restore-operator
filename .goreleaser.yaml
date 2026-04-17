@@ -3,6 +3,8 @@ version: 2 # the goreleaser config version
 before:
   hooks:
     - ./scripts/tidy
+    - make package-helm
+
 builds:
     - id: backup-restore-operator
       main: ./cmd/operator/main.go
@@ -30,8 +32,13 @@ builds:
         - linux
         - darwin
         - windows
+      goarch:
+        - amd64
+        - arm64
       binary: bro-tool
       ldflags:
+        - -extldflags
+        - -static
         - -s
         - -X github.com/rancher/backup-restore-operator/pkg/version.Version={{.Version}}
         - -X github.com/rancher/backup-restore-operator/pkg/version.GitCommit={{.Commit}}
@@ -43,9 +50,14 @@ builds:
 
 archives:
     - id: backup-restore-operator
-      builds:
+      ids:
         - backup-restore-operator
       name_template: '{{ .Binary }}_{{ .Arch }}'
+    - id: bro-tool
+      ids:
+        - bro-tool
+      name_template: '{{ .Binary }}_{{ .Os }}_{{ .Arch }}'
+
 release:
   prerelease: auto
   draft: true
@@ -53,8 +65,11 @@ release:
     - glob : ./build/artifacts/*.tgz
 checksum:
   name_template: 'checksums.txt'
+  disable: false
+  extra_files:
+    - glob: ./build/artifacts/*.tgz
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 changelog:
   sort: asc
   filters:

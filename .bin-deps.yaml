@@ -1,0 +1,58 @@
+tools:
+  - name: goreleaser
+    mode: pinned
+    source: goreleaser/goreleaser
+    # renovate: datasource=github-releases depName=goreleaser/goreleaser
+    version: v2.15.3
+    checksums:
+      linux/amd64:  "3b24b3a1629be21a9527d2f46f08b9bbf012c52fe33395714fe2c70acee57e0f"  # renovate-local: goreleaser=v2.15.3
+      linux/arm64:  "646b8f36329cf1ec02af18d40e7096973f62524bdef19c3690414e390a9f757d"  # renovate-local: goreleaser=v2.15.3
+      darwin/amd64: "723ba2f0ad18ec037c9bdd79d787f8a870a66f432706b3b3962b44b3a90def91"  # renovate-local: goreleaser=v2.15.3
+      darwin/arm64: "a46a3bf44ef8255b78d9eae9a3f4da60b878011e8eba7cf12bb3787ad5110418"  # renovate-local: goreleaser=v2.15.3
+    release:
+      download_template: "goreleaser_{os|title}_{arch|replace:amd64=x86_64}.tar.gz"
+      extract: "goreleaser"
+
+  - name: golangci-lint
+    mode: pinned
+    source: golangci/golangci-lint
+    # renovate: datasource=github-releases depName=golangci/golangci-lint
+    version: v2.11.4
+    checksums:
+      linux/amd64:  "200c5b7503f67b59a6743ccf32133026c174e272b930ee79aa2aa6f37aca7ef1"  # renovate-local: golangci-lint=v2.11.4
+      linux/arm64:  "3bcfa2e6f3d32b2bf5cd75eaa876447507025e0303698633f722a05331988db4"  # renovate-local: golangci-lint=v2.11.4
+      darwin/amd64: "c900d4048db75d1edfd550fd11cf6a9b3008e7caa8e119fcddbc700412d63e60"  # renovate-local: golangci-lint=v2.11.4
+      darwin/arm64: "02db2a2dae8b26812e53b0688a6f617e3ef1f489790e829ea22862cf76945675"  # renovate-local: golangci-lint=v2.11.4
+    release:
+      download_template: "golangci-lint-{version|trimprefix:v}-{os}-{arch}.tar.gz"
+      extract: "golangci-lint-{version|trimprefix:v}-{os}-{arch}/golangci-lint"
+      checksum_template: "golangci-lint-{version|trimprefix:v}-checksums.txt"
+
+  - name: k3d
+    mode: pinned
+    source: k3d-io/k3d
+    # renovate: datasource=github-release-attachments depName=k3d-io/k3d
+    version: v5.8.3
+    checksums:
+      darwin/amd64: "fd0f8e9e8ea4d8bc3674572ca6ed0833b639bf57c43c708616d937377324cfea"
+      darwin/arm64: "8da468daa7dc7cf7cdd4735f90a9bb05179fa27858250f62e3d8cdf5b5ca0698"
+      linux/amd64: "dbaa79a76ace7f4ca230a1ff41dc7d8a5036a8ad0309e9c54f9bf3836dbe853e"
+      linux/arm64: "0b8110f2229631af7402fb828259330985918b08fefd38b7f1b788a1c8687216"
+    release:
+      download_template: "k3d-{os}-{arch}"
+      # asset is the binary itself; no extract path needed
+
+  - name: oras
+    mode: pinned
+    source: oras-project/oras
+    # renovate: datasource=github-release-attachments depName=oras-project/oras
+    version: v1.3.1
+    checksums:
+      darwin/amd64: "22b7d8947d32280283c2e1a2fabc59d3b3c3b3056ec070dabdfe016fda532e52"
+      darwin/arm64: "d545a238f4c8be6dfae6c3d0ff5b09720c5588641d4a5180fb87c38a64500cc4"
+      linux/amd64: "d52c4af76ce6a3ceb8579e51fb751a43ac051cca67f965f973a0b0e897a2bb86"
+      linux/arm64: "79946ad57d732836f9242f903f476b6fa484c451d659f121bce54d931ab2a044"
+    release:
+      download_template: "oras_{version|trimprefix:v}_{os}_{arch}.tar.gz"
+      extract: "oras"
+      checksum_template: "oras_{version|trimprefix:v}_checksums.txt"

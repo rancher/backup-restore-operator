@@ -13,8 +13,8 @@ echo_with_time "INFO - Running $0"
 
 ls -la ./dist/artifacts
 
-helm install rancher-backup-crd ./dist/artifacts/rancher-backup-crd-$HELM_CHART_VERSION.tgz -n cattle-resources-system --create-namespace --wait
-helm install rancher-backup ./dist/artifacts/rancher-backup-$HELM_CHART_VERSION.tgz -n cattle-resources-system --set image.tag=$TAG --set imagePullPolicy=IfNotPresent
+helm install rancher-backup-crd ./build/artifacts/rancher-backup-crd-$HELM_CHART_VERSION.tgz -n cattle-resources-system --create-namespace --wait
+helm install rancher-backup ./build/artifacts/rancher-backup-$HELM_CHART_VERSION.tgz -n cattle-resources-system --set image.tag=$TAG --set imagePullPolicy=IfNotPresent
 
 time timeout 300 bash -c 'while ! (kubectl --namespace cattle-resources-system rollout status --timeout 10s deploy/rancher-backup 2>/dev/null); do sleep 5; done'
 
