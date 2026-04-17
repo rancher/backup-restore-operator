@@ -20,5 +20,6 @@ else
 fi
 
 echo Built ${IMAGE}
+mkdir -p ./build/artifacts
 docker image save ${IMAGE} -o ./build/artifacts/backup-restore-operator.img
 
