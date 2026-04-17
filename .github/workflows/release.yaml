@@ -114,13 +114,25 @@ jobs:
     runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
     needs: [ ci, goreleaser, push ]
     permissions:
-      contents: read
-      id-token: write
+      contents: write
     name: Un-draft release
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Fully publish release
+      - name: Fully publish release (retry until visible)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit ${{ github.ref_name }} --draft=false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.ref_name }}"
+  
+          for i in {1..12}; do
+            if gh release view -R "${{ github.repository }}" "$tag" >/dev/null 2>&1; then
+              gh release edit -R "${{ github.repository }}" "$tag" --draft=false
+              exit 0
+            fi
+            echo "Release '$tag' not found yet (attempt $i/12). Sleeping 10s..."
+            sleep 10
+          done
+  
+          echo "Release '$tag' still not found after retries; failing."
+          exit 1
