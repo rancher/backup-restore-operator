@@ -20,5 +20,5 @@ else
 fi
 
 echo Built ${IMAGE}
-docker image save ${IMAGE} -o ./dist/artifacts/backup-restore-operator.img
+docker image save ${IMAGE} -o ./build/artifacts/backup-restore-operator.img
 

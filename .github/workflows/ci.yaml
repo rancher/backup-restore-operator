@@ -124,7 +124,7 @@ jobs:
       - name: Setup helm charts
         run: ./scripts/package-helm
       - name: Debug
-        run: ls -R ./dist/artifacts
+        run: ls -R ./build/artifacts
       - name: Setup test environment
         run: |
           CLUSTER_NAME=backup-restore K3S_VERSION=${{ matrix.K3S_VERSION }} ./scripts/testenv

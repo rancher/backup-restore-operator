@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: read
   goreleaser:
-    needs: [ci]
+    needs: [ ci ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -32,11 +32,7 @@ jobs:
         with:
           version: v0.1.1
 
-      - name: Package release helm charts
-        run: make package-helm
-      - run: mkdir -p ./build/artifacts/ && mv -v ./dist/artifacts/ ./build/
-
-        name: Run goreleaser
+      - name: Run goreleaser
         shell: bash
         run: |-
           goreleaser release --clean
@@ -54,12 +50,8 @@ jobs:
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
         with:
           subject-path: dist/backup-restore-operator_*, build/artifacts/*.tgz
-      - name: Publish release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit ${{ github.ref_name }} --draft=false
   push:
-    needs: [ci]
+    needs: [ ci ]
     permissions:
       contents: read
       id-token: write
@@ -115,3 +107,17 @@ jobs:
           prime-repo: rancher
           prime-username: ${{ env.PRIME_REGISTRY_USERNAME }}
           prime-password: ${{ env.PRIME_REGISTRY_PASSWORD }}
+  release:
+    runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
+    needs: [ ci, goreleaser, push ]
+    permissions:
+      contents: read
+      id-token: write
+    name: Un-draft release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Fully publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit ${{ github.ref_name }} --draft=false
