@@ -28,7 +28,7 @@ jobs:
         with:
           go-version: 1.25
 
-      - uses: rancherlabs/dep-fetch/actions/sync-deps@v0.1.1
+      - uses: rancherlabs/dep-fetch/actions/sync-deps@56731ed2727325212f71f7682013dc71c18540e1 # v0.1.1
         with:
           version: v0.1.1
 
