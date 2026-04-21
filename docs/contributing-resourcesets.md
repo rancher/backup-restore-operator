@@ -338,6 +338,13 @@ BRO restores fall along two independent axes. Understanding both is important co
 
 **Same-version restore** — the Rancher version on the target cluster matches the version from which the backup was taken. This is the recommended and best-supported path. Rancher's system chart reconciler targets the same versions that were in the backup, so any post-restore reconciliation converges cleanly.
 
+**Cross-version restore** is the umbrella term for any restore where the Rancher version running on the target does not match the version from which the backup was taken. The distinction matters because of how Rancher behaves on startup:
+
+- **Same-version restore (ideal):** Rancher wakes up and performs normal reconciliation — equivalent to the pod being restarted or scaled to zero for a period. It expects the world to look roughly as it left it, just potentially stale.
+- **Cross-version restore:** Rancher wakes up and must also perform upgrade-related tasks on top of reconciliation — migrating data, updating CRD schemas, rewriting stored objects. These two concerns were designed to happen independently; a cross-version restore forces them to happen simultaneously and in an order Rancher was not designed to handle.
+
+The further apart the versions, the larger the gap between what Rancher finds in the restored cluster and what it expects to see on startup, and the higher the risk of failure. This complexity is why cross-version restores are not officially supported — BRO can restore the objects, but it cannot control or compensate for what Rancher does when it wakes up against a world it wasn't expecting.
+
 **Version rollback** — the backup was taken from an older Rancher version than the one currently installed on the target. This is not officially supported but is attempted in practice (typically to recover from a failed upgrade). It introduces additional failure modes — most significantly around CRD API version changes — that do not exist in same-version restores.
 
 Version rollbacks require extra steps beyond triggering a BRO restore, and those steps differ by infrastructure axis:
