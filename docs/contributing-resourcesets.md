@@ -324,6 +324,40 @@ Each `.yaml` file under these directories is a plain YAML list of `ResourceSelec
 
 ---
 
+### Restore Scenarios
+
+BRO restores fall along two independent axes. Understanding both is important context for the limitations described in the next section.
+
+#### Infrastructure axis: in-place vs migration
+
+**In-place restore** — the target Kubernetes cluster is already running Rancher. BRO scales Rancher down before restoring objects and scales it back up when done. The Rancher system charts (Fleet, Webhook, etc.) remain installed throughout; Rancher reconciles them back to a healthy state on the way up.
+
+**Migration restore** — the target is either a fresh Kubernetes cluster or one where the nodes have been wiped. Rancher is not present during the BRO restore phase. System-chart Helm release objects are restored as raw Kubernetes objects, and Rancher must be installed afterwards to drive everything to a healthy state.
+
+#### Version axis: same-version vs rollback
+
+**Same-version restore** — the Rancher version on the target cluster matches the version from which the backup was taken. This is the recommended and best-supported path. Rancher's system chart reconciler targets the same versions that were in the backup, so any post-restore reconciliation converges cleanly.
+
+**Version rollback** — the backup was taken from an older Rancher version than the one currently installed on the target. This is not officially supported but is attempted in practice (typically to recover from a failed upgrade). It introduces additional failure modes — most significantly around CRD API version changes — that do not exist in same-version restores.
+
+Version rollbacks require extra steps beyond triggering a BRO restore, and those steps differ by infrastructure axis:
+
+- **Migration rollback** — after BRO restore completes, Rancher must be installed at the version matching the backup, not the latest available version. Installing the wrong version will cause Rancher to reconcile system charts to the wrong target state.
+- **In-place rollback** — Rancher must be downgraded to the backup version (via `helm upgrade` to the target version) before triggering the BRO restore. If the rollback crosses a CRD API version boundary, a clean in-place downgrade is not possible; the recommended workaround is to wipe the cluster and treat it as a migration restore instead (see [CRD API version changes and rollback](#crd-api-version-changes-and-rollback)).
+
+BRO does not validate that the installed Rancher version matches the backup — this check is the operator's responsibility.
+
+#### The full matrix
+
+| | Same-version | Rollback |
+|---|---|---|
+| **In-place** | Well supported | Risky — see [CRD API version changes](#crd-api-version-changes-and-rollback) |
+| **Migration** | Well supported | Risky — same CRD issues; no Rancher present to assist recovery |
+
+BRO does not enforce version matching and does not auto-detect which scenario applies. The correct `Restore` CR options (e.g. `prune`, `forceConcurrentRestore`) depend on the scenario, and selecting them is currently left to the operator. The limitations below call out which scenario each issue applies to.
+
+---
+
 ### Known Limitations / Open Issues
 
 #### In-place rollback pruning
