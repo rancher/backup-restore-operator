@@ -129,3 +129,7 @@ resources: {}
   # limits:
   #   cpu: 2
   #   memory: 2Gi
+
+# Extra annotations passed to the rancher-backup pods.
+# extraAnnotations:
+#   new-annotation: "new-annotation-value"
