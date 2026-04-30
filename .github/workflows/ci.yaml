@@ -85,7 +85,7 @@ jobs:
       - name: Install Helm-unittest
         run: helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest
       - name: Set up chart-testing
-        uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b # v2.7.0
+        uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b # v2.7.0 - DO NOT BUMP
       - name: CI
         run: make ci
   test:
@@ -104,7 +104,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: rancherlabs/dep-fetch/actions/sync-deps@v0.1.1
+      - uses: rancherlabs/dep-fetch/actions/sync-deps@56731ed2727325212f71f7682013dc71c18540e1 # v0.1.1
         with: # Kept to fetch k3d
           version: v0.1.1
       - name: Install Helm-unittest
