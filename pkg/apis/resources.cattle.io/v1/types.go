@@ -106,6 +106,7 @@ type S3ObjectStore struct {
 	Region                    string        `json:"region"`
 	Folder                    string        `json:"folder"`
 	ClientConfig              *ClientConfig `json:"clientConfig,omitempty"`
+	BucketLookupType          string        `json:"bucketLookupType,omitempty"`
 }
 
 // +genclient

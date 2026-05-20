@@ -49,6 +49,9 @@ spec:
                   s3:
                     nullable: true
                     properties:
+                      bucketLookupType:
+                        nullable: true
+                        type: string
                       bucketName:
                         nullable: true
                         type: string
