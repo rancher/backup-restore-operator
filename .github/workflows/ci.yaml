@@ -120,7 +120,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Helm-unittest
-        run: helm plugin install --verify=false https://github.com/quintush/helm-unittest
+        run: helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest.git
       - name: Setup helm charts
         run: ./scripts/package-helm
       - name: Debug
