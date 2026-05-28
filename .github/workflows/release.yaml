@@ -28,7 +28,7 @@ jobs:
         with:
           go-version: 1.25
 
-      - uses: rancherlabs/dep-fetch/actions/sync-deps@v0.1.1
+      - uses: rancherlabs/dep-fetch/actions/sync-deps@56731ed2727325212f71f7682013dc71c18540e1 # v0.1.1
         with:
           version: v0.1.1
 
@@ -74,7 +74,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD ;
         # This encapsulates: login, qemu, build/push
       - name: Build and push BRO image (dockerhub and prime stg)
-        uses: rancher/ecm-distro-tools/actions/publish-image@8821b2e4aa18f762dc334f811f54e8f215771a68 # v0.66.2
+        uses: rancher/ecm-distro-tools/actions/publish-image@0e1697ecc955e85ec73970b66c8984241fa84a28 # v0.69.0
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
@@ -100,7 +100,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials password | PRIME_REGISTRY_PASSWORD ;
       - name: Build and push BRO image (prime prod)
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
-        uses: rancher/ecm-distro-tools/actions/publish-image@8821b2e4aa18f762dc334f811f54e8f215771a68 # v0.66.2
+        uses: rancher/ecm-distro-tools/actions/publish-image@0e1697ecc955e85ec73970b66c8984241fa84a28 # v0.69.0
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
