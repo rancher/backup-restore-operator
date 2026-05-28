@@ -17,6 +17,7 @@
   ],
   "baseBranches": [
     "main",
+    "release/v10.x",
     "release/v9.x",
     "release/v8.x",
     "release/v7.x",
@@ -34,6 +35,10 @@
     {
       "matchBaseBranches": ["main"],
       "extends": ["github>rancher/renovate-config:rancher-main#main"]
+    },
+    {
+      "matchBaseBranches": ["release/v10.x"],
+      "extends": ["github>rancher/renovate-config:rancher-2.14#main"]
     },
     {
       "matchBaseBranches": ["release/v9.x"],
