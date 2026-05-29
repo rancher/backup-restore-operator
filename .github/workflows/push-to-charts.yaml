@@ -28,7 +28,7 @@ jobs:
           curl -L "https://github.com/cli/cli/releases/download/v2.82.0/gh_2.82.0_linux_${SYSTEM_ARCH}.tar.gz" -o gh.tar.gz && tar -zxvf gh.tar.gz && mv "gh_2.82.0_linux_${SYSTEM_ARCH}/bin/gh" /usr/local/bin/gh && rm -rf gh.tar.gz "gh_2.82.0_linux_${SYSTEM_ARCH}"
 
       - name: Read App Credentials from Vault
-        uses: rancher-eio/read-vault-secrets@main
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APPID;
@@ -36,7 +36,7 @@ jobs:
 
       - name: Generate GitHub App Token
         id: generate_token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
         with:
           app-id: ${{ env.APPID }}
           private-key: ${{ env.PRIVATEKEY }}

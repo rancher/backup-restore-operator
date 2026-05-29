@@ -2,27 +2,27 @@ module github.com/rancher/backup-restore-operator
 
 go 1.25.0
 
-toolchain go1.25.7
+toolchain go1.25.8
 
 replace (
-	golang.org/x/crypto => golang.org/x/crypto v0.45.0
+	golang.org/x/crypto => golang.org/x/crypto v0.49.0
 	google.golang.org/grpc => google.golang.org/grpc v1.79.3
 )
 
 require (
 	github.com/minio/minio-go/v7 v7.0.87
-	github.com/rancher/lasso v0.2.6
-	github.com/rancher/wrangler/v3 v3.4.0
+	github.com/rancher/lasso v0.2.7
+	github.com/rancher/wrangler/v3 v3.6.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/sync v0.19.0
-	k8s.io/api v0.35.0
-	k8s.io/apiextensions-apiserver v0.35.0
-	k8s.io/apimachinery v0.35.0
-	k8s.io/apiserver v0.35.0
-	k8s.io/client-go v0.35.0
-	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect with v0.30.0
+	golang.org/x/sync v0.20.0
+	k8s.io/api v0.35.5
+	k8s.io/apiextensions-apiserver v0.35.5
+	k8s.io/apimachinery v0.35.5
+	k8s.io/apiserver v0.35.5
+	k8s.io/client-go v0.35.5
+	k8s.io/utils v0.0.0-20260108192941-914a6e750570
 )
 
 require (
@@ -78,27 +78,27 @@ require (
 	go.opentelemetry.io/otel/sdk v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
-	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect
-	golang.org/x/mod v0.32.0 // indirect
-	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/mod v0.35.0 // indirect
+	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/term v0.39.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/term v0.42.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
-	golang.org/x/tools v0.41.0 // indirect
+	golang.org/x/tools v0.44.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.79.3 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/code-generator v0.35.0 // indirect
-	k8s.io/component-base v0.35.0 // indirect
+	k8s.io/code-generator v0.35.5 // indirect
+	k8s.io/component-base v0.35.5 // indirect
 	k8s.io/gengo v0.0.0-20250130153323-76c5745d3511 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kms v0.35.0 // indirect
+	k8s.io/kms v0.35.5 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
