@@ -49,8 +49,8 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
-	github.com/rancher/lasso v0.2.7 // indirect
-	github.com/rancher/wrangler/v3 v3.6.0 // indirect
+	github.com/rancher/lasso v0.2.9 // indirect
+	github.com/rancher/wrangler/v3 v3.7.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
