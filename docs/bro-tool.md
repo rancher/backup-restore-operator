@@ -360,7 +360,7 @@ See `internal/cmd/resourcesetview/cmd.go` as the simplest reference implementati
 
 - Use `build/charts/rancher-backup` (the **built** chart), not `charts/rancher-backup` (source). The source chart contains an unrendered `%TAG%` placeholder that is invalid YAML.
 - Build the chart with: `make package-helm` (runs `scripts/package-helm`).
-- `loader.Load()` from `helm.sh/helm/v3` accepts both directory paths and `.tgz` archives.
+- `loader.Load()` from `helm.sh/helm/v4` accepts both directory paths and `.tgz` archives.
 
 ### Source attribution
 

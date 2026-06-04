@@ -7,10 +7,10 @@ import (
 
 	v1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/consts"
-	helmchart "helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/chart/loader"
-	"helm.sh/helm/v3/pkg/chartutil"
-	"helm.sh/helm/v3/pkg/engine"
+	"helm.sh/helm/v4/pkg/chart/common"
+	"helm.sh/helm/v4/pkg/chart/common/util"
+	"helm.sh/helm/v4/pkg/chart/v2/loader"
+	"helm.sh/helm/v4/pkg/engine"
 	"sigs.k8s.io/yaml"
 )
 
@@ -34,14 +34,14 @@ func LoadAndRenderResourceSets(chartPath string) ([]*AnnotatedResourceSet, error
 		return nil, fmt.Errorf("loading chart from %q: %w", chartPath, err)
 	}
 
-	releaseOpts := chartutil.ReleaseOptions{
+	releaseOpts := common.ReleaseOptions{
 		Name:      consts.DefaultReleaseName,
 		Namespace: consts.DefaultNamespace,
 		IsInstall: true,
 	}
 	// Enable all optional resource groups so every possible selector rule is included.
 	vals := withAllOptionalsEnabled(chrt.Values)
-	values, err := chartutil.ToRenderValues(chrt, vals, releaseOpts, nil)
+	values, err := util.ToRenderValues(chrt, vals, releaseOpts, nil)
 	if err != nil {
 		return nil, fmt.Errorf("building render values: %w", err)
 	}
@@ -83,7 +83,7 @@ func annotate(resourceSets []*v1.ResourceSet, sourceIndex map[string][]string) [
 // fingerprint → chart-relative paths with the "files/" prefix stripped
 // (e.g. "default/basic-resourceset-contents/aks.yaml").
 // Multiple paths per fingerprint occur when the same selector appears verbatim in more than one file.
-func buildSourceIndex(files []*helmchart.File) map[string][]string {
+func buildSourceIndex(files []*common.File) map[string][]string {
 	index := make(map[string][]string)
 	for _, f := range files {
 		if !strings.HasPrefix(f.Name, "files/") || !strings.HasSuffix(f.Name, ".yaml") || !strings.HasSuffix(f.Name, ".yml") {
