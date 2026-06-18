@@ -13,19 +13,14 @@ on:
 jobs:
   push-to-charts:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/charts
     permissions:
       contents: read
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install yq and gh
-        run: |
-          ARCH=$(uname -m)
-          if [ "$ARCH" = "x86_64" ]; then SYSTEM_ARCH="amd64"; elif [ "$ARCH" = "aarch64" ]; then SYSTEM_ARCH="arm64"; else echo "Unsupported architecture: $ARCH"; exit 1; fi
-          curl -L "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${SYSTEM_ARCH}" -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq
-          curl -L "https://github.com/cli/cli/releases/download/v2.82.0/gh_2.82.0_linux_${SYSTEM_ARCH}.tar.gz" -o gh.tar.gz && tar -zxvf gh.tar.gz && mv "gh_2.82.0_linux_${SYSTEM_ARCH}/bin/gh" /usr/local/bin/gh && rm -rf gh.tar.gz "gh_2.82.0_linux_${SYSTEM_ARCH}"
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Read App Credentials from Vault
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
@@ -36,7 +31,7 @@ jobs:
 
       - name: Generate GitHub App Token
         id: generate_token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ env.APPID }}
           private-key: ${{ env.PRIVATEKEY }}
