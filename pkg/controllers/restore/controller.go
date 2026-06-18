@@ -992,8 +992,9 @@ func isSettingsWebhookError(gvr schema.GroupVersionResource, err error) bool {
 	}
 	if gvr.Group == "management.cattle.io" && gvr.Resource == "settings" {
 		var statusErr *apierrors.StatusError
-		if errors.As(err, &statusErr) {
-			return strings.Contains(statusErr.ErrStatus.Message, "rancher.cattle.io.settings")
+		if errors.As(err, &statusErr) && statusErr != nil {
+			msg := statusErr.Error()
+			return strings.Contains(msg, "admission webhook") && strings.Contains(msg, "rancher.cattle.io.settings") && strings.Contains(msg, "denied the request")
 		}
 	}
 	return false

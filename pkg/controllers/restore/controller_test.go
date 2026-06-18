@@ -102,6 +102,32 @@ func TestIsSettingsWebhookError(t *testing.T) {
 			},
 			expected: false,
 		},
+		{
+			name: "failed calling webhook error",
+			gvr:  settingsGVR,
+			err: &apierrors.StatusError{
+				ErrStatus: k8sv1.Status{
+					Message: "Internal error occurred: failed calling webhook \"rancher.cattle.io.settings\": service \"rancher-webhook\" not found",
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "empty message statuserror falling back to error()",
+			gvr:  settingsGVR,
+			err: &apierrors.StatusError{
+				ErrStatus: k8sv1.Status{
+					Message: "",
+				},
+			},
+			expected: false,
+		},
+		{
+			name:     "typed nil apierror pointer",
+			gvr:      settingsGVR,
+			err:      (*apierrors.StatusError)(nil),
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
