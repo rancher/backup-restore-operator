@@ -83,7 +83,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
       - name: Install Helm-unittest
-        run: helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest
+        run: |
+          ci-select helm helmv4 && \
+          helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
       - name: Install python
         run: |
           zypper -n install --no-recommends \
@@ -94,7 +96,9 @@ jobs:
       - name: Set up chart-testing
         uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b # v2.7.0 - DO NOT BUMP
       - name: CI
-        run: make ci
+        run: |
+          ci-select helm helmv4 && \
+          make ci
   test:
     name: integration-test
     runs-on: runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
@@ -115,9 +119,13 @@ jobs:
         with: # Kept to fetch k3d
           version: v0.1.1
       - name: Install Helm-unittest
-        run: helm plugin install --verify=false https://github.com/quintush/helm-unittest
+        run: |
+          ci-select helm helmv4 && \
+          helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
       - name: Setup helm charts
-        run: ./scripts/package-helm
+        run: |
+          ci-select helm helmv4 && \
+          ./scripts/package-helm
       - name: Debug
         run: ls -R ./build/artifacts
       - name: Setup test environment
