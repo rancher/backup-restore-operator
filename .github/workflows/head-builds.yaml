@@ -23,7 +23,7 @@ jobs:
     runs-on : runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
     steps:
       - name: Check out the repository to the runner
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Set Branch Tag and Other Variables
         id: set-vars
         run: bash ./.github/scripts/branch-tags.sh >> $GITHUB_OUTPUT
@@ -49,7 +49,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD
       - name : Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: rancherlabs/dep-fetch/actions/sync-deps@35f5facb2f545a6ebbba91f8a635cf2511ade703 # v0.2.0
         with:
           version: v0.2.0

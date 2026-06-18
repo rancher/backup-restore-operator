@@ -19,7 +19,7 @@ jobs:
     needs: [ ci ]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
       - run: git fetch --force --tags
@@ -62,7 +62,7 @@ jobs:
     runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: "Read vault secrets"
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
@@ -74,7 +74,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD ;
         # This encapsulates: login, qemu, build/push
       - name: Build and push BRO image (dockerhub and prime stg)
-        uses: rancher/ecm-distro-tools/actions/publish-image@3a1c5e3106195b82d8700f8f760107aa634fecdf # v0.70.0
+        uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
@@ -100,7 +100,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials password | PRIME_REGISTRY_PASSWORD ;
       - name: Build and push BRO image (prime prod)
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
-        uses: rancher/ecm-distro-tools/actions/publish-image@3a1c5e3106195b82d8700f8f760107aa634fecdf # v0.70.0
+        uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
