@@ -706,6 +706,10 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 		// create and return
 		createdObj, err := dr.Create(h.ctx, &obj, k8sv1.CreateOptions{})
 		if err != nil {
+			if isSettingsWebhookError(gvr, err) {
+				logrus.Warnf("restoreResource: skipping setting %s due to webhook admission restriction: %v", name, err)
+				return nil
+			}
 			return fmt.Errorf("restoreResource: err creating resource %v", err)
 		}
 		if hasStatusSubresource && obj.Object["status"] != nil {
@@ -718,11 +722,16 @@ func (h *handler) restoreResource(restoreObjInfo objInfo, restoreObjData unstruc
 		}
 		return nil
 	}
+
 	resMetadata := res.Object[metadataMapKey].(map[string]interface{})
 	resourceVersion := resMetadata["resourceVersion"].(string)
 	obj.Object[metadataMapKey].(map[string]interface{})["resourceVersion"] = resourceVersion
 	updatedObj, err := dr.Update(h.ctx, &obj, k8sv1.UpdateOptions{})
 	if err != nil {
+		if isSettingsWebhookError(gvr, err) {
+			logrus.Warnf("restoreResource: skipping setting %s due to webhook admission restriction: %v", name, err)
+			return nil
+		}
 		return fmt.Errorf("restoreResource: err updating resource %v", err)
 	}
 	if hasStatusSubresource && obj.Object["status"] != nil {
@@ -975,4 +984,18 @@ func crdKind(crd *unstructured.Unstructured) string {
 		return ""
 	}
 	return kind.(string)
+}
+
+func isSettingsWebhookError(gvr schema.GroupVersionResource, err error) bool {
+	if err == nil {
+		return false
+	}
+	if gvr.Group == "management.cattle.io" && gvr.Resource == "settings" {
+		var statusErr *apierrors.StatusError
+		if errors.As(err, &statusErr) && statusErr != nil {
+			msg := statusErr.Error()
+			return strings.Contains(msg, "admission webhook") && strings.Contains(msg, "rancher.cattle.io.settings") && strings.Contains(msg, "denied the request")
+		}
+	}
+	return false
 }
