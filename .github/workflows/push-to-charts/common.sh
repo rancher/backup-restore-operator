@@ -20,6 +20,7 @@ PACKAGE="rancher-backup"
 # Map of BRO major version → rancher/charts target branch.
 # Add a new entry here when a new BRO/Rancher version pair is created.
 declare -A CHARTS_BRANCH_MAP=(
+  ["11"]="dev-v2.15"
   ["10"]="dev-v2.14"
   ["9"]="dev-v2.13"
   ["8"]="dev-v2.12"
