@@ -2,7 +2,7 @@
 include hack/make/build.mk
 
 # ---- CI Image Config ----
-CI_IMAGE := ghcr.io/rancher/ci-image/go1.25
+CI_IMAGE := ghcr.io/rancher/ci-image/go1.26
 WORKDIR := /workspace
 
 # Detect CI environment (common env var used by many CI systems)

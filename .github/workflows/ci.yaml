@@ -28,7 +28,7 @@ jobs:
     name: workspace sync check
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/rancher/ci-image/go1.25
+      image: ghcr.io/rancher/ci-image/go1.26
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Check go.work.sum is in sync
@@ -41,7 +41,7 @@ jobs:
     name: lint (${{ matrix.module }})
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/rancher/ci-image/go1.25
+      image: ghcr.io/rancher/ci-image/go1.26
     strategy:
       matrix:
         module:
@@ -69,7 +69,7 @@ jobs:
           - arm64
     runs-on: runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     container:
-      image: ghcr.io/rancher/ci-image/go1.25
+      image: ghcr.io/rancher/ci-image/go1.26
     env:
       CI: true
     steps:
@@ -99,7 +99,7 @@ jobs:
     name: integration-test
     runs-on: runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     container:
-      image: ghcr.io/rancher/ci-image/go1.25
+      image: ghcr.io/rancher/ci-image/go1.26
     strategy:
       matrix:
         arch:
