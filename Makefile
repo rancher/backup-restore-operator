@@ -1,6 +1,29 @@
 # Include logic that can be reused across projects.
 include hack/make/build.mk
 
+# ---- CI Image Config ----
+CI_IMAGE := ghcr.io/rancher/ci-image/go1.25
+WORKDIR := /workspace
+
+# Detect CI environment (common env var used by many CI systems)
+CI ?= false
+
+# Docker run wrapper (only used locally)
+DOCKER_RUN = docker run --rm -i \
+	-v $(PWD):$(WORKDIR) \
+	-w $(WORKDIR) \
+	$(CI_IMAGE)
+
+# Command runner:
+# - In CI: run commands directly
+# - Locally: run via Docker
+ifeq ($(CI),true)
+	RUN =
+else
+	RUN = $(DOCKER_RUN)
+endif
+
+# ---- Build Config ----
 # Define target platforms, image builder and the fully qualified image name.
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 
@@ -12,12 +35,11 @@ BUILD_ACTION = --load
 
 TARGETS := $(shell ls scripts|grep -ve "^util-\|entry\|^pull-scripts")
 
-$(TARGETS):
-	./scripts/$@
-
 .DEFAULT_GOAL := ci
 
 .PHONY: $(TARGETS)
+$(TARGETS):
+	$(RUN) ./scripts/$@
 
 build-image: buildx-machine ## build (and load) the container image targeting the current platform.
 	$(IMAGE_BUILDER) build -f package/Dockerfile \
@@ -41,8 +63,14 @@ push-image: validate buildx-machine ## build the container image targeting all p
 		--build-arg VERSION=$(VERSION) --platform=$(TARGET_PLATFORMS) -t "$(FULL_IMAGE_TAG)" --push .
 	@echo "Pushed $(FULL_IMAGE_TAG)"
 
+.PHONY: generate
+generate: ## Run go generate to update generated code.
+	$(RUN) go generate ./...
+
+.PHONY: validate
 validate: validate-dirty ## Run validation checks.
 
+.PHONY: validate-dirty
 validate-dirty:
 ifdef DIRTY
 	@echo Git is dirty
