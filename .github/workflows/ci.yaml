@@ -115,9 +115,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: rancherlabs/dep-fetch/actions/sync-deps@56731ed2727325212f71f7682013dc71c18540e1 # v0.1.1
-        with: # Kept to fetch k3d
-          version: v0.1.1
+      - name: Use dep-fetch to get CI tools # Kept to fetch k3d
+        uses: rancherlabs/dep-fetch/actions/sync-deps@35f5facb2f545a6ebbba91f8a635cf2511ade703 # v0.2.0
       - name: Install Helm-unittest
         run: |
           ci-select helm helmv4 && \
@@ -130,12 +129,13 @@ jobs:
         run: ls -R ./build/artifacts
       - name: Setup test environment
         run: |
+          ci-select helm helmv4 && \
           CLUSTER_NAME=backup-restore K3S_VERSION=${{ matrix.K3S_VERSION }} ./scripts/testenv
           k3d kubeconfig get backup-restore > kubeconfig.yaml
       - name: Debug kubeconfig
         run: cat kubeconfig.yaml
       - name: Run e2e tests
         run: |
-          cd e2e && KUBECONFIG=$KUBECONFIG CHART_NAMESPACE=cattle-resources-system go test -v -timeout 10m -count=1 ./...
+          ci-select helm helmv4 && cd e2e && KUBECONFIG=$KUBECONFIG CHART_NAMESPACE=cattle-resources-system go test -v -timeout 10m -count=1 ./...
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig.yaml
