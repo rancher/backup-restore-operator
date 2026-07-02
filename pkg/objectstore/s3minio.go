@@ -38,7 +38,8 @@ type ObjectStore struct {
 	Region                    string `json:"region"`
 	Folder                    string `json:"folder"`
 	// TODO: this may need to be a string too
-	ClientConfig *v1.ClientConfig `json:"clientConfig,omitempty"`
+	ClientConfig     *v1.ClientConfig `json:"clientConfig,omitempty"`
+	BucketLookupType string           `json:"bucketLookupType,omitempty"`
 }
 
 // Almost everything in this file is from rke-tools with some modifications https://github.com/rancher/rke-tools/blob/master/main.go
@@ -59,13 +60,14 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKeyID, secretKey string, useSSL bo
 		"s3-endpoint-ca":           bc.EndpointCA,
 		"s3-folder":                bc.Folder,
 		"insecure-tls-skip-verify": bc.InsecureTLSSkipVerify,
+		"bucket-lookup-type":       bc.BucketLookupType,
 	}).Info("invoking set s3 service client")
 
 	var err error
 	var client = &minio.Client{}
 	var cred credentials.Credentials
 	var tr = http.DefaultTransport
-	bucketLookup := getBucketLookupType(bc.Endpoint)
+	bucketLookup := getBucketLookupType(bc.Endpoint, bc.BucketLookupType)
 	for retries := 0; retries <= s3ServerRetries; retries++ {
 		// if the s3 access key and secret is not set use iam role
 		if len(accessKeyID) == 0 && len(secretKey) == 0 {
@@ -177,9 +179,15 @@ func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClie
 	return s3Client, nil
 }
 
-func getBucketLookupType(endpoint string) minio.BucketLookupType {
+func getBucketLookupType(endpoint, lookupType string) minio.BucketLookupType {
 	if endpoint == "" {
 		return minio.BucketLookupAuto
+	}
+	switch strings.ToLower(lookupType) {
+	case "dns":
+		return minio.BucketLookupDNS
+	case "path":
+		return minio.BucketLookupPath
 	}
 	if strings.Contains(endpoint, "aliyun") {
 		return minio.BucketLookupDNS
