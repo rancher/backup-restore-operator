@@ -58,7 +58,7 @@ func formatRestoreMetadataMetrics(restores []backupv1.Restore) string {
 
 		metrics += fmt.Sprintf(`
 		rancher_restore_info{fileName="%s",name="%s",prune="%t",restoreTime="%s",status="%s",storageLocation="%s"} 1
-		`, r.Spec.BackupFilename, r.Name, *r.Spec.Prune, r.Status.RestoreCompletionTS, restoreMessage, r.Status.BackupSource)
+		`, r.Spec.BackupFilename, r.Name, r.Spec.GetPrune(), r.Status.RestoreCompletionTS, restoreMessage, r.Status.BackupSource)
 	}
 
 	return metrics
