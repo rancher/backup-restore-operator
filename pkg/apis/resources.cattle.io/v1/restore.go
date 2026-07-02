@@ -41,6 +41,15 @@ type RestoreSpec struct {
 	IgnoreErrors bool `json:"ignoreErrors,omitempty"`
 }
 
+// GetPrune returns the prune value, defaulting to true if unset
+// This helper consolidates the existing logic of Prune value in a single place.
+func (rs *RestoreSpec) GetPrune() bool {
+	if rs.Prune == nil {
+		return true
+	}
+	return *rs.Prune
+}
+
 type RestoreStatus struct {
 	Conditions          []genericcondition.GenericCondition `json:"conditions,omitempty"`
 	RestoreCompletionTS string                              `json:"restoreCompletionTs"`
