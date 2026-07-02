@@ -239,7 +239,7 @@ func TestUpdateRestoreMetricsWithNilPrune(t *testing.T) {
 	const expectedRestore = `
 # HELP rancher_restore_info Details on a specific Rancher Restore CR
 # TYPE rancher_restore_info gauge
-rancher_restore_info{fileName="backup-no-prune.tar.gz",name="restore-no-prune",prune="false",restoreTime="1627849200",status="Restore completed successfully",storageLocation="s3"} 1
+rancher_restore_info{fileName="backup-no-prune.tar.gz",name="restore-no-prune",prune="true",restoreTime="1627849200",status="Restore completed successfully",storageLocation="s3"} 1
 `
 	if err := promtestutil.CollectAndCompare(restore, strings.NewReader(expectedRestore), "rancher_restore_info"); err != nil {
 		t.Error("error when comparing resulting rancher_restore_info to expected values:", err)
@@ -305,7 +305,7 @@ rancher_restore_count 3
 	const expectedRestore = `
 # HELP rancher_restore_info Details on a specific Rancher Restore CR
 # TYPE rancher_restore_info gauge
-rancher_restore_info{fileName="backup1.tar.gz",name="restore-nil-prune",prune="false",restoreTime="1627849200",status="Completed",storageLocation="s3"} 1
+rancher_restore_info{fileName="backup1.tar.gz",name="restore-nil-prune",prune="true",restoreTime="1627849200",status="Completed",storageLocation="s3"} 1
 rancher_restore_info{fileName="backup2.tar.gz",name="restore-true-prune",prune="true",restoreTime="1627849300",status="Completed",storageLocation="s3"} 1
 rancher_restore_info{fileName="backup3.tar.gz",name="restore-false-prune",prune="false",restoreTime="1627849400",status="Completed",storageLocation="s3"} 1
 `
