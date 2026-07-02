@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -29,6 +31,9 @@ func main() {
 
 	// Remove empty CRD
 	cleanEmptyCRD("./pkg/crds/yaml/generated/_.yaml")
+
+	// Copy generated CRDs to chart templates
+	copyCRDsToChart()
 
 	fmt.Println("controller-gen command executed successfully.")
 }
@@ -59,4 +64,52 @@ func runControllerGen(cmdArgs []string) {
 		fmt.Fprintf(os.Stderr, "controller-gen command failed: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func copyCRDsToChart() {
+	// Mapping of generated CRD files to chart template names
+	crdMapping := map[string]string{
+		"resources.cattle.io_backups.yaml":      "backup.yaml",
+		"resources.cattle.io_resourcesets.yaml": "resourceset.yaml",
+		"resources.cattle.io_restores.yaml":     "restore.yaml",
+	}
+
+	srcDir := "./pkg/crds/yaml/generated"
+	dstDir := "./charts/rancher-backup-crd/templates"
+
+	fmt.Println("Copying CRDs to chart templates...")
+
+	for srcFile, dstFile := range crdMapping {
+		srcPath := filepath.Join(srcDir, srcFile)
+		dstPath := filepath.Join(dstDir, dstFile)
+
+		if err := copyFile(srcPath, dstPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Error copying %s to %s: %v\n", srcPath, dstPath, err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("  Copied %s -> %s\n", srcFile, dstFile)
+	}
+
+	fmt.Println("CRDs copied to chart templates successfully.")
+}
+
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		return err
+	}
+
+	return destFile.Sync()
 }
