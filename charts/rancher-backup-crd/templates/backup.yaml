@@ -29,7 +29,7 @@ spec:
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
-      type: date-time
+      type: date
     - jsonPath: .status.conditions[?(@.type=="Ready")].message
       name: Status
       type: string

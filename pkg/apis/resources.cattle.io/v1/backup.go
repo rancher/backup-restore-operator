@@ -34,7 +34,7 @@ var (
 // +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.status.backupType`
 // +kubebuilder:printcolumn:name="Latest-Backup",type=string,JSONPath=`.status.filename`
 // +kubebuilder:printcolumn:name="ResourceSet",type=string,JSONPath=`.spec.resourceSetName`
-// +kubebuilder:printcolumn:name="Age",type=date-time,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

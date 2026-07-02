@@ -12,7 +12,7 @@ import (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Backup-Source",type=string,JSONPath=`.status.backupSource`
 // +kubebuilder:printcolumn:name="Backup-File",type=string,JSONPath=`.spec.backupFilename`
-// +kubebuilder:printcolumn:name="Age",type=date-time,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
