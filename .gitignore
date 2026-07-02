@@ -23,3 +23,7 @@ kubeconfig*.yaml
 bin/
 # Added by goreleaser init:
 dist/
+
+# Go workspace files (developer-specific, not committed)
+go.work
+go.work.sum
