@@ -28,6 +28,15 @@ var (
 
 // +genclient
 // +genclient:nonNamespaced
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Location",type=string,JSONPath=`.status.storageLocation`
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.status.backupType`
+// +kubebuilder:printcolumn:name="Latest-Backup",type=string,JSONPath=`.status.filename`
+// +kubebuilder:printcolumn:name="ResourceSet",type=string,JSONPath=`.spec.resourceSetName`
+// +kubebuilder:printcolumn:name="Age",type=date-time,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type Backup struct {
@@ -39,11 +48,22 @@ type Backup struct {
 }
 
 type BackupSpec struct {
-	StorageLocation            *StorageLocation `json:"storageLocation"`
-	ResourceSetName            string           `json:"resourceSetName"`
-	EncryptionConfigSecretName string           `json:"encryptionConfigSecretName,omitempty"`
-	Schedule                   string           `json:"schedule,omitempty"`
-	RetentionCount             int64            `json:"retentionCount,omitempty"`
+	// +nullable
+	StorageLocation *StorageLocation `json:"storageLocation"`
+	// Name of the ResourceSet CR to use for backup
+	// +required
+	ResourceSetName string `json:"resourceSetName"`
+	// Name of the Secret containing the encryption config
+	// +kubebuilder:validation:nullable
+	// +nullable
+	EncryptionConfigSecretName string `json:"encryptionConfigSecretName,omitempty"`
+	// Cron schedule for recurring backups
+	// +kubebuilder:example="Descriptors: '@midnight'\nStandard crontab specs: 0 0 * * *"
+	// +kubebuilder:validation:nullable
+	// +nullable
+	Schedule string `json:"schedule,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	RetentionCount int64 `json:"retentionCount,omitempty"`
 }
 
 type BackupStatus struct {
@@ -59,18 +79,23 @@ type BackupStatus struct {
 
 // +genclient
 // +genclient:nonNamespaced
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:subresource:status
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ResourceSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	// +required
 	ResourceSelectors    []ResourceSelector    `json:"resourceSelectors"`
 	ControllerReferences []ControllerReference `json:"controllerReferences"`
 }
 
 // regex+list = OR //separate fields :AND
 type ResourceSelector struct {
+	// +required
 	APIVersion                string                `json:"apiVersion"`
 	Kinds                     []string              `json:"kinds,omitempty"`
 	KindsRegexp               string                `json:"kindsRegexp,omitempty"`
@@ -89,7 +114,7 @@ type ControllerReference struct {
 	Resource   string `json:"resource"`
 	Namespace  string `json:"namespace"`
 	Name       string `json:"name"`
-	Replicas   int32
+	Replicas   int32  `json:"replicas"`
 }
 
 type StorageLocation struct {
@@ -110,6 +135,13 @@ type S3ObjectStore struct {
 
 // +genclient
 // +genclient:nonNamespaced
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Backup-Source",type=string,JSONPath=`.status.backupSource`
+// +kubebuilder:printcolumn:name="Backup-File",type=string,JSONPath=`.spec.backupFilename`
+// +kubebuilder:printcolumn:name="Age",type=date-time,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type Restore struct {
@@ -121,11 +153,17 @@ type Restore struct {
 }
 
 type RestoreSpec struct {
-	BackupFilename             string           `json:"backupFilename"`
-	StorageLocation            *StorageLocation `json:"storageLocation"`
-	Prune                      *bool            `json:"prune"` //prune by default
-	DeleteTimeoutSeconds       int              `json:"deleteTimeoutSeconds,omitempty"`
-	EncryptionConfigSecretName string           `json:"encryptionConfigSecretName,omitempty"`
+	// +required
+	BackupFilename string `json:"backupFilename"`
+	// +nullable
+	StorageLocation *StorageLocation `json:"storageLocation"`
+	// prune is true by default when unset
+	// +kubebuilder:default:=true
+	// +optional
+	Prune *bool `json:"prune"`
+	// +kubebuilder:validation:Maximum=10
+	DeleteTimeoutSeconds       int    `json:"deleteTimeoutSeconds,omitempty"`
+	EncryptionConfigSecretName string `json:"encryptionConfigSecretName,omitempty"`
 
 	// When set to true, the controller ignores any errors during the restore process
 	IgnoreErrors bool `json:"ignoreErrors,omitempty"`
