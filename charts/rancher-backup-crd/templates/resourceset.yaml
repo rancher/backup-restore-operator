@@ -26,6 +26,7 @@ spec:
               More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           controllerReferences:
+            default: []
             items:
               properties:
                 apiVersion:
@@ -58,6 +59,7 @@ spec:
           metadata:
             type: object
           resourceSelectors:
+            default: []
             items:
               description: regex+list = OR //separate fields :AND
               properties:
@@ -85,6 +87,7 @@ spec:
                     A label selector is a label query over a set of resources. The result of matchLabels and
                     matchExpressions are ANDed. An empty label selector matches all objects. A null
                     label selector matches no objects.
+                  nullable: true
                   properties:
                     matchExpressions:
                       description: matchExpressions is a list of label selector requirements.
@@ -146,7 +149,6 @@ spec:
               type: object
             type: array
         required:
-        - controllerReferences
         - resourceSelectors
         type: object
     served: true

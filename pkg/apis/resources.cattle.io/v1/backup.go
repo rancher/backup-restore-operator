@@ -43,35 +43,35 @@ type Backup struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   BackupSpec   `json:"spec"`
-	Status BackupStatus `json:"status"`
+	Status BackupStatus `json:"status,omitempty"`
 }
 
 type BackupSpec struct {
+	// +optional
 	// +nullable
-	StorageLocation *StorageLocation `json:"storageLocation"`
+	StorageLocation *StorageLocation `json:"storageLocation,omitempty"`
 	// Name of the ResourceSet CR to use for backup
 	// +required
 	ResourceSetName string `json:"resourceSetName"`
 	// Name of the Secret containing the encryption config
-	// +kubebuilder:validation:nullable
-	// +nullable
+	// +optional
 	EncryptionConfigSecretName string `json:"encryptionConfigSecretName,omitempty"`
 	// Cron schedule for recurring backups
 	// +kubebuilder:example="Descriptors: '@midnight'\nStandard crontab specs: 0 0 * * *"
-	// +kubebuilder:validation:nullable
-	// +nullable
+	// +optional
 	Schedule string `json:"schedule,omitempty"`
 	// +kubebuilder:validation:Minimum=1
+	// +optional
 	RetentionCount int64 `json:"retentionCount,omitempty"`
 }
 
 type BackupStatus struct {
-	Conditions         []genericcondition.GenericCondition `json:"conditions"`
-	LastSnapshotTS     string                              `json:"lastSnapshotTs"`
-	NextSnapshotAt     string                              `json:"nextSnapshotAt"`
-	ObservedGeneration int64                               `json:"observedGeneration"`
-	StorageLocation    string                              `json:"storageLocation"`
-	BackupType         BackupType                          `json:"backupType"`
-	Filename           string                              `json:"filename"`
-	Summary            string                              `json:"summary"`
+	Conditions         []genericcondition.GenericCondition `json:"conditions,omitempty"`
+	LastSnapshotTS     string                              `json:"lastSnapshotTs,omitempty"`
+	NextSnapshotAt     string                              `json:"nextSnapshotAt,omitempty"`
+	ObservedGeneration int64                               `json:"observedGeneration,omitempty"`
+	StorageLocation    string                              `json:"storageLocation,omitempty"`
+	BackupType         BackupType                          `json:"backupType,omitempty"`
+	Filename           string                              `json:"filename,omitempty"`
+	Summary            string                              `json:"summary,omitempty"`
 }

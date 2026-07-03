@@ -106,13 +106,11 @@ func schema_pkg_apis_resourcescattleio_v1_AwsConfig(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"dualStack": {
 						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
+							Type:   []string{"boolean"},
+							Format: "",
 						},
 					},
 				},
-				Required: []string{"dualStack"},
 			},
 		},
 	}
@@ -157,7 +155,7 @@ func schema_pkg_apis_resourcescattleio_v1_Backup(ref common.ReferenceCallback) c
 						},
 					},
 				},
-				Required: []string{"spec", "status"},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -254,7 +252,7 @@ func schema_pkg_apis_resourcescattleio_v1_BackupSpec(ref common.ReferenceCallbac
 						},
 					},
 				},
-				Required: []string{"storageLocation", "resourceSetName"},
+				Required: []string{"resourceSetName"},
 			},
 		},
 		Dependencies: []string{
@@ -283,55 +281,47 @@ func schema_pkg_apis_resourcescattleio_v1_BackupStatus(ref common.ReferenceCallb
 					},
 					"lastSnapshotTs": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"nextSnapshotAt": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"observedGeneration": {
 						SchemaProps: spec.SchemaProps{
-							Default: 0,
-							Type:    []string{"integer"},
-							Format:  "int64",
+							Type:   []string{"integer"},
+							Format: "int64",
 						},
 					},
 					"storageLocation": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"backupType": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"filename": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"summary": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 				},
-				Required: []string{"conditions", "lastSnapshotTs", "nextSnapshotAt", "observedGeneration", "storageLocation", "backupType", "filename", "summary"},
 			},
 		},
 		Dependencies: []string{
@@ -583,7 +573,7 @@ func schema_pkg_apis_resourcescattleio_v1_ResourceSet(ref common.ReferenceCallba
 						},
 					},
 				},
-				Required: []string{"resourceSelectors", "controllerReferences"},
+				Required: []string{"resourceSelectors"},
 			},
 		},
 		Dependencies: []string{
@@ -679,7 +669,7 @@ func schema_pkg_apis_resourcescattleio_v1_Restore(ref common.ReferenceCallback) 
 						},
 					},
 				},
-				Required: []string{"spec", "status"},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
@@ -781,7 +771,7 @@ func schema_pkg_apis_resourcescattleio_v1_RestoreSpec(ref common.ReferenceCallba
 						},
 					},
 				},
-				Required: []string{"backupFilename", "storageLocation"},
+				Required: []string{"backupFilename"},
 			},
 		},
 		Dependencies: []string{
@@ -810,34 +800,29 @@ func schema_pkg_apis_resourcescattleio_v1_RestoreStatus(ref common.ReferenceCall
 					},
 					"restoreCompletionTs": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"observedGeneration": {
 						SchemaProps: spec.SchemaProps{
-							Default: 0,
-							Type:    []string{"integer"},
-							Format:  "int64",
+							Type:   []string{"integer"},
+							Format: "int64",
 						},
 					},
 					"backupSource": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"summary": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 				},
-				Required: []string{"restoreCompletionTs", "observedGeneration", "backupSource", "summary"},
 			},
 		},
 		Dependencies: []string{
@@ -860,16 +845,14 @@ func schema_pkg_apis_resourcescattleio_v1_S3ObjectStore(ref common.ReferenceCall
 					},
 					"endpointCA": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"insecureTLSSkipVerify": {
 						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
+							Type:   []string{"boolean"},
+							Format: "",
 						},
 					},
 					"credentialSecretName": {
@@ -881,9 +864,8 @@ func schema_pkg_apis_resourcescattleio_v1_S3ObjectStore(ref common.ReferenceCall
 					},
 					"credentialSecretNamespace": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"bucketName": {
@@ -895,16 +877,14 @@ func schema_pkg_apis_resourcescattleio_v1_S3ObjectStore(ref common.ReferenceCall
 					},
 					"region": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"folder": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"clientConfig": {
@@ -913,7 +893,7 @@ func schema_pkg_apis_resourcescattleio_v1_S3ObjectStore(ref common.ReferenceCall
 						},
 					},
 				},
-				Required: []string{"endpoint", "endpointCA", "insecureTLSSkipVerify", "credentialSecretName", "credentialSecretNamespace", "bucketName", "region", "folder"},
+				Required: []string{"endpoint", "credentialSecretName", "bucketName"},
 			},
 		},
 		Dependencies: []string{
@@ -933,7 +913,6 @@ func schema_pkg_apis_resourcescattleio_v1_StorageLocation(ref common.ReferenceCa
 						},
 					},
 				},
-				Required: []string{"s3"},
 			},
 		},
 		Dependencies: []string{

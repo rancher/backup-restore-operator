@@ -64,11 +64,13 @@ spec:
               prune:
                 default: true
                 description: prune is true by default when unset
+                nullable: true
                 type: boolean
               storageLocation:
                 nullable: true
                 properties:
                   s3:
+                    nullable: true
                     properties:
                       bucketName:
                         type: string
@@ -76,14 +78,14 @@ spec:
                         description: |-
                           ClientConfig allows configuration of more advanced minio client settings
                           any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providres.
+                        nullable: true
                         properties:
                           aws:
+                            nullable: true
                             properties:
                               dualStack:
                                 default: true
                                 type: boolean
-                            required:
-                            - dualStack
                             type: object
                         type: object
                       credentialSecretName:
@@ -103,19 +105,11 @@ spec:
                     required:
                     - bucketName
                     - credentialSecretName
-                    - credentialSecretNamespace
                     - endpoint
-                    - endpointCA
-                    - folder
-                    - insecureTLSSkipVerify
-                    - region
                     type: object
-                required:
-                - s3
                 type: object
             required:
             - backupFilename
-            - storageLocation
             type: object
           status:
             properties:
@@ -156,15 +150,9 @@ spec:
                 type: string
               summary:
                 type: string
-            required:
-            - backupSource
-            - observedGeneration
-            - restoreCompletionTs
-            - summary
             type: object
         required:
         - spec
-        - status
         type: object
     served: true
     storage: true

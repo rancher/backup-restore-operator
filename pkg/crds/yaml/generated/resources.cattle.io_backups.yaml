@@ -58,7 +58,6 @@ spec:
             properties:
               encryptionConfigSecretName:
                 description: Name of the Secret containing the encryption config
-                nullable: true
                 type: string
               resourceSetName:
                 description: Name of the ResourceSet CR to use for backup
@@ -72,12 +71,12 @@ spec:
                 example: |-
                   Descriptors: '@midnight'
                   Standard crontab specs: 0 0 * * *
-                nullable: true
                 type: string
               storageLocation:
                 nullable: true
                 properties:
                   s3:
+                    nullable: true
                     properties:
                       bucketName:
                         type: string
@@ -85,14 +84,14 @@ spec:
                         description: |-
                           ClientConfig allows configuration of more advanced minio client settings
                           any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providres.
+                        nullable: true
                         properties:
                           aws:
+                            nullable: true
                             properties:
                               dualStack:
                                 default: true
                                 type: boolean
-                            required:
-                            - dualStack
                             type: object
                         type: object
                       credentialSecretName:
@@ -112,19 +111,11 @@ spec:
                     required:
                     - bucketName
                     - credentialSecretName
-                    - credentialSecretNamespace
                     - endpoint
-                    - endpointCA
-                    - folder
-                    - insecureTLSSkipVerify
-                    - region
                     type: object
-                required:
-                - s3
                 type: object
             required:
             - resourceSetName
-            - storageLocation
             type: object
           status:
             properties:
@@ -175,19 +166,9 @@ spec:
                 type: string
               summary:
                 type: string
-            required:
-            - backupType
-            - conditions
-            - filename
-            - lastSnapshotTs
-            - nextSnapshotAt
-            - observedGeneration
-            - storageLocation
-            - summary
             type: object
         required:
         - spec
-        - status
         type: object
     served: true
     storage: true

@@ -1,19 +1,28 @@
 package v1
 
 type StorageLocation struct {
-	S3 *S3ObjectStore `json:"s3"`
+	// +optional
+	// +nullable
+	S3 *S3ObjectStore `json:"s3,omitempty"`
 }
 
 type S3ObjectStore struct {
-	Endpoint                  string        `json:"endpoint"`
-	EndpointCA                string        `json:"endpointCA"`
-	InsecureTLSSkipVerify     bool          `json:"insecureTLSSkipVerify"`
-	CredentialSecretName      string        `json:"credentialSecretName"`
-	CredentialSecretNamespace string        `json:"credentialSecretNamespace"`
-	BucketName                string        `json:"bucketName"`
-	Region                    string        `json:"region"`
-	Folder                    string        `json:"folder"`
-	ClientConfig              *ClientConfig `json:"clientConfig,omitempty"`
+	Endpoint string `json:"endpoint"`
+	// +optional
+	EndpointCA string `json:"endpointCA,omitempty"`
+	// +optional
+	InsecureTLSSkipVerify bool   `json:"insecureTLSSkipVerify,omitempty"`
+	CredentialSecretName  string `json:"credentialSecretName"`
+	// +optional
+	CredentialSecretNamespace string `json:"credentialSecretNamespace,omitempty"`
+	BucketName                string `json:"bucketName"`
+	// +optional
+	Region string `json:"region,omitempty"`
+	// +optional
+	Folder string `json:"folder,omitempty"`
+	// +optional
+	// +nullable
+	ClientConfig *ClientConfig `json:"clientConfig,omitempty"`
 }
 
 // ClientConfig allows configuration of more advanced minio client settings
@@ -21,11 +30,14 @@ type S3ObjectStore struct {
 type ClientConfig struct {
 	// TODO: Add setting to control lookup mode
 	// TODO: Add a setting for varying trace options that minio provides
+	// +optional
+	// +nullable
 	Aws *AwsConfig `json:"aws,omitempty"`
 }
 
 type AwsConfig struct {
 	// +default:value=true
-	DualStack bool `json:"dualStack"`
+	// +optional
+	DualStack bool `json:"dualStack,omitempty"`
 	// TODO: also support s3 TransferAccelerate feature this way?
 }

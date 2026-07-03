@@ -21,23 +21,28 @@ type Restore struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   RestoreSpec   `json:"spec"`
-	Status RestoreStatus `json:"status"`
+	Status RestoreStatus `json:"status,omitempty"`
 }
 
 type RestoreSpec struct {
 	// +required
 	BackupFilename string `json:"backupFilename"`
+	// +optional
 	// +nullable
-	StorageLocation *StorageLocation `json:"storageLocation"`
+	StorageLocation *StorageLocation `json:"storageLocation,omitempty"`
 	// prune is true by default when unset
 	// +kubebuilder:default:=true
 	// +optional
-	Prune *bool `json:"prune"`
+	// +nullable
+	Prune *bool `json:"prune,omitempty"`
 	// +kubebuilder:validation:Maximum=10
-	DeleteTimeoutSeconds       int    `json:"deleteTimeoutSeconds,omitempty"`
+	// +optional
+	DeleteTimeoutSeconds int `json:"deleteTimeoutSeconds,omitempty"`
+	// +optional
 	EncryptionConfigSecretName string `json:"encryptionConfigSecretName,omitempty"`
 
 	// When set to true, the controller ignores any errors during the restore process
+	// +optional
 	IgnoreErrors bool `json:"ignoreErrors,omitempty"`
 }
 
@@ -52,8 +57,8 @@ func (rs *RestoreSpec) GetPrune() bool {
 
 type RestoreStatus struct {
 	Conditions          []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	RestoreCompletionTS string                              `json:"restoreCompletionTs"`
-	ObservedGeneration  int64                               `json:"observedGeneration"`
-	BackupSource        string                              `json:"backupSource"`
-	Summary             string                              `json:"summary"`
+	RestoreCompletionTS string                              `json:"restoreCompletionTs,omitempty"`
+	ObservedGeneration  int64                               `json:"observedGeneration,omitempty"`
+	BackupSource        string                              `json:"backupSource,omitempty"`
+	Summary             string                              `json:"summary,omitempty"`
 }
