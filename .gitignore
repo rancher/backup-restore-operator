@@ -7,6 +7,7 @@
 .idea
 ./backup
 backup-restore-operator
+rancher-backup-*.tgz
 operator
 !cmd/operator
 tool
