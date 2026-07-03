@@ -16,9 +16,11 @@ type ResourceSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	// +listType=atomic
 	// +kubebuilder:default:={}
 	// +required
 	ResourceSelectors []ResourceSelector `json:"resourceSelectors"`
+	// +listType=atomic
 	// +kubebuilder:default:={}
 	// +optional
 	ControllerReferences []ControllerReference `json:"controllerReferences,omitempty"`
@@ -28,14 +30,17 @@ type ResourceSet struct {
 type ResourceSelector struct {
 	// +required
 	APIVersion string `json:"apiVersion"`
+	// +listType=set
 	// +optional
 	Kinds []string `json:"kinds,omitempty"`
 	// +optional
 	KindsRegexp string `json:"kindsRegexp,omitempty"`
+	// +listType=set
 	// +optional
 	ResourceNames []string `json:"resourceNames,omitempty"`
 	// +optional
 	ResourceNameRegexp string `json:"resourceNameRegexp,omitempty"`
+	// +listType=set
 	// +optional
 	Namespaces []string `json:"namespaces,omitempty"`
 	// +optional
@@ -45,6 +50,7 @@ type ResourceSelector struct {
 	LabelSelectors *metav1.LabelSelector `json:"labelSelectors,omitempty"`
 	// +optional
 	FieldSelectors fields.Set `json:"fieldSelectors,omitempty"`
+	// +listType=set
 	// +optional
 	ExcludeKinds []string `json:"excludeKinds,omitempty"`
 	// +optional

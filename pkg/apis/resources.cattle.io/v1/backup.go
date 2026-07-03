@@ -66,6 +66,8 @@ type BackupSpec struct {
 }
 
 type BackupStatus struct {
+	// +listType=map
+	// +listMapKey=type
 	Conditions         []genericcondition.GenericCondition `json:"conditions,omitempty"`
 	LastSnapshotTS     string                              `json:"lastSnapshotTs,omitempty"`
 	NextSnapshotAt     string                              `json:"nextSnapshotAt,omitempty"`

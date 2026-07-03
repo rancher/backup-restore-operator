@@ -48,6 +48,7 @@ spec:
               - resource
               type: object
             type: array
+            x-kubernetes-list-type: atomic
           kind:
             description: |-
               Kind is a string value representing the REST resource this object represents.
@@ -69,6 +70,7 @@ spec:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 excludeResourceNameRegexp:
                   type: string
                 fieldSelectors:
@@ -80,6 +82,7 @@ spec:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 kindsRegexp:
                   type: string
                 labelSelectors:
@@ -138,16 +141,19 @@ spec:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 resourceNameRegexp:
                   type: string
                 resourceNames:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
               required:
               - apiVersion
               type: object
             type: array
+            x-kubernetes-list-type: atomic
         required:
         - resourceSelectors
         type: object

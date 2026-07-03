@@ -56,6 +56,8 @@ func (rs *RestoreSpec) GetPrune() bool {
 }
 
 type RestoreStatus struct {
+	// +listType=map
+	// +listMapKey=type
 	Conditions          []genericcondition.GenericCondition `json:"conditions,omitempty"`
 	RestoreCompletionTS string                              `json:"restoreCompletionTs,omitempty"`
 	ObservedGeneration  int64                               `json:"observedGeneration,omitempty"`
