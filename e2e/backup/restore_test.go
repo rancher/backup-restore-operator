@@ -280,6 +280,96 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 		})
 	})
 
+	When("we restore with Prune field unset (CRD default handling)", func() {
+		It("should handle unset Prune field with CRD default", func() {
+			// Note: The CRD has +kubebuilder:default:=true, so when Prune is omitted,
+			// the API server applies Prune=true automatically. This is the correct behavior
+			// for NEW Restores and prevents nil values going forward.
+			//
+			// OLD Restores (created before the default) may have Prune=nil. The GetPrune()
+			// helper handles this for backward compatibility. See unit tests in
+			// pkg/monitoring/metrics_test.go:TestUpdateRestoreMetricsWithNilPrune for
+			// verification of nil handling.
+			r := &backupv1.Restore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "s3-restore-nil-prune",
+				},
+				Spec: backupv1.RestoreSpec{
+					BackupFilename: preserveFieldsBackup,
+					// Prune field intentionally omitted - CRD default will apply Prune=true
+					StorageLocation: &backupv1.StorageLocation{
+						S3: &backupv1.S3ObjectStore{
+							CredentialSecretName:      credentialSecretName,
+							CredentialSecretNamespace: ts.ChartNamespace,
+							BucketName:                insecureBucket,
+							Endpoint:                  minioEndpoint,
+						},
+					},
+				},
+			}
+			o.Add(r)
+			Expect(k8sClient.Create(testCtx, r)).To(Succeed())
+			Eventually(Object(r)).Should(Exist())
+
+			Eventually(func() error {
+				return isRestoreSuccessful(r)
+			}).Should(Succeed())
+		})
+
+		It("should verify GetPrune() defaults correctly", func() {
+			// Note: The CRD now has +kubebuilder:default:=true, which means the API server
+			// automatically applies Prune=true when the field is omitted or null.
+			// This prevents NEW Restores from having Prune=nil, which is correct behavior.
+			//
+			// However, OLD Restores created before the default was added could still have Prune=nil.
+			// The GetPrune() helper function handles this case for backward compatibility.
+			//
+			// Nil handling verification: See unit tests in pkg/monitoring/metrics_test.go:
+			// - TestUpdateRestoreMetricsWithNilPrune (line 214)
+			// - TestUpdateRestoreMetricsWithMixedPruneValues (line 249)
+			// These verify that metrics warmup handles Prune=nil correctly without crashing.
+
+			By("verifying the Restore exists (will have Prune=true due to CRD default)")
+			var restore backupv1.Restore
+			Expect(k8sClient.Get(testCtx, client.ObjectKey{Name: "s3-restore-nil-prune"}, &restore)).To(Succeed())
+
+			By("verifying GetPrune() returns true when Prune field uses CRD default")
+			// With the CRD default, Prune will be a pointer to true (not nil)
+			Expect(restore.Spec.Prune).NotTo(BeNil(), "CRD default should apply Prune=true")
+			Expect(restore.Spec.GetPrune()).To(BeTrue(), "GetPrune() should return true")
+		})
+
+		Specify("ensure restore count includes nil Prune restore", func() {
+			Eventually(func() error {
+				expected := formatRestoreMetrics([]string{
+					"s3-restore-preserve-unknown-fields",
+					"s3-deletion-grace-period",
+					"s3-encrypted",
+					"s3-restore-nil-prune",
+				})
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_restore_count",
+				)
+			}).Should(Succeed())
+		})
+
+		Specify("ensure restore count includes nil Prune restore", func() {
+			Eventually(func() error {
+				expected := formatRestoreMetrics([]string{
+					"s3-restore-preserve-unknown-fields",
+					"s3-deletion-grace-period",
+					"s3-encrypted",
+					"s3-restore-nil-prune",
+				})
+
+				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
+					"rancher_restore_count",
+				)
+			}).Should(Succeed())
+		})
+	})
+
 	When("we're done with all test restores", func() {
 		Specify("we should eventually have the correct restore metadata metrics", func() {
 

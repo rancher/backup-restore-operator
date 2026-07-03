@@ -1,0 +1,85 @@
+#!/bin/sh
+# Run e2e tests locally or in CI
+#
+# This script automates the e2e test workflow used in CI, making it easy to run
+# tests locally without manually setting up the environment.
+#
+# Usage: ./scripts/e2e [K3S_VERSION] [CLUSTER_NAME]
+#   K3S_VERSION: optional, defaults to v1.36.1-k3s1
+#   CLUSTER_NAME: optional, defaults to backup-restore
+#
+# Prerequisites:
+#   - helm (helm.sh)
+#   - k3d (k3d.io)
+#   - go (golang.org)
+#
+# Examples:
+#   ./scripts/e2e                           # Use defaults
+#   ./scripts/e2e v1.34.5-k3s1              # Specific K3s version
+#   ./scripts/e2e v1.36.1-k3s1 my-cluster   # Custom version and cluster name
+#
+# Note: This script will delete any existing cluster with the same name.
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+# Default values from CI
+K3S_VERSION="${1:-v1.36.1-k3s1}"
+CLUSTER_NAME="${2:-backup-restore}"
+CHART_NAMESPACE="cattle-resources-system"
+
+echo "==> Running e2e tests with K3S_VERSION=${K3S_VERSION} CLUSTER_NAME=${CLUSTER_NAME}"
+
+# Check prerequisites
+if ! command -v helm >/dev/null 2>&1; then
+    echo "ERROR: helm is not installed"
+    exit 1
+fi
+
+if ! command -v k3d >/dev/null 2>&1; then
+    echo "ERROR: k3d is not installed"
+    exit 1
+fi
+
+if ! command -v go >/dev/null 2>&1; then
+    echo "ERROR: go is not installed"
+    exit 1
+fi
+
+# Check if helm-unittest plugin is installed
+if ! helm plugin list | grep -q unittest; then
+    echo "==> Installing helm-unittest plugin"
+    helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false
+fi
+
+# Package helm charts
+echo "==> Packaging helm charts"
+./scripts/package-helm
+
+# Debug: show packaged charts
+echo "==> Packaged charts:"
+ls -lh ./build/artifacts/*.tgz || true
+
+# Setup test environment (creates cluster and installs CRD chart)
+echo "==> Setting up test environment"
+export CLUSTER_NAME="${CLUSTER_NAME}"
+export K3S_VERSION="${K3S_VERSION}"
+./scripts/testenv
+
+# Get kubeconfig
+echo "==> Getting kubeconfig"
+k3d kubeconfig get "${CLUSTER_NAME}" > kubeconfig.yaml
+
+# Debug: show kubeconfig
+echo "==> Kubeconfig cluster info:"
+kubectl --kubeconfig=kubeconfig.yaml cluster-info
+
+# Run e2e tests
+echo "==> Running e2e tests"
+cd e2e
+KUBECONFIG="$(pwd)/../kubeconfig.yaml" \
+CHART_NAMESPACE="${CHART_NAMESPACE}" \
+    go test -v -timeout 10m -count=1 ./...
+
+echo "==> e2e tests completed successfully!"
