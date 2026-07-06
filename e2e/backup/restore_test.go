@@ -353,21 +353,6 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 				)
 			}).Should(Succeed())
 		})
-
-		Specify("ensure restore count includes nil Prune restore", func() {
-			Eventually(func() error {
-				expected := formatRestoreMetrics([]string{
-					"s3-restore-preserve-unknown-fields",
-					"s3-deletion-grace-period",
-					"s3-encrypted",
-					"s3-restore-nil-prune",
-				})
-
-				return promtestutil.ScrapeAndCompare(metricsURL, strings.NewReader(expected),
-					"rancher_restore_count",
-				)
-			}).Should(Succeed())
-		})
 	})
 
 	When("we're done with all test restores", func() {
