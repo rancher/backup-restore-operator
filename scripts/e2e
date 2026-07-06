@@ -47,6 +47,11 @@ if ! command -v go >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! command -v kubectl >/dev/null 2>&1; then
+    echo "ERROR: kubectl is not installed"
+    exit 1
+fi
+
 # Check if helm-unittest plugin is installed
 if ! helm plugin list | grep -q unittest; then
     echo "==> Installing helm-unittest plugin"

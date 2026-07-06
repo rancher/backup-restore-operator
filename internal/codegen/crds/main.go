@@ -11,9 +11,9 @@ import (
 
 func baseControllerGenCmd() []string {
 	return []string{
-		"tool",
 		"-modfile",
 		"gotools/controller-gen/go.mod",
+		"tool",
 		"controller-gen",
 	}
 }

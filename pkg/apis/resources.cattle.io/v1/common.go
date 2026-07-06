@@ -26,7 +26,7 @@ type S3ObjectStore struct {
 }
 
 // ClientConfig allows configuration of more advanced minio client settings
-// any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providres.
+// any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providers.
 type ClientConfig struct {
 	// TODO: Add setting to control lookup mode
 	// TODO: Add a setting for varying trace options that minio provides
