@@ -1,4 +1,4 @@
-module github.com/rancher/rancher/gotools/controller-gen
+module github.com/rancher/backup-restore-operator/gotools/controller-gen
 
 go 1.26.0
 
