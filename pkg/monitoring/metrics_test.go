@@ -228,7 +228,7 @@ func TestUpdateRestoreMetricsWithNilPrune(t *testing.T) {
 			},
 			Spec: v1.RestoreSpec{
 				BackupFilename: "backup-no-prune.tar.gz",
-			Prune:          nil, // Simulates an unset prune field (nil); GetPrune() should default this to true
+				Prune:          nil, // Simulates an unset prune field (nil); GetPrune() should default this to true
 			},
 		},
 	}
