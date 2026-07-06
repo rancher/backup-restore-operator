@@ -92,6 +92,8 @@ spec:
                               dualStack:
                                 default: true
                                 type: boolean
+                            required:
+                            - dualStack
                             type: object
                         type: object
                       credentialSecretName:

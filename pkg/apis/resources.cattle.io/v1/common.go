@@ -35,9 +35,12 @@ type ClientConfig struct {
 	Aws *AwsConfig `json:"aws,omitempty"`
 }
 
+// AwsConfig holds AWS-specific S3 configuration.
+// Fields here don't use +optional/omitempty since AwsConfig itself is already optional.
+// This avoids the bool round-trip bug (omitempty strips false → default reapplies → always true)
+// and keeps code simple (no *bool pointers needed).
 type AwsConfig struct {
 	// +default:value=true
-	// +optional
-	DualStack bool `json:"dualStack,omitempty"`
+	DualStack bool `json:"dualStack"`
 	// TODO: also support s3 TransferAccelerate feature this way?
 }

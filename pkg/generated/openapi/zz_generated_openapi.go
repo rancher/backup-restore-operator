@@ -106,11 +106,13 @@ func schema_pkg_apis_resourcescattleio_v1_AwsConfig(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"dualStack": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"boolean"},
-							Format: "",
+							Default: false,
+							Type:    []string{"boolean"},
+							Format:  "",
 						},
 					},
 				},
+				Required: []string{"dualStack"},
 			},
 		},
 	}
