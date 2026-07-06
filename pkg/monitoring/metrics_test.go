@@ -12,6 +12,10 @@ import (
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func init() {
+	SetupBackupDurationMetric()
+}
+
 func resetMetrics() {
 	backupDuration.Reset()
 	backupLastProcessed.Reset()

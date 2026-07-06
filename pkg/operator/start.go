@@ -233,6 +233,8 @@ func Run(
 	}
 
 	if options.shouldRunMetricsServer() {
+		monitoring.SetupBackupDurationMetric()
+
 		logrus.Info("Starting metrics server")
 		go monitoring.InitMetricsServer(options.MetricsPort)
 
