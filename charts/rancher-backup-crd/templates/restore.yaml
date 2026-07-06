@@ -77,10 +77,11 @@ spec:
                       clientConfig:
                         description: |-
                           ClientConfig allows configuration of more advanced minio client settings
-                          any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providres.
+                          any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providers.
                         nullable: true
                         properties:
                           aws:
+                            description: AwsConfig holds AWS-specific S3 configuration.
                             nullable: true
                             properties:
                               dualStack:

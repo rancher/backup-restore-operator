@@ -102,7 +102,8 @@ func schema_pkg_apis_resourcescattleio_v1_AwsConfig(ref common.ReferenceCallback
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "AwsConfig holds AWS-specific S3 configuration.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"dualStack": {
 						SchemaProps: spec.SchemaProps{
@@ -343,7 +344,7 @@ func schema_pkg_apis_resourcescattleio_v1_ClientConfig(ref common.ReferenceCallb
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ClientConfig allows configuration of more advanced minio client settings any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providres.",
+				Description: "ClientConfig allows configuration of more advanced minio client settings any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providers.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"aws": {
