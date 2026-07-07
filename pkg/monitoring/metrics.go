@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,32 +74,40 @@ var (
 			Help: "Number of existing Rancher Restore CRs",
 		},
 	)
+
+	setupMetricsOnce sync.Once
 )
 
-func init() {
-	buckets := defaultRancherBackupDurationBuckets
-	rancherBackupDurationBuckets := os.Getenv("BACKUP_DURATION_BUCKETS")
+// SetupBackupDurationMetric parses duration buckets from the environment and
+// initializes the backupDuration histogram metric. Other metrics in this package
+// are initialized statically on package import.
+func SetupBackupDurationMetric() {
+	setupMetricsOnce.Do(func() {
+		buckets := defaultRancherBackupDurationBuckets
+		rancherBackupDurationBuckets := os.Getenv("BACKUP_DURATION_BUCKETS")
 
-	if rancherBackupDurationBuckets != "" {
-		buckets = []float64{}
-		for _, b := range strings.Split(rancherBackupDurationBuckets, ",") {
-			f, err := strconv.ParseFloat(strings.TrimSpace(b), 64)
-			if err != nil {
-				logrus.Errorf("Failed to parse backup duration bucket '%s': %v", b, err)
-				return
+		if rancherBackupDurationBuckets != "" {
+			buckets = []float64{}
+			for _, b := range strings.Split(rancherBackupDurationBuckets, ",") {
+				f, err := strconv.ParseFloat(strings.TrimSpace(b), 64)
+				if err != nil {
+					logrus.Errorf("Failed to parse backup duration bucket '%s': %v. Falling back to default buckets.", b, err)
+					buckets = defaultRancherBackupDurationBuckets
+					break
+				}
+				buckets = append(buckets, f)
 			}
-			buckets = append(buckets, f)
 		}
-	}
 
-	logrus.Debugf("Backup duration buckets: %v", buckets)
-	backupDuration = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "rancher_backup_duration_seconds",
-			Help:    "Duration of each backup processed by this operator in seconds",
-			Buckets: buckets,
-		}, []string{"name"},
-	)
+		logrus.Debugf("Backup duration buckets: %v", buckets)
+		backupDuration = promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "rancher_backup_duration_seconds",
+				Help:    "Duration of each backup processed by this operator in seconds",
+				Buckets: buckets,
+			}, []string{"name"},
+		)
+	})
 }
 
 func updateBackupMetrics(backups []v1.Backup) {
