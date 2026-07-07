@@ -113,7 +113,6 @@ spec:
                         type: string
                     required:
                     - bucketName
-                    - credentialSecretName
                     - endpoint
                     type: object
                 type: object

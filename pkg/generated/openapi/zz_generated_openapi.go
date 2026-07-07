@@ -906,9 +906,8 @@ func schema_pkg_apis_resourcescattleio_v1_S3ObjectStore(ref common.ReferenceCall
 					},
 					"credentialSecretName": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"credentialSecretNamespace": {
@@ -942,7 +941,7 @@ func schema_pkg_apis_resourcescattleio_v1_S3ObjectStore(ref common.ReferenceCall
 						},
 					},
 				},
-				Required: []string{"endpoint", "credentialSecretName", "bucketName"},
+				Required: []string{"endpoint", "bucketName"},
 			},
 		},
 		Dependencies: []string{

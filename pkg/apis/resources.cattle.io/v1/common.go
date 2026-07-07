@@ -11,8 +11,9 @@ type S3ObjectStore struct {
 	// +optional
 	EndpointCA string `json:"endpointCA,omitempty"`
 	// +optional
-	InsecureTLSSkipVerify bool   `json:"insecureTLSSkipVerify,omitempty"`
-	CredentialSecretName  string `json:"credentialSecretName"`
+	InsecureTLSSkipVerify bool `json:"insecureTLSSkipVerify,omitempty"`
+	// +optional
+	CredentialSecretName string `json:"credentialSecretName,omitempty"`
 	// +optional
 	CredentialSecretNamespace string `json:"credentialSecretNamespace,omitempty"`
 	BucketName                string `json:"bucketName"`
