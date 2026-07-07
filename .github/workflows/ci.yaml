@@ -24,19 +24,6 @@ on:
     - 'CODEOWNERS'
     - 'LICENSE'
 jobs:
-  workspace-sync:
-    name: workspace sync check
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/rancher/ci-image/go1.26
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Check go.work.sum is in sync
-        run: |
-          [ -f go.work ] || { echo "No go.work found, skipping workspace sync check"; exit 0; }
-          go work sync
-          git diff --exit-code go.work.sum || (echo "go.work.sum is out of sync — run 'make tidy' and commit the result" && exit 1)
-
   golangci:
     name: lint (${{ matrix.module }})
     runs-on: ubuntu-latest

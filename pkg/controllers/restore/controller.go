@@ -270,7 +270,7 @@ func (h *handler) OnRestoreChange(_ string, restore *v1.Restore) (*v1.Restore, e
 	}
 
 	// prune by default
-	if restore.Spec.Prune == nil || *restore.Spec.Prune == true {
+	if restore.Spec.GetPrune() {
 		logrus.Infof("Pruning resources that are not part of the backup for restore CR %v", restore.Name)
 		if err := h.prune(objFromBackupCR.backupResourceSet.ResourceSelectors, transformerMap, objFromBackupCR, restore.Spec.DeleteTimeoutSeconds); err != nil {
 			h.scaleUpControllersFromResourceSet(objFromBackupCR)
