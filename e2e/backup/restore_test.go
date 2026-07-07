@@ -355,7 +355,6 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 		})
 	})
 
-
 	When("we're done with all test restores", func() {
 		Specify("we should eventually have the correct restore metadata metrics", func() {
 
