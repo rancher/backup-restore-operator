@@ -13,7 +13,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/rancher/backup-restore-operator/e2e/test"
+	"github.com/rancher/backup-restore-operator/e2e/fixtures"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/operator"
 	"github.com/testcontainers/testcontainers-go"
@@ -24,7 +24,7 @@ import (
 )
 
 func SetupRancherResourceSet(o *ObjectTracker) {
-	rsc := test.Data("rancher-resource-set-basic.yaml")
+	rsc := fixtures.Data("rancher-resource-set-basic.yaml")
 	rscObj := &backupv1.ResourceSet{}
 	Expect(yaml.Unmarshal(rsc, rscObj)).To(Succeed())
 	o.Add(rscObj)
@@ -45,7 +45,7 @@ func SetupOperator(ctx context.Context, kubeconfig *rest.Config, options operato
 
 func SetupEncryption(o *ObjectTracker) {
 	By("creating a generic secret for encryption configuration")
-	payload := test.Data("encryption.yaml")
+	payload := fixtures.Data("encryption.yaml")
 	encsecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      encSecret,
