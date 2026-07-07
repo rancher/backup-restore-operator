@@ -26,8 +26,12 @@ type ResourceSet struct {
 	ControllerReferences []ControllerReference `json:"controllerReferences,omitempty"`
 }
 
-// regex+list = OR //separate fields :AND
 type ResourceSelector struct {
+	// Selector logic:
+	// - Fields with matching names (e.g., Kinds + KindsRegexp, ResourceNames + ResourceNameRegexp, Namespaces + NamespaceRegexp) are combined via OR
+	// - Different field groups are combined via AND
+	// Example: (Kinds OR KindsRegexp) AND (ResourceNames OR ResourceNameRegexp) AND (Namespaces OR NamespaceRegexp)
+
 	// +required
 	APIVersion string `json:"apiVersion"`
 	// +listType=set

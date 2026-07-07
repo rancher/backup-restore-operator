@@ -62,7 +62,6 @@ spec:
           resourceSelectors:
             default: []
             items:
-              description: regex+list = OR //separate fields :AND
               properties:
                 apiVersion:
                   type: string
