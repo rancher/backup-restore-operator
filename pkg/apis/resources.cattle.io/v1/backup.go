@@ -1,0 +1,79 @@
+package v1
+
+import (
+	"github.com/rancher/wrangler/v3/pkg/condition"
+	"github.com/rancher/wrangler/v3/pkg/genericcondition"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+// BackupType enforces the valid registration modes
+// +kubebuilder:validation:Enum=One-time;Recurring
+type BackupType string
+
+const (
+	OneTimeBackupType   BackupType = "One-time"
+	RecurringBackupType BackupType = "Recurring"
+)
+
+var (
+	BackupConditionReady        condition.Cond = "Ready"
+	BackupConditionUploaded     condition.Cond = "Uploaded"
+	BackupConditionReconciling  condition.Cond = "Reconciling"
+	BackupConditionStalled      condition.Cond = "Stalled"
+	RestoreConditionReconciling condition.Cond = "Reconciling"
+	RestoreConditionStalled     condition.Cond = "Stalled"
+	RestoreConditionReady       condition.Cond = "Ready"
+)
+
+// +genclient
+// +genclient:nonNamespaced
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Location",type=string,JSONPath=`.status.storageLocation`
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.status.backupType`
+// +kubebuilder:printcolumn:name="Latest-Backup",type=string,JSONPath=`.status.filename`
+// +kubebuilder:printcolumn:name="ResourceSet",type=string,JSONPath=`.spec.resourceSetName`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].message`
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type Backup struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   BackupSpec   `json:"spec"`
+	Status BackupStatus `json:"status,omitempty"`
+}
+
+type BackupSpec struct {
+	// +optional
+	// +nullable
+	StorageLocation *StorageLocation `json:"storageLocation,omitempty"`
+	// Name of the ResourceSet CR to use for backup
+	// +required
+	ResourceSetName string `json:"resourceSetName"`
+	// Name of the Secret containing the encryption config
+	// +optional
+	EncryptionConfigSecretName string `json:"encryptionConfigSecretName,omitempty"`
+	// Cron schedule for recurring backups
+	// +kubebuilder:example="Descriptors: '@midnight'\nStandard crontab specs: 0 0 * * *"
+	// +optional
+	Schedule string `json:"schedule,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	RetentionCount int64 `json:"retentionCount,omitempty"`
+}
+
+type BackupStatus struct {
+	// +listType=map
+	// +listMapKey=type
+	Conditions         []genericcondition.GenericCondition `json:"conditions,omitempty"`
+	LastSnapshotTS     string                              `json:"lastSnapshotTs,omitempty"`
+	NextSnapshotAt     string                              `json:"nextSnapshotAt,omitempty"`
+	ObservedGeneration int64                               `json:"observedGeneration,omitempty"`
+	StorageLocation    string                              `json:"storageLocation,omitempty"`
+	BackupType         BackupType                          `json:"backupType,omitempty"`
+	Filename           string                              `json:"filename,omitempty"`
+	Summary            string                              `json:"summary,omitempty"`
+}

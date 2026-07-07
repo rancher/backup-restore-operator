@@ -151,7 +151,7 @@ func updateRestoreMetrics(restores []v1.Restore) {
 			r.Name,
 			restoreMessage,
 			r.Spec.BackupFilename,
-			strconv.FormatBool(*r.Spec.Prune),
+			strconv.FormatBool(r.Spec.GetPrune()),
 			r.Status.BackupSource,
 			r.Status.RestoreCompletionTS,
 		).Set(1)
