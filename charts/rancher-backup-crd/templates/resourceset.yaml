@@ -27,24 +27,32 @@ spec:
             type: string
           controllerReferences:
             default: []
+            description: ControllerReferences lists controllers to scale down during
+              restore operations.
             items:
+              description: ControllerReference identifies a controller to scale down
+                during restore operations.
               properties:
                 apiVersion:
+                  description: APIVersion of the controller resource (e.g., "apps/v1")
                   type: string
                 name:
+                  description: Name of the controller
                   type: string
                 namespace:
+                  description: Namespace where the controller lives
                   type: string
                 replicas:
+                  description: Populated at restore time from the live cluster
                   format: int32
                   type: integer
                 resource:
+                  description: Resource type (e.g., "deployments", "statefulsets")
                   type: string
               required:
               - apiVersion
               - name
               - namespace
-              - replicas
               - resource
               type: object
             type: array

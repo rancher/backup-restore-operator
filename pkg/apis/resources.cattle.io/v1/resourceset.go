@@ -20,6 +20,7 @@ type ResourceSet struct {
 	// +kubebuilder:default:={}
 	// +required
 	ResourceSelectors []ResourceSelector `json:"resourceSelectors"`
+	// ControllerReferences lists controllers to scale down during restore operations.
 	// +listType=atomic
 	// +kubebuilder:default:={}
 	// +optional
@@ -61,10 +62,21 @@ type ResourceSelector struct {
 	ExcludeResourceNameRegexp string `json:"excludeResourceNameRegexp,omitempty"`
 }
 
+// ControllerReference identifies a controller to scale down during restore operations.
 type ControllerReference struct {
+	// During restore, the controller reads the current replica count from the live cluster,
+	// scales the controller to 0, performs the restore, then scales back to the original count.
+	// The Replicas field is populated at restore time and should not be set manually.
+
+	// APIVersion of the controller resource (e.g., "apps/v1")
 	APIVersion string `json:"apiVersion"`
-	Resource   string `json:"resource"`
-	Namespace  string `json:"namespace"`
-	Name       string `json:"name"`
-	Replicas   int32  `json:"replicas"`
+	// Resource type (e.g., "deployments", "statefulsets")
+	Resource string `json:"resource"`
+	// Namespace where the controller lives
+	Namespace string `json:"namespace"`
+	// Name of the controller
+	Name string `json:"name"`
+	// Populated at restore time from the live cluster
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
 }
