@@ -27,7 +27,8 @@ builds:
         - CGO_ENABLED=0
 
     - id: bro-tool
-      main: ./cmd/tool/main.go
+      dir: ./cmd/tool
+      main: ./main.go
       goos:
         - linux
         - darwin
