@@ -352,6 +352,13 @@ func schema_pkg_apis_resourcescattleio_v1_ClientConfig(ref common.ReferenceCallb
 							Ref: ref("github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1.AwsConfig"),
 						},
 					},
+					"bucketLookup": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BucketLookup controls the bucket lookup mode. Supported values: \"auto\", \"dns\", \"path\".",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
