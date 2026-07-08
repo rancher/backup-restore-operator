@@ -29,11 +29,13 @@ type S3ObjectStore struct {
 // ClientConfig allows configuration of more advanced minio client settings
 // any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providers.
 type ClientConfig struct {
-	// TODO: Add setting to control lookup mode
 	// TODO: Add a setting for varying trace options that minio provides
 	// +optional
 	// +nullable
 	Aws *AwsConfig `json:"aws,omitempty"`
+	// BucketLookup controls the bucket lookup mode. Supported values: "auto", "dns", "path".
+	// +optional
+	BucketLookup string `json:"bucketLookup,omitempty"`
 }
 
 // AwsConfig holds AWS-specific S3 configuration.
