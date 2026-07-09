@@ -7,7 +7,7 @@ sources:
     name: Get current build base minor version from Dockerfile
     kind: dockerfile
     spec:
-      file: Dockerfile
+      file: package/Dockerfile
       instruction:
         keyword: ARG
         matcher: GO_IMAGE
