@@ -51,7 +51,7 @@ targets:
     scmid: default
     sourceid: latest_patch
     spec:
-      file: Dockerfile
+      file: package/Dockerfile
       instruction:
         keyword: ARG
         matcher: "GO_IMAGE"
