@@ -5,7 +5,7 @@ cd $(dirname $0)
 
 ./version
 ./test
-./validate
+./lint
 ./validate-ci
 ./package
 ./package-helm
