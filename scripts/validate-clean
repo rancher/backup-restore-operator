@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+# Check if git repository is clean (no uncommitted changes or untracked files)
+
+if ! git diff-index --quiet HEAD -- || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+    echo "Error: Git repository is not clean"
+    echo ""
+    echo "Uncommitted changes or untracked files detected:"
+    git status --short
+    exit 1
+fi
+
+echo "Git repository is clean"
+exit 0
