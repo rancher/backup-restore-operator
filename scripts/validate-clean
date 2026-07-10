@@ -3,11 +3,34 @@ set -e
 
 # Check if git repository is clean (no uncommitted changes or untracked files)
 
-if ! git diff-index --quiet HEAD -- || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+# Refresh the index to avoid false positives from stale timestamps
+git update-index --refresh >/dev/null 2>&1 || true
+
+untracked=$(git ls-files --others --exclude-standard)
+has_diff=false
+
+if ! git diff-index --quiet HEAD --; then
+    has_diff=true
+fi
+
+if [ "$has_diff" = "true" ] || [ -n "$untracked" ]; then
     echo "Error: Git repository is not clean"
     echo ""
-    echo "Uncommitted changes or untracked files detected:"
-    git status --short
+
+    if [ -n "$untracked" ]; then
+        echo "Untracked files:"
+        echo "$untracked" | sed 's/^/  /'
+        echo ""
+    fi
+
+    if [ "$has_diff" = "true" ]; then
+        echo "Uncommitted changes:"
+        git status --short
+        echo ""
+        echo "Diff:"
+        git diff HEAD
+    fi
+
     exit 1
 fi
 
