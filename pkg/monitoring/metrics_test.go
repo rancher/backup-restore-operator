@@ -12,6 +12,10 @@ import (
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func init() {
+	SetupBackupDurationMetric()
+}
+
 func resetMetrics() {
 	backupDuration.Reset()
 	backupLastProcessed.Reset()
@@ -205,6 +209,109 @@ rancher_restore_count 2
 # TYPE rancher_restore_info gauge
 rancher_restore_info{fileName="backup1.tar.gz",name="restore1",prune="true",restoreTime="1627849200",status="Restore completed successfully",storageLocation="s3"} 1
 rancher_restore_info{fileName="backup2.tar.gz",name="restore2",prune="false",restoreTime="1627849300",status="Restore failed",storageLocation="s3"} 1
+`
+	if err := promtestutil.CollectAndCompare(restore, strings.NewReader(expectedRestore), "rancher_restore_info"); err != nil {
+		t.Error("error when comparing resulting rancher_restore_info to expected values:", err)
+	}
+}
+
+func TestUpdateRestoreMetricsWithNilPrune(t *testing.T) {
+	t.Cleanup(resetMetrics)
+
+	// This test simulates how Kubernetes deserializes CRs when optional fields are not set
+	// In production, Prune is a *bool and will be nil if not specified in the YAML
+	restores := []v1.Restore{
+		{
+			ObjectMeta: k8sv1.ObjectMeta{Name: "restore-no-prune"},
+			Status: v1.RestoreStatus{
+				Conditions: []genericcondition.GenericCondition{
+					{Message: "Restore completed successfully"},
+				},
+				BackupSource:        "s3",
+				RestoreCompletionTS: "1627849200",
+			},
+			Spec: v1.RestoreSpec{
+				BackupFilename: "backup-no-prune.tar.gz",
+				Prune:          nil, // Simulates an unset prune field (nil); GetPrune() should default this to true
+			},
+		},
+	}
+
+	updateRestoreMetrics(restores)
+
+	// If we get here without panicking, the code handles nil Prune correctly
+	const expectedRestore = `
+# HELP rancher_restore_info Details on a specific Rancher Restore CR
+# TYPE rancher_restore_info gauge
+rancher_restore_info{fileName="backup-no-prune.tar.gz",name="restore-no-prune",prune="true",restoreTime="1627849200",status="Restore completed successfully",storageLocation="s3"} 1
+`
+	if err := promtestutil.CollectAndCompare(restore, strings.NewReader(expectedRestore), "rancher_restore_info"); err != nil {
+		t.Error("error when comparing resulting rancher_restore_info to expected values:", err)
+	}
+}
+
+func TestUpdateRestoreMetricsWithMixedPruneValues(t *testing.T) {
+	t.Cleanup(resetMetrics)
+	tr := true
+	f := false
+
+	// Mix of nil, true, and false to ensure all cases are handled
+	restores := []v1.Restore{
+		{
+			ObjectMeta: k8sv1.ObjectMeta{Name: "restore-nil-prune"},
+			Status: v1.RestoreStatus{
+				Conditions:          []genericcondition.GenericCondition{{Message: "Completed"}},
+				BackupSource:        "s3",
+				RestoreCompletionTS: "1627849200",
+			},
+			Spec: v1.RestoreSpec{
+				BackupFilename: "backup1.tar.gz",
+				Prune:          nil,
+			},
+		},
+		{
+			ObjectMeta: k8sv1.ObjectMeta{Name: "restore-true-prune"},
+			Status: v1.RestoreStatus{
+				Conditions:          []genericcondition.GenericCondition{{Message: "Completed"}},
+				BackupSource:        "s3",
+				RestoreCompletionTS: "1627849300",
+			},
+			Spec: v1.RestoreSpec{
+				BackupFilename: "backup2.tar.gz",
+				Prune:          &tr,
+			},
+		},
+		{
+			ObjectMeta: k8sv1.ObjectMeta{Name: "restore-false-prune"},
+			Status: v1.RestoreStatus{
+				Conditions:          []genericcondition.GenericCondition{{Message: "Completed"}},
+				BackupSource:        "s3",
+				RestoreCompletionTS: "1627849400",
+			},
+			Spec: v1.RestoreSpec{
+				BackupFilename: "backup3.tar.gz",
+				Prune:          &f,
+			},
+		},
+	}
+
+	updateRestoreMetrics(restores)
+
+	const expectedRestoreCount = `
+# HELP rancher_restore_count Number of existing Rancher Restore CRs
+# TYPE rancher_restore_count gauge
+rancher_restore_count 3
+`
+	if err := promtestutil.CollectAndCompare(restoreCount, strings.NewReader(expectedRestoreCount), "rancher_restore_count"); err != nil {
+		t.Error("error when comparing resulting rancher_restore_count to expected values:", err)
+	}
+
+	const expectedRestore = `
+# HELP rancher_restore_info Details on a specific Rancher Restore CR
+# TYPE rancher_restore_info gauge
+rancher_restore_info{fileName="backup1.tar.gz",name="restore-nil-prune",prune="true",restoreTime="1627849200",status="Completed",storageLocation="s3"} 1
+rancher_restore_info{fileName="backup2.tar.gz",name="restore-true-prune",prune="true",restoreTime="1627849300",status="Completed",storageLocation="s3"} 1
+rancher_restore_info{fileName="backup3.tar.gz",name="restore-false-prune",prune="false",restoreTime="1627849400",status="Completed",storageLocation="s3"} 1
 `
 	if err := promtestutil.CollectAndCompare(restore, strings.NewReader(expectedRestore), "rancher_restore_info"); err != nil {
 		t.Error("error when comparing resulting rancher_restore_info to expected values:", err)

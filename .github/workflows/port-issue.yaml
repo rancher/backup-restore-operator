@@ -10,6 +10,8 @@ on:
 jobs:
   port-issue:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/charts
     if: ${{ !github.event.issue.pull_request && (contains(github.event.comment.body, '/backport') || contains(github.event.comment.body, '/forwardport')) }}
     steps:
       - name: Check org membership or repo ownership

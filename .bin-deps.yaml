@@ -42,6 +42,20 @@ tools:
       download_template: "k3d-{os}-{arch}"
       # asset is the binary itself; no extract path needed
 
+  - name: kubectl
+    mode: pinned
+    source: flavio/kuberlr
+    # renovate: datasource=github-release-attachments depName=flavio/kuberlr
+    version: v0.7.0
+    checksums:
+      darwin/amd64: "5e3ddf382679ef0cf97e037e225c88fa17d546c75015b6cbb9df0aedb0aa47d4"
+      darwin/arm64: "e4ff7747d02e498af552cb4abc63d07adad6ee4ae8f7b9d31b4a9a98072614a4"
+      linux/amd64: "2f131dbf61d136eafcafa583f7884262972c6cc4059d8c811fc2e46ac7ca6128"
+      linux/arm64: "50a94652653cd067587878d45518326430c9a731e642cb05d0d8e4d3813b18be"
+    release:
+      download_template: "kuberlr_{version|trimprefix:v}_{os}_{arch}.tar.gz"
+      extract: "kuberlr_{version|trimprefix:v}_{os}_{arch}/kuberlr"
+
   - name: oras
     mode: pinned
     source: oras-project/oras
