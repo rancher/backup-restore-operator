@@ -2,7 +2,7 @@
 version: 2 # the goreleaser config version
 before:
   hooks:
-    - ./scripts/tidy
+    - ./scripts/validate-ci
     - make package-helm
 
 builds:
