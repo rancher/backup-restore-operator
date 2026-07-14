@@ -61,6 +61,9 @@ spec:
                               dualStack:
                                 type: boolean
                             type: object
+                          bucketLookup:
+                            nullable: true
+                            type: string
                         type: object
                       credentialSecretName:
                         nullable: true
