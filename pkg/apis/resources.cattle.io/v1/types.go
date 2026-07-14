@@ -142,9 +142,11 @@ type RestoreStatus struct {
 // ClientConfig allows configuration of more advanced minio client settings
 // any provider specific settings will be grouped accordingly, otherwise settings apply to all S3 providres.
 type ClientConfig struct {
-	// TODO: Add setting to control lookup mode
 	// TODO: Add a setting for varying trace options that minio provides
 	Aws *AwsConfig `json:"aws,omitempty"`
+	// BucketLookup controls the bucket lookup mode. Supported values: "auto", "dns", "path".
+	// +optional
+	BucketLookup string `json:"bucketLookup,omitempty"`
 }
 
 type AwsConfig struct {
