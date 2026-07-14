@@ -12,12 +12,12 @@ sources:
         keyword: ARG
         matcher: GO_IMAGE
     transformers:
-      # Value is "rancher/hardened-build-base:v1.24.9b1"
-      # Trim prefix to get "v1.24.9b1"
+      # Value is "rancher/hardened-build-base:v1.26.5b1"
+      # Trim prefix to get "v1.26.5b1"
       - trimprefix: "rancher/hardened-build-base:"
-      # Trim 'v' prefix to get "1.24.9b1"
+      # Trim 'v' prefix to get "1.26.5b1"
       - trimprefix: "v"
-      # This regex captures the major.minor to get "1.24"
+      # This regex captures the major.minor to get "1.26"
       # but it will be a list that will be handled in the next step
       - findsubmatch:
           pattern: '^([0-9]+\.[0-9]+)'
