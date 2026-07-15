@@ -1,0 +1,20 @@
+apiVersion: resources.cattle.io/v1
+kind: Restore
+metadata:
+  name: legacy-restore-with-nil-prune
+  # This restore mimics what would exist after an in-place restore
+  # from an older version that didn't have the Prune field
+spec:
+  backupFilename: "test-backup-2026-07-02T10-00-00Z.tar.gz"
+  # Prune field is intentionally omitted (nil) to replicate the bug condition
+  # In older versions or migrated resources, this field may not exist
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+      lastUpdateTime: "2026-07-02T10:30:00Z"
+      message: "Restore completed successfully"
+  restoreCompletionTs: "2026-07-02T10:30:00Z"
+  backupSource: "local"
+  summary: "Restored 42 resources"
+  observedGeneration: 1

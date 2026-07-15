@@ -80,11 +80,16 @@ k3d kubeconfig get "${CLUSTER_NAME}" > kubeconfig.yaml
 echo "==> Kubeconfig cluster info:"
 kubectl --kubeconfig=kubeconfig.yaml cluster-info
 
-# Run e2e tests
-echo "==> Running e2e tests"
+# Run all e2e tests
+# - backup tests use the shared cluster (via KUBECONFIG env var)
+# - upgrade-* tests create their own isolated clusters (ignore env vars)
+echo "==> Running all e2e tests"
 cd e2e
-KUBECONFIG="$(pwd)/../kubeconfig.yaml" \
-CHART_NAMESPACE="${CHART_NAMESPACE}" \
-    go test -v -timeout 10m -count=1 ./...
+export KUBECONFIG="$(pwd)/../kubeconfig.yaml"
+export CHART_NAMESPACE="${CHART_NAMESPACE}"
 
-echo "==> e2e tests completed successfully!"
+# Run all test packages
+# -p 2 allows running 2 packages in parallel since they use different clusters
+go test -v -timeout 20m -count=1 -p 2 ./...
+
+echo "==> All e2e tests completed successfully!"

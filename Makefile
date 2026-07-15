@@ -14,13 +14,21 @@ DOCKER_RUN = docker run --rm -i \
 	-w $(WORKDIR) \
 	$(CI_IMAGE)
 
+# Targets that require Docker (build/package tasks that need controlled environment)
+DOCKER_TARGETS := build build-tool ci package package-helm test tidy validate validate-ci version
+
 # Command runner:
 # - In CI: run commands directly
-# - Locally: run via Docker
+# - Locally: run via Docker only for specific targets
 ifeq ($(CI),true)
 	RUN =
 else
-	RUN = $(DOCKER_RUN)
+	# Check if current target requires Docker
+	ifneq ($(filter $(MAKECMDGOALS),$(DOCKER_TARGETS)),)
+		RUN = $(DOCKER_RUN)
+	else
+		RUN =
+	endif
 endif
 
 # ---- Build Config ----

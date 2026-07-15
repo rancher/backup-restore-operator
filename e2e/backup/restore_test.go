@@ -13,7 +13,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
-	"github.com/rancher/backup-restore-operator/e2e/test"
+	"github.com/rancher/backup-restore-operator/e2e/fixtures"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -106,7 +106,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 			By("uploading the preserve-unknown-fields backup")
 			ctxCa, caT := context.WithTimeout(testCtx, 10*time.Second)
 			defer caT()
-			preserveData := test.Data("restore/preserve-unknown-fields.tar.gz")
+			preserveData := fixtures.Data("restore/preserve-unknown-fields.tar.gz")
 			_, err := minioClient.PutObject(
 				ctxCa,
 				insecureBucket,
@@ -118,7 +118,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 			Expect(err).NotTo(HaveOccurred())
 
 			By("uploading deletion grace period backup")
-			deleteData := test.Data("restore/deletion-grace-period-seconds.tar.gz")
+			deleteData := fixtures.Data("restore/deletion-grace-period-seconds.tar.gz")
 			_, err = minioClient.PutObject(
 				ctxCa,
 				insecureBucket,
@@ -223,7 +223,7 @@ var _ = Describe("Restore from remote driver", Ordered, Label("integration"), fu
 			By("uploading the preserve-unknown-fields backup")
 			ctxCa, caT := context.WithTimeout(testCtx, 10*time.Second)
 			defer caT()
-			encryptData := test.Data("restore/encrypted-resources.tar.gz")
+			encryptData := fixtures.Data("restore/encrypted-resources.tar.gz")
 			_, err := minioClient.PutObject(
 				ctxCa,
 				secureBucket,

@@ -1,4 +1,4 @@
-package test
+package fixtures
 
 import (
 	"embed"
@@ -7,12 +7,12 @@ import (
 )
 
 var (
-	//go:embed data
+	//go:embed testdata
 	TestDataFS embed.FS
 )
 
 func Data(filename string) []byte {
-	data, err := fs.ReadFile(TestDataFS, path.Join("data", filename))
+	data, err := fs.ReadFile(TestDataFS, path.Join("testdata", filename))
 	if err != nil {
 		panic(err)
 	}

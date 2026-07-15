@@ -18,7 +18,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/rancher/backup-restore-operator/e2e/test"
+	"github.com/rancher/backup-restore-operator/e2e/fixtures"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/samber/lo"
 	"github.com/testcontainers/testcontainers-go"
@@ -664,7 +664,7 @@ var _ = Describe("Backup e2e local driver", Ordered, Label("integration"), func(
 		})
 
 		By("creating a generic secret for encryption configuration")
-		payload := test.Data("encryption.yaml")
+		payload := fixtures.Data("encryption.yaml")
 
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
