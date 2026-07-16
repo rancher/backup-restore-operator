@@ -1,4 +1,4 @@
-FROM rancher/hardened-build-base:v1.25.11b1 AS builder
+FROM rancher/hardened-build-base:v1.25.12b1 AS builder
 
 ARG TAG=''
 ARG REPO=''
