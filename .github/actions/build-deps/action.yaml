@@ -1,0 +1,30 @@
+name: build-deps
+description: Install the tooling needed to run the CI build job
+
+runs:
+  using: composite
+  steps:
+    - uses: rancherlabs/dep-fetch/actions/sync-deps@35f5facb2f545a6ebbba91f8a635cf2511ade703 # v0.2.0
+      with:
+        version: v0.2.0
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+    - name: Install Helm-unittest
+      shell: bash
+      run: |
+        ci-select helm helmv4 && \
+        helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
+
+    - name: Install python
+      shell: bash
+      run: |
+        zypper -n install --no-recommends \
+            python311 \
+            python311-pip \
+            && zypper clean -a \
+            && ln -sf /usr/bin/python3.11 /var/ci-tools/active/python3
+
+    - name: Set up chart-testing
+      uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b # v2.7.0
