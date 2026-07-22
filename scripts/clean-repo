@@ -1,0 +1,13 @@
+#!/bin/bash
+
+echo "Cleaning BRO repo artifacts"
+
+if [[ -d ./build ]]; then
+  echo "Cleaning old build artifacts..."
+  rm -rf ./build
+fi
+
+if [[ -d ./dist ]]; then
+  echo "Cleaning dist artifacts..."
+  rm -rf ./dist
+fi

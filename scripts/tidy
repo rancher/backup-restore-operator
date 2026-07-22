@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+
+cd $(dirname $0)/..
+
+echo "Tidying workspace modules"
+
+for module in . cmd/tool tests; do
+    [ -f "$module/go.mod" ] || continue
+    echo "go mod tidy: $module"
+    (cd "$module" && go mod tidy)
+done
+
+if [ -f go.work ]; then
+    echo "go work sync"
+    go work sync
+fi

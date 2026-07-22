@@ -1,0 +1,48 @@
+name: Push to rancher/charts
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to process (e.g. v9.0.2-rc.5)'
+        required: true
+        type: string
+
+jobs:
+  push-to-charts:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/charts
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Read App Credentials from Vault
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APPID;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATEKEY
+
+      - name: Generate GitHub App Token
+        id: generate_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ env.APPID }}
+          private-key: ${{ env.PRIVATEKEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: charts
+
+      - name: Push chart update to rancher/charts
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+          SOURCE_REPO: ${{ github.repository }}
+          BRO_DIR: ${{ github.workspace }}
+          CHARTS_DIR: ${{ github.workspace }}/charts-repo
+        run: ./.github/workflows/push-to-charts/run-gha.sh

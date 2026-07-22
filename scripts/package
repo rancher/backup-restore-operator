@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+source $(dirname $0)/version
+
+cd $(dirname $0)/..
+
+mkdir -p dist/artifacts
+
+IMAGE=${REPO}/backup-restore-operator:${TAG}
+DOCKERFILE=./package/Dockerfile
+if [ -e ${DOCKERFILE}.${ARCH} ]; then
+    DOCKERFILE=${DOCKERFILE}.${ARCH}
+fi
+
+if [[ ${USE_DOCKER_BUILDX} -eq 1 ]]; then
+    docker buildx build --platform linux/amd64 -f ${DOCKERFILE} . -t ${IMAGE} 
+else
+    docker build -f ${DOCKERFILE} -t ${IMAGE} .
+fi
+
+echo Built ${IMAGE}
+mkdir -p ./build/artifacts
+docker image save ${IMAGE} -o ./build/artifacts/backup-restore-operator.img
+
