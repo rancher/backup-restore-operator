@@ -1,0 +1,15 @@
+name: sync-deps
+description: Fetch and verify binary dependencies via dep-fetch, pinned to the version this repo supports.
+
+inputs:
+  version:
+    description: dep-fetch release tag to install
+    required: false
+    default: v0.2.0
+
+runs:
+  using: composite
+  steps:
+    - uses: rancherlabs/dep-fetch/actions/sync-deps@35f5facb2f545a6ebbba91f8a635cf2511ade703 # v0.2.0
+      with:
+        version: ${{ inputs.version }}
