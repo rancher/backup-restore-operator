@@ -6,7 +6,7 @@
 
 ## Description
 
-The Backup and Restore Operator provides the ability to back up and restore the Rancher application running on any Kubernetes cluster.
+TThe Backup and Restore Operator provides the ability to back up and restore the Rancher application running on any Kubernetes cluster.
 
 ### Use Cases
 - Performing a backup before upgrading Rancher and restoring after a failed upgrade.
