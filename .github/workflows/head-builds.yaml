@@ -1,10 +1,7 @@
 name : Branch head Prerelease Images
 
 on:
-  push:
-    branches:
-      - main
-      - release/v[0-9]+.(0|x)
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
