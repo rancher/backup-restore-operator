@@ -1,8 +1,11 @@
 name: Publish Images & artifacts (via goreleaser)
 on:
-  push:
-    tags:
-      - "*"
+  workflow_call:
+    inputs:
+      k3s_versions:
+        description: JSON array of K3S versions to run integration tests against
+        type: string
+        required: true
 env:
   PUBLIC_REGISTRY: docker.io
   PUBLIC_REPO: rancher
@@ -13,6 +16,8 @@ permissions:
 jobs:
   ci:
     uses: ./.github/workflows/ci.yaml
+    with:
+      k3s_versions: ${{ inputs.k3s_versions }}
     permissions:
       contents: read
   goreleaser:
