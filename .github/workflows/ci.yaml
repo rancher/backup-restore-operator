@@ -5,24 +5,11 @@ permissions:
 
 on:
   workflow_call:
-  push:
-    branches:
-      - main
-      - release/v[0-9]+.(0|x)
-      - release/v[0-9]+.[0-9]+.[0-9]+
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - '.gitignore'
-      - 'CODEOWNERS'
-      - 'LICENSE'
-  pull_request:
-    paths-ignore:
-    - 'docs/**'
-    - '*.md'
-    - '.gitignore'
-    - 'CODEOWNERS'
-    - 'LICENSE'
+    inputs:
+      k3s_versions:
+        description: JSON array of K3S versions to run integration tests against
+        type: string
+        required: true
 jobs:
   golangci:
     name: lint (${{ matrix.module }})
@@ -77,9 +64,7 @@ jobs:
         arch:
           - x64
           - arm64
-        K3S_VERSION:
-          - v1.34.5-k3s1
-          - v1.36.1-k3s1
+        K3S_VERSION: ${{ fromJSON(inputs.k3s_versions) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
