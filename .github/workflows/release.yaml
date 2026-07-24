@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 0
       - run: git fetch --force --tags
       - name: Install go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: 1.26
 
@@ -50,7 +50,7 @@ jobs:
           echo "metadata=$(tr -d '\n\r' < dist/metadata.json)" >> "${GITHUB_OUTPUT}"
           echo "artifacts=$(tr -d '\n\r' < dist/artifacts.json)" >> "${GITHUB_OUTPUT}"
       - name: Attest build provenance
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
         with:
           subject-path: dist/backup-restore-operator_*, build/artifacts/*.tgz
   push:
@@ -74,7 +74,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD ;
         # This encapsulates: login, qemu, build/push
       - name: Build and push BRO image (dockerhub and prime stg)
-        uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
+        uses: rancher/ecm-distro-tools/actions/publish-image@b558c3371d4a363f131e31a87d5c47dae2bbebe7 # v0.75.1
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
@@ -100,7 +100,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials password | PRIME_REGISTRY_PASSWORD ;
       - name: Build and push BRO image (prime prod)
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
-        uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
+        uses: rancher/ecm-distro-tools/actions/publish-image@b558c3371d4a363f131e31a87d5c47dae2bbebe7 # v0.75.1
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
