@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+
+cd $(dirname $0)
+
+./version
+./test
+./lint
+./validate-ci
+./package
+./package-helm
+./chart/lint
+./chart/test

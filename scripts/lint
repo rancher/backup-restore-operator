@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+cd $(dirname $0)/..
+
+echo Running validation
+
+if ! command -v golangci-lint; then
+    echo Skipping validation: no golangci-lint available
+    exit
+fi
+
+# Lint each workspace module independently so sub-module deps don't bleed into
+# each other's results and each module gets its own golangci config scope.
+for module in . cmd/tool; do
+    [ -f "$module/go.mod" ] || continue
+    echo "Running: golangci-lint in $module"
+    (cd "$module" && golangci-lint run)
+done

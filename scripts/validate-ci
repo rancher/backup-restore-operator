@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+cd $(dirname $0)/..
+
+./scripts/tidy
+./scripts/generate
+./scripts/validate-clean

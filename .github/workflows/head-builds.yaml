@@ -1,0 +1,77 @@
+name : Branch head Prerelease Images
+
+on:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: docker.io
+  REPO : rancher
+
+permissions:
+  contents: write
+
+jobs:
+  prebuild-env:
+    name: Prebuild needed Env vars
+    runs-on : runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
+    steps:
+      - name: Check out the repository to the runner
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set Branch Tag and Other Variables
+        id: set-vars
+        run: bash ./.github/scripts/branch-tags.sh >> $GITHUB_OUTPUT
+    outputs:
+      branch_tag: ${{ steps.set-vars.outputs.branch_tag }}
+      branch_static_tag: ${{ steps.set-vars.outputs.branch_static_tag }}
+      prev_tag: ${{ steps.set-vars.outputs.prev_tag }}
+  push:
+    needs : [
+      prebuild-env,
+    ]
+    permissions:
+      contents : read
+      id-token: write
+    name : Build and push BRO images
+    runs-on : runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
+    steps:
+      - name : "Read vault secrets"
+        uses : rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        if: ${{ github.repository_owner == 'rancher' }}
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD
+      - name : Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: rancherlabs/dep-fetch/actions/sync-deps@35f5facb2f545a6ebbba91f8a635cf2511ade703 # v0.2.0
+        with:
+          version: v0.2.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+      - name: Log in to the Container registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.DOCKER_USERNAME || vars.REPO }}
+          password: ${{ env.DOCKER_PASSWORD || secrets.DOCKER_PW }}
+      - name: Build and push BRO image
+        env:
+          FULL_IMAGE_URL: "${{ env.REGISTRY }}/${{ vars.REPO || env.REPO || github.repository_owner }}/backup-restore-operator"
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: ./package/Dockerfile
+          build-args: |
+            TAG=${{ needs.prebuild-env.outputs.branch_static_tag }}
+          push: true
+          tags: ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_static_tag }}
+          platforms: linux/amd64,linux/arm64
+      - name: Update rolling tag to new static tag
+        env:
+          FULL_IMAGE_URL: ${{ env.REGISTRY }}/${{ vars.REPO || env.REPO || github.repository_owner }}/backup-restore-operator
+        run: |
+          oras copy ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_static_tag }} ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_tag }}
