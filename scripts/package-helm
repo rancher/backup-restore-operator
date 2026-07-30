@@ -18,8 +18,8 @@ function edit-charts() {
 }
 
 function package-charts() {
-    helm package --debug -d ./dist/artifacts ./build/charts/rancher-backup
-    helm package --debug -d ./dist/artifacts ./build/charts/rancher-backup-crd
+    helm package --debug -d ./build/artifacts ./build/charts/rancher-backup
+    helm package --debug -d ./build/artifacts ./build/charts/rancher-backup-crd
 }
 
 if ! hash helm 2>/dev/null; then
@@ -31,8 +31,8 @@ cd $(dirname $0)/..
 source ./scripts/version
 
 
-rm -rf build/charts
-mkdir -p build dist/artifacts
+rm -rf build/charts build/artifacts
+mkdir -p build/artifacts
 cp -rf charts build/
 
 edit-charts ${HELM_CHART_VERSION} ${HELM_IMAGE_TAG}
