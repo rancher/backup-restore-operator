@@ -65,7 +65,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKeyID, secretKey string, useSSL bo
 	var client = &minio.Client{}
 	var cred credentials.Credentials
 	var tr = http.DefaultTransport
-	bucketLookup := getBucketLookupType(bc.Endpoint)
+	bucketLookup := getBucketLookupType(bc)
 	for retries := 0; retries <= s3ServerRetries; retries++ {
 		// if the s3 access key and secret is not set use iam role
 		if len(accessKeyID) == 0 && len(secretKey) == 0 {
@@ -177,11 +177,21 @@ func GetS3Client(ctx context.Context, objectStore *v1.S3ObjectStore, dynamicClie
 	return s3Client, nil
 }
 
-func getBucketLookupType(endpoint string) minio.BucketLookupType {
-	if endpoint == "" {
+func getBucketLookupType(bc *v1.S3ObjectStore) minio.BucketLookupType {
+	if bc == nil {
 		return minio.BucketLookupAuto
 	}
-	if strings.Contains(endpoint, "aliyun") {
+	if bc.ClientConfig != nil && bc.ClientConfig.BucketLookup != "" {
+		switch strings.ToLower(bc.ClientConfig.BucketLookup) {
+		case "dns":
+			return minio.BucketLookupDNS
+		case "path":
+			return minio.BucketLookupPath
+		case "auto":
+			return minio.BucketLookupAuto
+		}
+	}
+	if strings.Contains(bc.Endpoint, "aliyun") {
 		return minio.BucketLookupDNS
 	}
 	return minio.BucketLookupAuto
