@@ -1,0 +1,88 @@
+name: Backup Restore CI
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      k3s_versions:
+        description: JSON array of K3S versions to run integration tests against
+        type: string
+        required: true
+jobs:
+  golangci:
+    name: lint (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.26
+    strategy:
+      matrix:
+        module:
+          - .
+          - cmd/tool
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Check module exists
+        id: check
+        run: echo "exists=$([ -f '${{ matrix.module }}/go.mod' ] && echo true || echo false)" >> $GITHUB_OUTPUT
+      - uses: rancherlabs/dep-fetch/actions/sync-deps@35f5facb2f545a6ebbba91f8a635cf2511ade703 # v0.2.0
+        if: steps.check.outputs.exists == 'true'
+        with:
+          version: v0.2.0
+      - name: golangci-lint (${{ matrix.module }})
+        if: steps.check.outputs.exists == 'true'
+        run: golangci-lint run ./...
+        working-directory: ${{ matrix.module }}
+  build:
+    name: CI Build
+    strategy:
+      matrix:
+        arch:
+          - x64
+          - arm64
+    runs-on: runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
+    container:
+      image: ghcr.io/rancher/ci-image/go1.26
+    env:
+      CI: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: diogoasouza/backup-restore-operator/.github/actions/build-deps@automation-core
+      - name: CI
+        run: |
+          ci-select helm helmv4 && \
+          make ci
+  test:
+    name: integration-test
+    runs-on: runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
+    strategy:
+      matrix:
+        arch:
+          - x64
+          - arm64
+        K3S_VERSION: ${{ fromJSON(inputs.k3s_versions) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: diogoasouza/backup-restore-operator/.github/actions/test-deps@automation-core
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup helm charts
+        run: ./scripts/package-helm
+      - name: Debug
+        run: ls -R ./build/artifacts
+      - name: Setup test environment
+        run: |
+          CLUSTER_NAME=backup-restore K3S_VERSION=${{ matrix.K3S_VERSION }} ./scripts/testenv
+          k3d kubeconfig get backup-restore > kubeconfig.yaml
+      - name: Debug kubeconfig
+        run: cat kubeconfig.yaml
+      - name: Run e2e tests
+        run: |
+          cd e2e && KUBECONFIG=$KUBECONFIG CHART_NAMESPACE=cattle-resources-system go test -v -timeout 10m -count=1 ./...
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig.yaml

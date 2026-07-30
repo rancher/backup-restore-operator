@@ -1,0 +1,78 @@
+{
+  "regexManagers": [
+    {
+      "description": "mc version (binaries not on GitHub — run update-checksums.sh after bump)",
+      "fileMatch": ["^\\.github/workflows/scripts/install-mc\\.sh$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+) versioning=(?<versioning>[^\\s]+)\\nMC_VERSION=\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "{{datasource}}",
+      "depNameTemplate": "{{depName}}",
+      "versioningTemplate": "{{versioning}}"
+    }
+  ],
+  "extends": [
+    "github>rancher/renovate-config#release",
+    "group:allNonMajor"
+  ],
+  "baseBranches": [
+    "main",
+    "release/v10.x",
+    "release/v9.x",
+    "release/v8.x",
+    "release/v7.x",
+    "release/v6.x",
+    "release/v5.0"
+  ],
+  "ignoreDeps": [
+    "github.com/rancher/lasso",
+    "github.com/rancher/wrangler",
+    "github.com/rancher/wrangler/v2",
+    "github.com/rancher/wrangler/v3",
+    "github.com/imdario/mergo"
+  ],
+  "packageRules": [
+    {
+      "matchBaseBranches": ["main"],
+      "extends": ["github>rancher/renovate-config:rancher-main#main"]
+    },
+    {
+      "matchBaseBranches": ["release/v10.x"],
+      "extends": ["github>rancher/renovate-config:rancher-2.14#main"]
+    },
+    {
+      "matchBaseBranches": ["release/v9.x"],
+      "extends": ["github>rancher/renovate-config:rancher-2.13#main"]
+    },
+    {
+      "matchBaseBranches": ["release/v8.x"],
+      "extends": ["github>rancher/renovate-config:rancher-2.12#main"]
+    },
+    {
+      "matchBaseBranches": ["release/v7.x"],
+      "extends": ["github>rancher/renovate-config:rancher-2.11#main"]
+    },
+    {
+      "matchBaseBranches": ["release/v6.x"],
+      "extends": ["github>rancher/renovate-config:rancher-2.10#main"]
+    },
+    {
+      "matchBaseBranches": ["release/v5.0"],
+      "extends": ["github>rancher/renovate-config:rancher-2.9#main"]
+    },
+    {
+      "groupName": "GitHub Workflow Actions",
+      "groupSlug": "gha-deps",
+      "matchManagers": [
+        "github-actions"
+      ]
+    },
+    {
+      "groupName": "Docker File Deps",
+      "groupSlug": "docker-bumps",
+      "matchManagers": [
+        "dockerfile"
+      ]
+    }
+  ]
+}

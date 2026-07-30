@@ -1,0 +1,143 @@
+name: Publish Images & artifacts (via goreleaser)
+on:
+  workflow_call:
+    inputs:
+      k3s_versions:
+        description: JSON array of K3S versions to run integration tests against
+        type: string
+        required: true
+env:
+  PUBLIC_REGISTRY: docker.io
+  PUBLIC_REPO: rancher
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yaml
+    with:
+      k3s_versions: ${{ inputs.k3s_versions }}
+    permissions:
+      contents: read
+  goreleaser:
+    needs: [ ci ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - run: git fetch --force --tags
+      - name: Install go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: 1.26
+
+      - uses: rancherlabs/dep-fetch/actions/sync-deps@35f5facb2f545a6ebbba91f8a635cf2511ade703 # v0.2.0
+        with:
+          version: v0.2.0
+
+      - name: Run goreleaser
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |-
+          goreleaser release --clean
+          if [[ ! -f dist/metadata.json ]] || [[ ! -s dist/metadata.json ]]; then
+            echo "Missing required file: dist/metadata.json"
+            exit 1
+          fi
+          if [[ ! -f dist/artifacts.json ]] || [[ ! -s dist/artifacts.json ]]; then
+            echo "Missing required file: dist/artifacts.json"
+            exit 1
+          fi
+          echo "metadata=$(tr -d '\n\r' < dist/metadata.json)" >> "${GITHUB_OUTPUT}"
+          echo "artifacts=$(tr -d '\n\r' < dist/artifacts.json)" >> "${GITHUB_OUTPUT}"
+      - name: Attest build provenance
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: dist/backup-restore-operator_*, build/artifacts/*.tgz
+  push:
+    needs: [ ci ]
+    permissions:
+      contents: read
+      id-token: write
+    name: Build and push BRO images
+    runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: "Read vault secrets"
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials registry | PRIME_STG_REGISTRY ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | PRIME_STG_REGISTRY_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD ;
+        # This encapsulates: login, qemu, build/push
+      - name: Build and push BRO image (dockerhub and prime stg)
+        uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
+        with:
+          image: "backup-restore-operator"
+          tag: ${{ github.ref_name }}
+          public-registry: ${{ env.PUBLIC_REGISTRY }}
+          public-repo: ${{ env.PUBLIC_REPO }}
+          public-username: ${{ env.DOCKER_USERNAME || vars.DOCKER_USERNAME || github.repository_owner }}
+          public-password: ${{ env.DOCKER_PASSWORD || secrets.DOCKER_PASSWORD }}
+          push-to-prime: true
+          prime-registry: ${{ env.PRIME_STG_REGISTRY }}
+          prime-repo: rancher
+          prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
+          prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
+      - name: Check SemVer Characteristics
+        id: semver_check
+        run: bash ./.github/scripts/check-semver "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+      - name: "Read vault secrets"
+        if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials registry | PRIME_REGISTRY ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials username | PRIME_REGISTRY_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials password | PRIME_REGISTRY_PASSWORD ;
+      - name: Build and push BRO image (prime prod)
+        if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
+        uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
+        with:
+          image: "backup-restore-operator"
+          tag: ${{ github.ref_name }}
+          push-to-public: false
+          push-to-prime: true
+          prime-registry: ${{ env.PRIME_REGISTRY }}
+          prime-repo: rancher
+          prime-username: ${{ env.PRIME_REGISTRY_USERNAME }}
+          prime-password: ${{ env.PRIME_REGISTRY_PASSWORD }}
+  release:
+    runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
+    needs: [ ci, goreleaser, push ]
+    permissions:
+      contents: write
+    name: Un-draft release
+    steps:
+      - name: Fully publish release (retry until visible)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.ref_name }}"
+  
+          for i in {1..12}; do
+            if gh release view -R "${{ github.repository }}" "$tag" >/dev/null 2>&1; then
+              gh release edit -R "${{ github.repository }}" "$tag" --draft=false
+              exit 0
+            fi
+            echo "Release '$tag' not found yet (attempt $i/12). Sleeping 10s..."
+            sleep 10
+          done
+  
+          echo "Release '$tag' still not found after retries; failing."
+          exit 1
