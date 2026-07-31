@@ -6,7 +6,6 @@ This branch hosts the reusable GitHub Actions workflows and composite actions fo
 
 - `ci.yaml` — lint, build, and integration test. Takes `k3s_versions` (a JSON array as a string) as a required input, so each branch can set its own K3S versions to match their respective rancher minors.
 - `head-builds.yaml` — builds and pushes the prerelease image.
-- `release.yaml` — the tag-triggered release pipeline: runs `ci.yaml`, goreleaser, image publishing, and un-drafts the GitHub release. Also takes `k3s_versions`, which it forwards to `ci.yaml`.
 
 ## Calling a workflow from a release branch
 
@@ -30,8 +29,40 @@ jobs:
     secrets: inherit
 ```
 
-`head-builds.yaml` and `release.yaml` work the same way — same `uses:` pattern, different workflow file.
+`head-builds.yaml` works the same way — same `uses:` pattern, different workflow file.
 
 ## Actions
 
-`.github/actions/build-deps` and `.github/actions/test-deps` are composite actions used internally by `ci.yaml`. They're not meant to be called directly from a release branch.
+- `.github/actions/build-deps` and `.github/actions/test-deps` are composite actions used internally by `ci.yaml`. They're not meant to be called directly from a release branch.
+- `.github/actions/release` runs goreleaser, publishes the container images, and un-drafts the GitHub release. Unlike the workflows above, this one has to be called as a *step* rather than a reusable workflow — the image signing it does needs the job to be defined in the release branch's own file (at the tag being released), not in a file called in from a different ref. A release branch's `release.yaml` looks like:
+
+```yaml
+name: Publish Images & artifacts (via goreleaser)
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  ci:
+    uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@automation-core
+    with:
+      k3s_versions: '["v1.34.5-k3s1", "v1.36.1-k3s1"]'
+    permissions:
+      contents: read
+    secrets: inherit
+
+  release:
+    needs: [ ci ]
+    runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: rancher/backup-restore-operator/.github/actions/release@automation-core
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          docker-password: ${{ secrets.DOCKER_PASSWORD }}
+```
