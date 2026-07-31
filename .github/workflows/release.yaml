@@ -6,12 +6,23 @@ on:
       - "*"
 
 jobs:
-  release:
-    uses: rancher/backup-restore-operator/.github/workflows/release.yaml@automation-core
+  ci:
+    uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@automation-core
     with:
       k3s_versions: '["v1.34.5-k3s1", "v1.36.1-k3s1"]'
+    permissions:
+      contents: read
+    secrets: inherit
+
+  release:
+    needs: [ ci ]
+    runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
     permissions:
       contents: write
       id-token: write
       attestations: write
-    secrets: inherit
+    steps:
+      - uses: rancher/backup-restore-operator/.github/actions/release@automation-core
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          docker-password: ${{ secrets.DOCKER_PASSWORD }}
