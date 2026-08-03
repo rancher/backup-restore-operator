@@ -17,13 +17,12 @@ jobs:
     steps:
       - name: Check out the repository to the runner
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - name: Set Branch Tag and Other Variables
+      - uses: rancher/backup-restore-operator/actions/compute-branch-tags@automation-core
         id: set-vars
-        run: bash ./.github/scripts/branch-tags.sh >> $GITHUB_OUTPUT
     outputs:
       branch_tag: ${{ steps.set-vars.outputs.branch_tag }}
       branch_static_tag: ${{ steps.set-vars.outputs.branch_static_tag }}
-      prev_tag: ${{ steps.set-vars.outputs.prev_tag }}
+      prev_tag: ${{ steps.set-vars.outputs.prev_static_tag }}
   push:
     needs : [
       prebuild-env,

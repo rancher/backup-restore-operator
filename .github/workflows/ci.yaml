@@ -10,12 +10,16 @@ on:
         description: JSON array of K3S versions to run integration tests against
         type: string
         required: true
+      go-version:
+        description: Go version to use
+        type: string
+        required: true
 jobs:
   golangci:
     name: lint (${{ matrix.module }})
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/rancher/ci-image/go1.26
+      image: ghcr.io/rancher/ci-image/go${{ inputs.go-version }}
     strategy:
       matrix:
         module:
@@ -43,7 +47,7 @@ jobs:
           - arm64
     runs-on: runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     container:
-      image: ghcr.io/rancher/ci-image/go1.26
+      image: ghcr.io/rancher/ci-image/go${{ inputs.go-version }}
     env:
       CI: true
     steps:
@@ -51,7 +55,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-      - uses: rancher/backup-restore-operator/.github/actions/build-deps@automation-core
+      - uses: rancher/backup-restore-operator/actions/build-deps@automation-core
       - name: CI
         run: |
           ci-select helm helmv4 && \
@@ -68,7 +72,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: rancher/backup-restore-operator/.github/actions/test-deps@automation-core
+      - uses: rancher/backup-restore-operator/actions/test-deps@automation-core
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup helm charts

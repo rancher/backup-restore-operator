@@ -1,0 +1,21 @@
+name: compute-branch-tags
+description: Calculate branch tags for head builds
+
+outputs:
+  branch_tag:
+    description: The branch tag for this build
+    value: ${{ steps.compute.outputs.branch_tag }}
+  branch_static_tag:
+    description: The current static branch tag
+    value: ${{ steps.compute.outputs.branch_static_tag }}
+  prev_static_tag:
+    description: The previous static branch tag
+    value: ${{ steps.compute.outputs.prev_static_tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Compute branch tags
+      id: compute
+      shell: bash
+      run: bash ${{ github.action_path }}/../../.github/scripts/branch-tags.sh >> "$GITHUB_OUTPUT"
