@@ -18,4 +18,4 @@ runs:
     - name: Compute branch tags
       id: compute
       shell: bash
-      run: bash ${{ github.action_path }}/../../.github/scripts/branch-tags.sh >> "$GITHUB_OUTPUT"
+      run: bash ${{ github.action_path }}/branch-tags.sh >> "$GITHUB_OUTPUT"

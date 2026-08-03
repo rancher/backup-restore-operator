@@ -21,4 +21,4 @@ runs:
     - name: Check semver characteristics
       id: check
       shell: bash
-      run: bash ${{ github.action_path }}/../../.github/scripts/check-semver.sh "${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+      run: bash ${{ github.action_path }}/check-semver.sh "${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
