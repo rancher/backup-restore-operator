@@ -24,7 +24,9 @@ automation-core/
 
 ## Workflows
 
-- `ci.yaml` — lint, build, and integration test. Takes `k3s_versions` (a JSON array as a string) as a required input, so each branch can set its own K3S versions to match their respective rancher minors.
+- `ci.yaml` — lint, build, and integration test. Takes required inputs:
+  - `k3s_versions` (JSON array as a string) - K3S versions for integration tests
+  - `go-version` (string) - Go version to use (e.g., "1.26", "1.27")
 - `head-builds.yaml` — builds and pushes the prerelease image.
 
 ## Calling a workflow from a release branch
@@ -44,6 +46,7 @@ jobs:
     uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@automation-core
     with:
       k3s_versions: '["v1.34.5-k3s1", "v1.36.1-k3s1"]'
+      go-version: "1.26"
     permissions:
       contents: read
     secrets: inherit
@@ -53,26 +56,89 @@ jobs:
 
 ## Actions
 
+### Atomic Actions (for release branches)
+
+These focused actions can be composed together in release branch workflows:
+
+#### `check-semver`
+Parses semantic version characteristics from a tag.
+
+**Inputs:**
+- `tag` (optional, default: `${{ github.ref_name }}`)
+
+**Outputs:**
+- `HAS_PRERELEASE` - Whether the tag has a prerelease identifier
+- `HAS_BUILD_META` - Whether the tag has build metadata
+
+**Example:**
+```yaml
+- uses: rancher/backup-restore-operator/actions/check-semver@automation-core
+  id: semver_check
+  with:
+    tag: ${{ github.ref_name }}
+```
+
+#### `compute-branch-tags`
+Calculates branch tags for head builds.
+
+**Outputs:**
+- `branch_tag` - The branch tag for this build
+- `branch_static_tag` - The current static branch tag
+- `prev_static_tag` - The previous static branch tag
+
+**Example:**
+```yaml
+- uses: rancher/backup-restore-operator/actions/compute-branch-tags@automation-core
+  id: branch_tags
+```
+
+#### `undraft-release`
+Undrafts a GitHub release with retry logic (waits up to 2 minutes for release to become visible).
+
+**Inputs:**
+- `github-token` (required)
+- `tag` (optional, default: `${{ github.ref_name }}`)
+
+**Example:**
+```yaml
+- uses: rancher/backup-restore-operator/actions/undraft-release@automation-core
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+#### `run-goreleaser`
+Executes goreleaser and validates outputs.
+
+**Inputs:**
+- `github-token` (required)
+- `tag` (optional, default: `${{ github.ref_name }}`)
+- `go-version` (optional, default: "1.26")
+
+**Outputs:**
+- `metadata` - Contents of dist/metadata.json
+- `artifacts` - Contents of dist/artifacts.json
+
+**Example:**
+```yaml
+- uses: rancher/backup-restore-operator/actions/run-goreleaser@automation-core
+  id: goreleaser
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    go-version: "1.26"
+```
+
+**Note:** SLSA attestation must be done in the job definition on the release branch (after this action), not within this action, due to OIDC binding requirements.
+
 ### Internal Actions (used by workflows)
 
 - `actions/build-deps` and `actions/test-deps` are composite actions used internally by `ci.yaml`. They're not meant to be called directly from a release branch.
 
-### Release Action
+### Security Boundaries
 
-**IMPORTANT**: The `actions/release` action has specific requirements due to GitHub Actions security boundaries.
+Due to GitHub Actions security and OIDC binding requirements, the following **MUST** be done in the release branch's workflow file:
 
-#### What the Release Action Does
-
-- Runs goreleaser to build binaries and Helm charts
-- Publishes container images to Docker Hub and Prime registries
-- Un-drafts the GitHub release
-
-#### What Must Stay on Release Branch
-
-Due to GitHub Actions security and OIDC binding requirements, the following **MUST** be done in the release branch's workflow file, not in this composite action:
-
-1. **Vault Secret Reading**: Vault paths are per-repo and per-branch context. The release branch must read vault secrets and pass them as inputs.
-2. **SLSA Attestation**: OIDC tokens are bound to the workflow file on the tagged branch. Attestation must be a step in the job definition on the release branch.
+1. **Vault Secret Reading**: Vault paths are per-repo and per-branch context. Release branches must read vault secrets and pass them as inputs to actions.
+2. **SLSA Attestation**: OIDC tokens are bound to the workflow file on the tagged branch. Attestation must be a step in the job definition on the release branch (after `run-goreleaser`).
 
 #### Example Release Workflow (on release branch)
 
@@ -97,6 +163,7 @@ jobs:
     uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@automation-core
     with:
       k3s_versions: '["v1.34.5-k3s1", "v1.36.1-k3s1"]'
+      go-version: "1.26"
     permissions:
       contents: read
 
@@ -104,23 +171,11 @@ jobs:
     needs: [ci]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: rancher/backup-restore-operator/actions/run-goreleaser@automation-core
+        id: goreleaser
         with:
-          fetch-depth: 0
-      - run: git fetch --force --tags
-
-      - name: Install go
-        uses: actions/setup-go@v6
-        with:
-          go-version: 1.26
-
-      - uses: rancherlabs/dep-fetch/actions/sync-deps@v0.2.0
-
-      - name: Run goreleaser
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
-        run: goreleaser release --clean
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          go-version: "1.26"
 
       # SLSA attestation MUST stay on release branch (OIDC binding)
       - name: Attest build provenance
@@ -148,25 +203,58 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | PRIME_STG_REGISTRY_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD ;
 
-      # Now call the release action with credentials passed as inputs
-      - uses: rancher/backup-restore-operator/actions/release@automation-core
+      # Call publish-image directly (from ecm-distro-tools)
+      - uses: rancher/ecm-distro-tools/actions/publish-image@v0.74.2
+        with:
+          image: "backup-restore-operator"
+          tag: ${{ github.ref_name }}
+          public-registry: ${{ env.PUBLIC_REGISTRY }}
+          public-repo: ${{ env.PUBLIC_REPO }}
+          public-username: ${{ env.DOCKER_USERNAME }}
+          public-password: ${{ env.DOCKER_PASSWORD }}
+          push-to-prime: true
+          prime-registry: ${{ env.PRIME_STG_REGISTRY }}
+          prime-repo: rancher
+          prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
+          prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
+
+      - uses: rancher/backup-restore-operator/actions/check-semver@automation-core
+        id: semver_check
+        with:
+          tag: ${{ github.ref_name }}
+
+      # For stable releases (no prerelease), also push to prime production
+      - name: "Read vault secrets (prime prod)"
+        if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
+        uses: rancher-eio/read-vault-secrets@v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials registry | PRIME_REGISTRY ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials username | PRIME_REGISTRY_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials password | PRIME_REGISTRY_PASSWORD ;
+
+      - uses: rancher/ecm-distro-tools/actions/publish-image@v0.74.2
+        if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
+        with:
+          image: "backup-restore-operator"
+          tag: ${{ github.ref_name }}
+          push-to-public: false
+          push-to-prime: true
+          prime-registry: ${{ env.PRIME_REGISTRY }}
+          prime-repo: rancher
+          prime-username: ${{ env.PRIME_REGISTRY_USERNAME }}
+          prime-password: ${{ env.PRIME_REGISTRY_PASSWORD }}
+
+  release:
+    needs: [ci, goreleaser, push]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: rancher/backup-restore-operator/actions/undraft-release@automation-core
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          docker-username: ${{ env.DOCKER_USERNAME }}
-          docker-password: ${{ env.DOCKER_PASSWORD }}
-          prime-stg-registry: ${{ env.PRIME_STG_REGISTRY }}
-          prime-stg-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
-          prime-stg-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
-          # For stable releases, also provide prime prod credentials:
-          # prime-registry: ${{ env.PRIME_REGISTRY }}
-          # prime-username: ${{ env.PRIME_REGISTRY_USERNAME }}
-          # prime-password: ${{ env.PRIME_REGISTRY_PASSWORD }}
 ```
-
-#### Why These Restrictions Exist
-
-- **Vault**: Composite actions cannot access the `vars` context (GitHub security restriction). Vault secret paths are per-repo and per-branch.
-- **OIDC/SLSA**: OIDC tokens used for image signing and SLSA attestations are bound to the workflow file on the specific branch/tag being released. Moving attestation to a composite action breaks this binding.
 
 ## Shared Scripts
 

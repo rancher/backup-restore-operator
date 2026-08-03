@@ -1,0 +1,24 @@
+name: check-semver
+description: Parse semantic version characteristics
+
+inputs:
+  tag:
+    description: The tag to check
+    required: false
+    default: ${{ github.ref_name }}
+
+outputs:
+  HAS_PRERELEASE:
+    description: Whether the tag has a prerelease identifier
+    value: ${{ steps.check.outputs.HAS_PRERELEASE }}
+  HAS_BUILD_META:
+    description: Whether the tag has build metadata
+    value: ${{ steps.check.outputs.HAS_BUILD_META }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check semver characteristics
+      id: check
+      shell: bash
+      run: bash ${{ github.action_path }}/check-semver.sh "${{ inputs.tag }}" >> "$GITHUB_OUTPUT"

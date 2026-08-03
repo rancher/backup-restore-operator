@@ -1,0 +1,34 @@
+name: undraft-release
+description: Undraft GitHub release with retry logic
+
+inputs:
+  github-token:
+    description: GitHub token for gh CLI
+    required: true
+  tag:
+    description: The release tag to undraft
+    required: false
+    default: ${{ github.ref_name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Fully publish release (retry until visible)
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        tag="${{ inputs.tag }}"
+
+        for i in {1..12}; do
+          if gh release view -R "${{ github.repository }}" "$tag" >/dev/null 2>&1; then
+            gh release edit -R "${{ github.repository }}" "$tag" --draft=false
+            exit 0
+          fi
+          echo "Release '$tag' not found yet (attempt $i/12). Sleeping 10s..."
+          sleep 10
+        done
+
+        echo "Release '$tag' still not found after retries; failing."
+        exit 1
