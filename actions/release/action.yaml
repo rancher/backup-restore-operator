@@ -3,10 +3,39 @@ description: Run goreleaser, publish container images, and un-draft the GitHub r
 
 inputs:
   github-token:
-    description: Token used for goreleaser, gh CLI calls, and attestation
+    description: Token used for goreleaser, gh CLI calls, and undraft release
+    required: true
+
+  # Docker Hub credentials (public registry)
+  docker-username:
+    description: Docker Hub username
     required: true
   docker-password:
-    description: Fallback Docker Hub password, used when vault secrets aren't available (e.g. fork PRs)
+    description: Docker Hub password
+    required: true
+
+  # Prime staging registry credentials
+  prime-stg-registry:
+    description: Prime staging registry URL
+    required: true
+  prime-stg-username:
+    description: Prime staging registry username
+    required: true
+  prime-stg-password:
+    description: Prime staging registry password
+    required: true
+
+  # Prime production registry credentials (optional - only for stable releases)
+  prime-registry:
+    description: Prime production registry URL
+    required: false
+    default: ""
+  prime-username:
+    description: Prime production registry username
+    required: false
+    default: ""
+  prime-password:
+    description: Prime production registry password
     required: false
     default: ""
 
@@ -44,21 +73,16 @@ runs:
         fi
         echo "metadata=$(tr -d '\n\r' < dist/metadata.json)" >> "${GITHUB_OUTPUT}"
         echo "artifacts=$(tr -d '\n\r' < dist/artifacts.json)" >> "${GITHUB_OUTPUT}"
-    - name: Attest build provenance
-      uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
-      with:
-        subject-path: dist/backup-restore-operator_*, build/artifacts/*.tgz
 
-    - name: "Read vault secrets"
-      uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-      with:
-        secrets: |
-          secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
-          secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD ;
-          secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials registry | PRIME_STG_REGISTRY ;
-          secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | PRIME_STG_REGISTRY_USERNAME ;
-          secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD ;
-      # This encapsulates: login, qemu, build/push
+    # NOTE: SLSA attestation MUST be done in the calling workflow's job definition
+    # (not in this composite action) due to OIDC token binding requirements.
+    # See documentation in README.md for details.
+
+    # NOTE: Vault secrets MUST be read in the calling workflow (not here)
+    # and passed as inputs to this action. This action does not have access
+    # to vault or the vars/secrets contexts.
+
+    # This encapsulates: login, qemu, build/push
     - name: Build and push BRO image (dockerhub and prime stg)
       uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
       with:
@@ -66,37 +90,34 @@ runs:
         tag: ${{ github.ref_name }}
         public-registry: docker.io
         public-repo: rancher
-        public-username: ${{ env.DOCKER_USERNAME || vars.DOCKER_USERNAME || github.repository_owner }}
-        public-password: ${{ env.DOCKER_PASSWORD || inputs.docker-password }}
+        public-username: ${{ inputs.docker-username }}
+        public-password: ${{ inputs.docker-password }}
         push-to-prime: true
-        prime-registry: ${{ env.PRIME_STG_REGISTRY }}
+        prime-registry: ${{ inputs.prime-stg-registry }}
         prime-repo: rancher
-        prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
-        prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
+        prime-username: ${{ inputs.prime-stg-username }}
+        prime-password: ${{ inputs.prime-stg-password }}
     - name: Check SemVer Characteristics
       id: semver_check
       shell: bash
-      run: bash ./.github/scripts/check-semver "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-    - name: "Read vault secrets"
-      if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
-      uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-      with:
-        secrets: |
-          secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials registry | PRIME_REGISTRY ;
-          secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials username | PRIME_REGISTRY_USERNAME ;
-          secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials password | PRIME_REGISTRY_PASSWORD ;
+      run: |
+        # NOTE: This script is in the automation-core branch at .github/scripts/check-semver.sh
+        # For now, we expect it to exist in the calling repo's .github/scripts/ directory
+        # TODO: In P2, create a check-semver action that wraps this script
+        bash ./.github/scripts/check-semver "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
     - name: Build and push BRO image (prime prod)
-      if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
+      if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' && inputs.prime-registry != '' }}
       uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
       with:
         image: "backup-restore-operator"
         tag: ${{ github.ref_name }}
         push-to-public: false
         push-to-prime: true
-        prime-registry: ${{ env.PRIME_REGISTRY }}
+        prime-registry: ${{ inputs.prime-registry }}
         prime-repo: rancher
-        prime-username: ${{ env.PRIME_REGISTRY_USERNAME }}
-        prime-password: ${{ env.PRIME_REGISTRY_PASSWORD }}
+        prime-username: ${{ inputs.prime-username }}
+        prime-password: ${{ inputs.prime-password }}
 
     - name: Fully publish release (retry until visible)
       env:
