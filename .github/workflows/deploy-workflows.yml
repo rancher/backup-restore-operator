@@ -25,16 +25,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Load Secrets from Vault
-        uses: rancher-eio/read-vault-secrets@7282bf97898cd1c16c89f837e0bb442e6d384c89 # main
+      - name: Read App Credentials from Vault
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
-            secret/data/github/org/${{ github.repository_owner }}/github/app-rancher-automations appId | APP_ID ;
-            secret/data/github/org/${{ github.repository_owner }}/github/app-rancher-automations privateKey | PRIVATE_KEY
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APPID;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATEKEY
 
       - name: Get GitHub App token
         id: get_token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ env.APP_ID }}
           private-key: ${{ env.PRIVATE_KEY }}
@@ -42,7 +42,7 @@ jobs:
           repositories: ${{ github.event.repository.name }}
 
       - name: Checkout automation-core
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
           token: ${{ steps.get_token.outputs.token }}
@@ -50,7 +50,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout target branch
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.targetBranch }}
           token: ${{ steps.get_token.outputs.token }}
