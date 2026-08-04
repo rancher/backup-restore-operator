@@ -19,7 +19,6 @@ jobs:
     uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@automation-core
     with:
       k3s_versions: '["v1.34.5-k3s1", "v1.36.1-k3s1"]'
-      go-version: "1.26"
     permissions:
       contents: read
 
@@ -31,7 +30,6 @@ jobs:
         id: goreleaser
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          go-version: "1.26"
 
       # SLSA attestation stays on release branch (OIDC binding requirement)
       - name: Attest build provenance
