@@ -72,29 +72,43 @@ jobs:
           git config --global user.name "renovate-rancher[bot]"
           gh auth setup-git
 
-          cd target-repo
-          git checkout -b "${DEPLOY_BRANCH}"
-
-          # Copy workflow templates
-          mkdir -p .github/workflows
+          # Create staging directory for templates
+          STAGING_DIR=$(mktemp -d)
 
           # Process ci.yaml template
           sed -e "s|{{K3S_VERSIONS}}|${K3S_VERSIONS}|g" \
               -e "s|{{AUTOMATION_CORE_REF}}|@${AUTOMATION_CORE_REF}|g" \
-              ../automation-core/workflow-templates/ci.yaml.tmpl \
-              > .github/workflows/ci.yaml
+              automation-core/workflow-templates/ci.yaml.tmpl \
+              > "${STAGING_DIR}/ci.yaml"
 
           # Process release.yaml template
           sed -e "s|{{K3S_VERSIONS}}|${K3S_VERSIONS}|g" \
               -e "s|{{AUTOMATION_CORE_REF}}|@${AUTOMATION_CORE_REF}|g" \
-              ../automation-core/workflow-templates/release.yaml.tmpl \
-              > .github/workflows/release.yaml
+              automation-core/workflow-templates/release.yaml.tmpl \
+              > "${STAGING_DIR}/release.yaml"
 
           # Process head-builds.yaml template
           sed -e "s|{{AUTOMATION_CORE_REF}}|@${AUTOMATION_CORE_REF}|g" \
-              ../automation-core/workflow-templates/head-builds.yaml.tmpl \
-              > .github/workflows/head-builds.yaml
+              automation-core/workflow-templates/head-builds.yaml.tmpl \
+              > "${STAGING_DIR}/head-builds.yaml"
 
+          # Validate YAML syntax
+          echo "Validating generated workflow files..."
+          for workflow in "${STAGING_DIR}"/*.yaml; do
+            echo "  Validating $(basename "$workflow")..."
+            yq eval '.' "$workflow" > /dev/null || {
+              echo "ERROR: Invalid YAML in $(basename "$workflow")"
+              exit 1
+            }
+          done
+          echo "All workflow files are valid YAML"
+
+          cd target-repo
+          git checkout -b "${DEPLOY_BRANCH}"
+
+          # Copy validated workflow templates to target
+          mkdir -p .github/workflows
+          cp "${STAGING_DIR}"/*.yaml .github/workflows/
           git add .github/workflows/
 
           # Check if there are changes
