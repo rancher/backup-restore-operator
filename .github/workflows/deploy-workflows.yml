@@ -25,12 +25,12 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Load Secrets from Vault
-        uses: rancher-eio/read-vault-secrets@7282bf97898cd1c16c89f837e0bb442e6d384c89 # main
+      - name: Read App Credentials from Vault
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
-            secret/data/github/org/${{ github.repository_owner }}/github/app-rancher-automations appId | APP_ID ;
-            secret/data/github/org/${{ github.repository_owner }}/github/app-rancher-automations privateKey | PRIVATE_KEY
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APPID;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATEKEY
 
       - name: Get GitHub App token
         id: get_token
