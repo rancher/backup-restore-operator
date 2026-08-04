@@ -16,7 +16,10 @@ permissions:
 
 jobs:
   ci:
-    uses: ./.github/workflows/ci.yaml
+    uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@automation-core
+    with:
+      k3s_versions: '["v1.34.5-k3s1", "v1.36.1-k3s1"]'
+      go-version: "1.26"
     permissions:
       contents: read
 
@@ -24,36 +27,11 @@ jobs:
     needs: [ci]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: rancher/backup-restore-operator/actions/run-goreleaser@automation-core
+        id: goreleaser
         with:
-          fetch-depth: 0
-      - run: git fetch --force --tags
-      - name: Install go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
-        with:
-          go-version: 1.26
-
-      - uses: rancherlabs/dep-fetch/actions/sync-deps@35f5facb2f545a6ebbba91f8a635cf2511ade703 # v0.2.0
-        with:
-          version: v0.2.0
-
-      - name: Run goreleaser
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
-        shell: bash
-        run: |-
-          goreleaser release --clean
-          if [[ ! -f dist/metadata.json ]] || [[ ! -s dist/metadata.json ]]; then
-            echo "Missing required file: dist/metadata.json"
-            exit 1
-          fi
-          if [[ ! -f dist/artifacts.json ]] || [[ ! -s dist/artifacts.json ]]; then
-            echo "Missing required file: dist/artifacts.json"
-            exit 1
-          fi
-          echo "metadata=$(tr -d '\n\r' < dist/metadata.json)" >> "${GITHUB_OUTPUT}"
-          echo "artifacts=$(tr -d '\n\r' < dist/artifacts.json)" >> "${GITHUB_OUTPUT}"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          go-version: "1.26"
 
       # SLSA attestation stays on release branch (OIDC binding requirement)
       - name: Attest build provenance
@@ -99,9 +77,10 @@ jobs:
           prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
           prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
 
-      - name: Check SemVer Characteristics
+      - uses: rancher/backup-restore-operator/actions/check-semver@automation-core
         id: semver_check
-        run: bash ./.github/scripts/check-semver "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+        with:
+          tag: ${{ github.ref_name }}
 
       - name: "Read vault secrets"
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
@@ -132,22 +111,6 @@ jobs:
       contents: write
     name: Un-draft release
     steps:
-      - name: Fully publish release (retry until visible)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag="${{ github.ref_name }}"
-
-          for i in {1..12}; do
-            if gh release view -R "${{ github.repository }}" "$tag" >/dev/null 2>&1; then
-              gh release edit -R "${{ github.repository }}" "$tag" --draft=false
-              exit 0
-            fi
-            echo "Release '$tag' not found yet (attempt $i/12). Sleeping 10s..."
-            sleep 10
-          done
-
-          echo "Release '$tag' still not found after retries; failing."
-          exit 1
+      - uses: rancher/backup-restore-operator/actions/undraft-release@automation-core
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
