@@ -6,27 +6,38 @@ This branch hosts the reusable GitHub Actions workflows and composite actions fo
 
 ```
 automation-core/
-├── actions/                    # Composite actions (at root, not .github/actions)
+├── actions/                         # Composite actions (reusable)
 │   ├── build-deps/
 │   ├── test-deps/
-│   └── release/
+│   ├── check-semver/
+│   │   ├── action.yaml
+│   │   └── check-semver.sh          # Script lives with action
+│   ├── compute-branch-tags/
+│   │   ├── action.yaml
+│   │   └── branch-tags.sh           # Script lives with action
+│   ├── undraft-release/
+│   │   └── action.yaml
+│   └── run-goreleaser/
+│       └── action.yaml
+├── workflow-templates/              # Workflow templates (reusable)
+│   ├── ci.yaml.tmpl
+│   ├── release.yaml.tmpl
+│   ├── head-builds.yaml.tmpl
+│   └── README.md
 ├── .github/
-│   ├── workflows/              # Reusable workflows
-│   │   ├── ci.yaml
-│   │   └── head-builds.yaml
-│   └── scripts/                # Shared scripts
-│       ├── check-semver.sh
-│       └── branch-tags.sh
+│   └── workflows/                   # Workflows that run on automation-core
+│       ├── ci.yaml
+│       ├── head-builds.yaml
+│       └── deploy-workflows.yml
 └── README.md
 ```
 
-**Note**: Actions are at the root `actions/` directory for cleaner paths. Reference them as `rancher/backup-restore-operator/actions/{name}@automation-core`.
+**Note**: Reusable artifacts (actions, templates) are at root for cleaner paths. The `.github/` directory only contains workflows that run on automation-core itself. Reference actions as `rancher/backup-restore-operator/actions/{name}@automation-core`.
 
 ## Workflows
 
 - `ci.yaml` — lint, build, and integration test. Takes required inputs:
   - `k3s_versions` (JSON array as a string) - K3S versions for integration tests
-  - `go-version` (string) - Go version to use (e.g., "1.26", "1.27")
 - `head-builds.yaml` — builds and pushes the prerelease image.
 
 ## Calling a workflow from a release branch
@@ -46,7 +57,6 @@ jobs:
     uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@automation-core
     with:
       k3s_versions: '["v1.34.5-k3s1", "v1.36.1-k3s1"]'
-      go-version: "1.26"
     permissions:
       contents: read
     secrets: inherit
@@ -112,7 +122,6 @@ Executes goreleaser and validates outputs.
 **Inputs:**
 - `github-token` (required)
 - `tag` (optional, default: `${{ github.ref_name }}`)
-- `go-version` (optional, default: "1.26")
 
 **Outputs:**
 - `metadata` - Contents of dist/metadata.json
@@ -124,7 +133,6 @@ Executes goreleaser and validates outputs.
   id: goreleaser
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
-    go-version: "1.26"
 ```
 
 **Note:** SLSA attestation must be done in the job definition on the release branch (after this action), not within this action, due to OIDC binding requirements.
@@ -163,7 +171,6 @@ jobs:
     uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@automation-core
     with:
       k3s_versions: '["v1.34.5-k3s1", "v1.36.1-k3s1"]'
-      go-version: "1.26"
     permissions:
       contents: read
 
@@ -175,7 +182,6 @@ jobs:
         id: goreleaser
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          go-version: "1.26"
 
       # SLSA attestation MUST stay on release branch (OIDC binding)
       - name: Attest build provenance
@@ -256,24 +262,75 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-## Shared Scripts
+## Workflow Deployment System
 
-Scripts in `.github/scripts/` are used by actions and workflows:
+The automation-core branch includes a workflow deployment system that can automatically create PRs to update workflows on release branches.
 
-- `check-semver.sh` - Parses semantic version to determine if it's a prerelease
-- `branch-tags.sh` - Calculates branch-specific tags for head builds
+### How to Deploy Workflows to a Branch
 
-These scripts should NOT be called directly from release branch workflows. In Phase 2, they will be wrapped by atomic actions.
+1. Go to **Actions** → **Deploy Workflows** in GitHub
+2. Click **Run workflow**
+3. Fill in the inputs:
+   - **targetBranch**: The branch to deploy to (e.g., `main`, `release/v2.0`)
+   - **k3sVersions**: JSON array of K3S versions (e.g., `["v1.34.5-k3s1", "v1.36.1-k3s1"]`)
+   - **automationCoreRef**: (optional) Automation-core ref to pin to (default: `automation-core`)
+4. Click **Run workflow**
+
+The workflow will:
+- Create a new branch on the target
+- Apply workflow templates with your configuration
+- Create a PR for review
+
+### Workflow Templates
+
+Templates are in `workflow-templates/` (at root):
+- `ci.yaml.tmpl` - CI workflow
+- `release.yaml.tmpl` - Release workflow
+- `head-builds.yaml.tmpl` - Head builds workflow
+
+**Placeholders:**
+- `{{K3S_VERSIONS}}` - Replaced with k3sVersions input
+- `{{AUTOMATION_CORE_REF}}` - Replaced with automationCoreRef input (prefixed with `@`)
+
+### Initial Setup for a New Release Branch
+
+```bash
+# Via GitHub UI: Actions → Deploy Workflows → Run workflow
+# Inputs:
+#   targetBranch: release/v2.1
+#   k3sVersions: ["v1.34.5-k3s1", "v1.36.1-k3s1"]
+#   automationCoreRef: automation-core
+```
+
+This creates a PR with all three workflows configured for that branch.
+
+### Updating Workflows After Changes
+
+When workflow structure changes (rare), you can update all branches:
+
+1. Merge workflow template changes to automation-core
+2. Run deploy workflow for each branch (main, release/v2.x, release/v2.0, etc.)
+3. Review and merge the PRs
+
+### Pinning to Automation-Core Versions
+
+By default, deployed workflows reference `@automation-core` (latest). You can pin to specific tags:
+
+```yaml
+automationCoreRef: v1  # Uses @v1 instead of @automation-core
+```
+
+This is useful for:
+- Stable release branches that shouldn't auto-update
+- Testing new automation-core changes before rolling out
+- Maintaining known-good configurations
 
 ## Development
 
 When updating automation-core:
-1. Make changes in the automation-core branch
-2. Test by updating a single release branch to reference the new changes
-3. Once validated, other release branches will pick up changes automatically on their next run
 
-## Future Improvements (Phases 2-4)
+1. **For action/workflow logic changes**: Make changes in a PR, merge to automation-core. Release branches pick up changes on their next run (they reference `@automation-core`).
 
-- **Phase 2**: Create focused atomic actions (check-semver, compute-branch-tags, undraft-release, run-goreleaser)
-- **Phase 3**: Workflow template deployment mechanism for easier release branch setup
-- **Phase 4**: CI-image optimization for consistency and performance
+2. **For workflow structure changes**: Update templates in `workflow-templates/`, then use the deployment workflow to update release branches.
+
+3. **Testing changes**: Create a test branch and use the deployment workflow to apply templates there first, before deploying to production branches.

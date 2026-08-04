@@ -1,0 +1,33 @@
+name: Backup Restore CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+      - release/v[0-9]+.(0|x)
+      - release/v[0-9]+.[0-9]+.[0-9]+
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+      - 'CODEOWNERS'
+      - 'LICENSE'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+      - 'CODEOWNERS'
+      - 'LICENSE'
+
+jobs:
+  ci:
+    uses: rancher/backup-restore-operator/.github/workflows/ci.yaml{{AUTOMATION_CORE_REF}}
+    with:
+      k3s_versions: '{{K3S_VERSIONS}}'
+    permissions:
+      contents: read
+    secrets: inherit
