@@ -28,7 +28,6 @@ jobs:
     uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@automation-core
     with:
       k3s_versions: '["v1.30.14-k3s2", "v1.32.12-k3s1"]'
-      go-version: "1.26"
     permissions:
       contents: read
     secrets: inherit
