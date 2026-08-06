@@ -22,6 +22,11 @@ runs:
 
     - uses: rancherlabs/dep-fetch/actions/sync-deps@c20b0b0e73e0819fd96fab41e1ee8987714dd04b # v0.3.0
 
+    - name: Remove bin-deps config
+      shell: bash
+      run: |
+        rm .bin-deps.yaml
+
     - name: Install helm
       uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
       with:
