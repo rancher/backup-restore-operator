@@ -27,10 +27,15 @@ jobs:
       - name: Check module exists
         id: check
         run: echo "exists=$([ -f '${{ matrix.module }}/go.mod' ] && echo true || echo false)" >> $GITHUB_OUTPUT
-      - uses: rancherlabs/dep-fetch/actions/sync-deps@35f5facb2f545a6ebbba91f8a635cf2511ade703 # v0.2.0
+
+      - name: Checkout bin-deps config to local branch
         if: steps.check.outputs.exists == 'true'
-        with:
-          version: v0.2.0
+        shell: bash
+        run: git checkout automation-core -- .bin-deps.yaml
+
+      - uses: rancherlabs/dep-fetch/actions/sync-deps@c20b0b0e73e0819fd96fab41e1ee8987714dd04b # v0.3.0
+        if: steps.check.outputs.exists == 'true'
+
       - name: golangci-lint (${{ matrix.module }})
         if: steps.check.outputs.exists == 'true'
         run: golangci-lint run ./...
