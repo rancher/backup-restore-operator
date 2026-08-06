@@ -35,8 +35,7 @@ jobs:
 
       - uses: rancherlabs/dep-fetch/actions/sync-deps@c20b0b0e73e0819fd96fab41e1ee8987714dd04b # v0.3.0
         if: steps.check.outputs.exists == 'true'
-        with:
-          version: v0.2.0
+
       - name: golangci-lint (${{ matrix.module }})
         if: steps.check.outputs.exists == 'true'
         run: golangci-lint run ./...
