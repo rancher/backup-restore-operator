@@ -16,7 +16,9 @@ runs:
 
     - name: Checkout bin-deps config to local branch
       shell: bash
-      run: git restore --source automation-core .bin-deps.yaml
+      run: |
+        git fetch origin automation-core
+        git restore --source origin/automation-core .bin-deps.yaml
 
     - uses: rancherlabs/dep-fetch/actions/sync-deps@c20b0b0e73e0819fd96fab41e1ee8987714dd04b # v0.3.0
 
