@@ -5,13 +5,110 @@ on:
     tags:
       - "*"
 
+env:
+  PUBLIC_REGISTRY: docker.io
+  PUBLIC_REPO: rancher
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
 jobs:
-  release:
-    uses: rancher/backup-restore-operator/.github/workflows/release.yaml@automation-core
+  ci:
+    uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@automation-core
     with:
       k3s_versions: '["v1.32.13-k3s1", "v1.34.6-k3s1"]'
     permissions:
-      contents: write
+      contents: read
+
+  goreleaser:
+    needs: [ci]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: rancher/backup-restore-operator/actions/run-goreleaser@automation-core
+        id: goreleaser
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # SLSA attestation stays on release branch (OIDC binding requirement)
+      - name: Attest build provenance
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: dist/backup-restore-operator_*, build/artifacts/*.tgz
+
+  push:
+    needs: [ci]
+    permissions:
+      contents: read
       id-token: write
-      attestations: write
-    secrets: inherit
+    name: Build and push BRO images
+    runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Vault secrets read on release branch
+      - name: "Read vault secrets"
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials registry | PRIME_STG_REGISTRY ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | PRIME_STG_REGISTRY_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD ;
+
+      # This encapsulates: login, qemu, build/push
+      - name: Build and push BRO image (dockerhub and prime stg)
+        uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
+        with:
+          image: "backup-restore-operator"
+          tag: ${{ github.ref_name }}
+          public-registry: ${{ env.PUBLIC_REGISTRY }}
+          public-repo: ${{ env.PUBLIC_REPO }}
+          public-username: ${{ env.DOCKER_USERNAME || vars.DOCKER_USERNAME || github.repository_owner }}
+          public-password: ${{ env.DOCKER_PASSWORD || secrets.DOCKER_PASSWORD }}
+          push-to-prime: true
+          prime-registry: ${{ env.PRIME_STG_REGISTRY }}
+          prime-repo: rancher
+          prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
+          prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
+
+      - uses: rancher/backup-restore-operator/actions/check-semver@automation-core
+        id: semver_check
+        with:
+          tag: ${{ github.ref_name }}
+
+      - name: "Read vault secrets"
+        if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials registry | PRIME_REGISTRY ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials username | PRIME_REGISTRY_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials password | PRIME_REGISTRY_PASSWORD ;
+
+      - name: Build and push BRO image (prime prod)
+        if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
+        uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
+        with:
+          image: "backup-restore-operator"
+          tag: ${{ github.ref_name }}
+          push-to-public: false
+          push-to-prime: true
+          prime-registry: ${{ env.PRIME_REGISTRY }}
+          prime-repo: rancher
+          prime-username: ${{ env.PRIME_REGISTRY_USERNAME }}
+          prime-password: ${{ env.PRIME_REGISTRY_PASSWORD }}
+
+  release:
+    runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
+    needs: [ci, goreleaser, push]
+    permissions:
+      contents: write
+    name: Un-draft release
+    steps:
+      - uses: rancher/backup-restore-operator/actions/undraft-release@automation-core
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
