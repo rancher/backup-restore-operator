@@ -3,6 +3,7 @@
 /bin
 /dist
 /build
+/.dep-fetch
 *.swp
 .idea
 ./backup
