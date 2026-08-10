@@ -7,6 +7,8 @@ toolchain go1.25.12
 replace (
 	github.com/google/cel-go => github.com/google/cel-go v0.29.0
 	golang.org/x/crypto => golang.org/x/crypto v0.53.0
+	golang.org/x/net => golang.org/x/net v0.56.0
+	golang.org/x/text => golang.org/x/text v0.39.0
 	google.golang.org/grpc => google.golang.org/grpc v1.82.1
 )
 
