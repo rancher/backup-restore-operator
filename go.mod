@@ -5,7 +5,7 @@ go 1.25.0
 toolchain go1.25.12
 
 replace (
-	github.com/google/cel-go => github.com/google/cel-go v0.29.0
+	github.com/google/cel-go => github.com/google/cel-go v0.30.0
 	golang.org/x/crypto => golang.org/x/crypto v0.53.0
 	golang.org/x/net => golang.org/x/net v0.56.0
 	golang.org/x/text => golang.org/x/text v0.39.0
