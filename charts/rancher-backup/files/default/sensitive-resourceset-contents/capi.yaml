@@ -10,7 +10,7 @@
     "type": "addons.cluster.x-k8s.io/resource-set"
 - apiVersion: "v1"
   kindsRegexp: "^secrets$"
-  namespaceRegexp: "^capi-|^capa-|^capd-|^capg-|^capv-|^capz-|^rke2-bootstrap-system$|^rke2-control-plane-system$|^fleet-addon-system$|^rancher-turtles-system$"
+  namespaceRegexp: "^capi-|^capa-|^capd-|^capg-|^capv-|^capz-|^rke2-bootstrap-system$|^rke2-control-plane-system$|^fleet-addon-system$"
   labelSelectors:
     matchExpressions:
       - key: "owner"
