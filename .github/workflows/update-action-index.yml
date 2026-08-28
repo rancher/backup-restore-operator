@@ -1,0 +1,87 @@
+name: Update Action Index
+
+on:
+  schedule:
+    # Run at 2:17 AM daily (off-hour to avoid :00/:30 congestion)
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy updates to all branches'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-index:
+    runs-on: ubuntu-latest
+    outputs:
+      updated: ${{ steps.update.outputs.updated }}
+      count: ${{ steps.update.outputs.count }}
+    steps:
+      - name: Checkout automation-core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: automation-core
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Go
+        uses: actions/setup-go@f4f8053b0f6fa28b4f7c62db0be291f58f9c60fe # v6.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build update tool
+        run: go build -o update-action-index ./update-action-index.go
+
+      - name: Update action index
+        id: update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./update-action-index -index action-versions.yaml
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet action-versions.yaml; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add action-versions.yaml
+          git commit -m "chore: update action versions
+
+Updated by automated workflow on $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+Actions updated: ${{ steps.update.outputs.count }}
+
+          git push origin automation-core
+
+      - name: Summary
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          echo "✅ Updated ${{ steps.update.outputs.count }} action(s)"
+          echo "📝 Committed to automation-core branch"
+
+  deploy-updates:
+    needs: update-index
+    if: |
+      needs.update-index.outputs.updated == 'true' &&
+      (github.event_name == 'schedule' || inputs.deploy == true)
+    uses: ./.github/workflows/deploy-workflows.yml
+    with:
+      mode: bulk
+      branches: all
+      dryRun: false
+    secrets: inherit
