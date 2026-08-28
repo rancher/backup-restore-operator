@@ -58,14 +58,21 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git add action-versions.yaml
-          git commit -m "chore: update action versions
 
-Updated by automated workflow on $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          COUNT="${{ steps.update.outputs.count }}"
 
-Actions updated: ${{ steps.update.outputs.count }}
+          # Write commit message to temp file
+          printf '%s\n' \
+            "chore: update action versions" \
+            "" \
+            "Updated by automated workflow on ${TIMESTAMP}" \
+            "" \
+            "Actions updated: ${COUNT}" \
+            > /tmp/commit-msg.txt
 
+          git commit -F /tmp/commit-msg.txt
           git push origin automation-core
 
       - name: Summary
