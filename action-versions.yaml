@@ -1,0 +1,24 @@
+# GitHub Actions Version Index
+# This file is automatically updated by the update-action-index workflow
+# Last updated: 2026-08-28
+
+actions:
+  "actions/checkout":
+    version: "v7.0.1"
+    sha: "3d3c42e5aac5ba805825da76410c181273ba90b1"
+
+  "actions/attest":
+    version: "v4.1.0"
+    sha: "59d89421af93a897026c735860bf21b6eb4f7b26"
+
+  "fossas/fossa-action":
+    version: "v2.0.0"
+    sha: "29693cc50323968e039056be419b32989fc5880c"
+
+  "rancher-eio/read-vault-secrets":
+    version: "v3"
+    sha: "0da85151ad1f19ed7986c41587e45aac1ace74b6"
+
+  "rancher/ecm-distro-tools/actions/publish-image":
+    version: "v0.74.2"
+    sha: "4b93308a7a0a096e6001cda6a7b34f5bda215d13"

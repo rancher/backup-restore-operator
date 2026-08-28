@@ -12,6 +12,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ActionVersion represents a GitHub Action version with SHA
+type ActionVersion struct {
+	Version string `yaml:"version"`
+	SHA     string `yaml:"sha"`
+}
+
+// ActionIndex contains all tracked GitHub Actions versions
+type ActionIndex struct {
+	Actions map[string]ActionVersion `yaml:"actions"`
+}
+
 // GoConfig represents Go version configuration
 // Supports two formats:
 // 1. Simple: go: 1.25
@@ -83,8 +94,23 @@ type Config struct {
 	Description       string          `yaml:"description"`
 }
 
+// loadActionIndex reads and parses the action versions index
+func loadActionIndex(path string) (*ActionIndex, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read action index: %w", err)
+	}
+
+	var index ActionIndex
+	if err := yaml.Unmarshal(data, &index); err != nil {
+		return nil, fmt.Errorf("parse action index: %w", err)
+	}
+
+	return &index, nil
+}
+
 // templateFuncs returns custom template functions
-func templateFuncs(cfg *Config) template.FuncMap {
+func templateFuncs(cfg *Config, actionIndex *ActionIndex) template.FuncMap {
 	return template.FuncMap{
 		"jsonArray": func(items []string) string {
 			// Convert []string to JSON array format: ["item1", "item2"]
@@ -99,6 +125,17 @@ func templateFuncs(cfg *Config) template.FuncMap {
 		},
 		"goCIImage": func() string {
 			return cfg.Go.GetCIImage()
+		},
+		"actionRef": func(name string) string {
+			if actionIndex == nil {
+				// Fallback if index not loaded
+				return name
+			}
+			if action, ok := actionIndex.Actions[name]; ok {
+				return fmt.Sprintf("%s@%s # %s", name, action.SHA, action.Version)
+			}
+			// Action not in index - return as-is
+			return name
 		},
 	}
 }
@@ -118,12 +155,12 @@ func loadConfig(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// renderTemplate processes a template file with the given config
-func renderTemplate(templatePath string, cfg *Config) (string, error) {
+// renderTemplate processes a template file with the given config and action index
+func renderTemplate(templatePath string, cfg *Config, actionIndex *ActionIndex) (string, error) {
 	// Use custom delimiters to avoid conflicts with GitHub Actions ${{ }}
 	tmpl, err := template.New(filepath.Base(templatePath)).
 		Delims("[[", "]]").
-		Funcs(templateFuncs(cfg)).
+		Funcs(templateFuncs(cfg, actionIndex)).
 		ParseFiles(templatePath)
 	if err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
@@ -160,6 +197,14 @@ func renderAllTemplates(configPath, templateDir, outputDir string) ([]RenderResu
 		return nil, fmt.Errorf("load config: %w", err)
 	}
 
+	// Load action index (optional - templates work without it)
+	actionIndex, err := loadActionIndex("action-versions.yaml")
+	if err != nil {
+		// Not fatal - just log and continue without action resolution
+		fmt.Fprintf(os.Stderr, "Warning: Could not load action index: %v\n", err)
+		actionIndex = nil
+	}
+
 	// Create output directory
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return nil, fmt.Errorf("create output dir: %w", err)
@@ -179,7 +224,7 @@ func renderAllTemplates(configPath, templateDir, outputDir string) ([]RenderResu
 	// Render each template
 	var results []RenderResult
 	for _, tmplPath := range templates {
-		rendered, err := renderTemplate(tmplPath, cfg)
+		rendered, err := renderTemplate(tmplPath, cfg, actionIndex)
 		if err != nil {
 			return nil, fmt.Errorf("render %s: %w", filepath.Base(tmplPath), err)
 		}

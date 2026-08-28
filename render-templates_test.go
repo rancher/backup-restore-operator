@@ -183,7 +183,7 @@ func TestTemplateFunctions_jsonArray(t *testing.T) {
 		K3SVersions: []string{"v1.32.13-k3s1", "v1.34.6-k3s1"},
 	}
 
-	funcs := templateFuncs(cfg)
+	funcs := templateFuncs(cfg, nil)
 	jsonArrayFn := funcs["jsonArray"].(func([]string) string)
 
 	result := jsonArrayFn(cfg.K3SVersions)
@@ -211,7 +211,7 @@ func TestTemplateFunctions_goVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &Config{Go: tt.goConfig}
-			funcs := templateFuncs(cfg)
+			funcs := templateFuncs(cfg, nil)
 			goVersionFn := funcs["goVersion"].(func() string)
 
 			assert.Equal(t, tt.expected, goVersionFn())
@@ -240,7 +240,7 @@ func TestTemplateFunctions_goCIImage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &Config{Go: tt.goConfig}
-			funcs := templateFuncs(cfg)
+			funcs := templateFuncs(cfg, nil)
 			goCIImageFn := funcs["goCIImage"].(func() string)
 
 			assert.Equal(t, tt.expected, goCIImageFn())
@@ -268,7 +268,7 @@ automation_ref: [[.AutomationCoreRef]]
 		AutomationCoreRef: "automation-core",
 	}
 
-	rendered, err := renderTemplate(templatePath, cfg)
+	rendered, err := renderTemplate(templatePath, cfg, nil)
 	require.NoError(t, err)
 
 	assert.Contains(t, rendered, "go_version: 1.25.0")
@@ -293,7 +293,7 @@ go_image: [[goCIImage]]
 		Go: GoConfig{Version: "1.25"},
 	}
 
-	rendered, err := renderTemplate(templatePath, cfg)
+	rendered, err := renderTemplate(templatePath, cfg, nil)
 	require.NoError(t, err)
 
 	// GitHub Actions syntax should be preserved
@@ -315,7 +315,7 @@ invalid yaml here: [unclosed bracket
 
 	cfg := &Config{}
 
-	_, err = renderTemplate(templatePath, cfg)
+	_, err = renderTemplate(templatePath, cfg, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid YAML output")
 }
@@ -392,7 +392,7 @@ func TestRenderTemplate_TemplateNotFound(t *testing.T) {
 		Go: GoConfig{Version: "1.25"},
 	}
 
-	_, err := renderTemplate("/nonexistent/template.tmpl", cfg)
+	_, err := renderTemplate("/nonexistent/template.tmpl", cfg, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "parse template")
 }
@@ -410,7 +410,7 @@ func TestRenderTemplate_TemplateExecutionError(t *testing.T) {
 		Go: GoConfig{Version: "1.25"},
 	}
 
-	_, err = renderTemplate(templatePath, cfg)
+	_, err = renderTemplate(templatePath, cfg, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "execute template")
 }
@@ -420,7 +420,7 @@ func TestTemplateFunctions_jsonArray_EmptyArray(t *testing.T) {
 		K3SVersions: []string{},
 	}
 
-	funcs := templateFuncs(cfg)
+	funcs := templateFuncs(cfg, nil)
 	jsonArrayFn := funcs["jsonArray"].(func([]string) string)
 
 	result := jsonArrayFn(cfg.K3SVersions)
@@ -432,7 +432,7 @@ func TestTemplateFunctions_jsonArray_SingleItem(t *testing.T) {
 		K3SVersions: []string{"v1.32.13-k3s1"},
 	}
 
-	funcs := templateFuncs(cfg)
+	funcs := templateFuncs(cfg, nil)
 	jsonArrayFn := funcs["jsonArray"].(func([]string) string)
 
 	result := jsonArrayFn(cfg.K3SVersions)
@@ -675,3 +675,109 @@ description: "Test"
 // programmatically and will always be valid. To trigger this error, we would need
 // to pass invalid characters in templateDir itself, which os.MkdirAll prevents.
 // This error path exists for defensive programming but is unreachable in normal use.
+
+func TestLoadActionIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "action-versions.yaml")
+
+	indexContent := `actions:
+  "actions/checkout":
+    version: "v7.0.1"
+    sha: "3d3c42e5aac5ba805825da76410c181273ba90b1"
+
+  "actions/attest":
+    version: "v4.1.0"
+    sha: "59d89421af93a897026c735860bf21b6eb4f7b26"
+`
+	err := os.WriteFile(indexPath, []byte(indexContent), 0644)
+	require.NoError(t, err)
+
+	index, err := loadActionIndex(indexPath)
+	require.NoError(t, err)
+
+	assert.Len(t, index.Actions, 2)
+	assert.Equal(t, "v7.0.1", index.Actions["actions/checkout"].Version)
+	assert.Equal(t, "3d3c42e5aac5ba805825da76410c181273ba90b1", index.Actions["actions/checkout"].SHA)
+	assert.Equal(t, "v4.1.0", index.Actions["actions/attest"].Version)
+}
+
+func TestLoadActionIndex_FileNotFound(t *testing.T) {
+	_, err := loadActionIndex("/nonexistent/action-versions.yaml")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "read action index")
+}
+
+func TestLoadActionIndex_InvalidYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "invalid.yaml")
+
+	invalidContent := `actions: [invalid`
+	err := os.WriteFile(indexPath, []byte(invalidContent), 0644)
+	require.NoError(t, err)
+
+	_, err = loadActionIndex(indexPath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "parse action index")
+}
+
+func TestTemplateFunctions_actionRef(t *testing.T) {
+	index := &ActionIndex{
+		Actions: map[string]ActionVersion{
+			"actions/checkout": {
+				Version: "v7.0.1",
+				SHA:     "3d3c42e5aac5ba805825da76410c181273ba90b1",
+			},
+		},
+	}
+
+	cfg := &Config{}
+	funcs := templateFuncs(cfg, index)
+	actionRefFn := funcs["actionRef"].(func(string) string)
+
+	// Action in index
+	result := actionRefFn("actions/checkout")
+	assert.Equal(t, "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1", result)
+
+	// Action not in index
+	result = actionRefFn("unknown/action")
+	assert.Equal(t, "unknown/action", result)
+}
+
+func TestTemplateFunctions_actionRef_NilIndex(t *testing.T) {
+	cfg := &Config{}
+	funcs := templateFuncs(cfg, nil)
+	actionRefFn := funcs["actionRef"].(func(string) string)
+
+	// Should return name as-is when index is nil
+	result := actionRefFn("actions/checkout")
+	assert.Equal(t, "actions/checkout", result)
+}
+
+func TestRenderTemplate_WithActionIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	templatePath := filepath.Join(tmpDir, "test.yaml.tmpl")
+
+	templateContent := `name: Test
+steps:
+  - uses: [[actionRef "actions/checkout"]]
+  - uses: [[actionRef "unknown/action"]]
+`
+	err := os.WriteFile(templatePath, []byte(templateContent), 0644)
+	require.NoError(t, err)
+
+	cfg := &Config{}
+	index := &ActionIndex{
+		Actions: map[string]ActionVersion{
+			"actions/checkout": {
+				Version: "v7.0.1",
+				SHA:     "abc123",
+			},
+		},
+	}
+
+	rendered, err := renderTemplate(templatePath, cfg, index)
+	require.NoError(t, err)
+
+	assert.Contains(t, rendered, "uses: actions/checkout@abc123 # v7.0.1")
+	assert.Contains(t, rendered, "uses: unknown/action")
+}
