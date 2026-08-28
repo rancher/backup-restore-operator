@@ -233,6 +233,7 @@ cp configs/release-v10.x.yaml configs/release-v11.x.yaml
 **Step 2: Edit config**
 ```yaml
 branch: release/v11.x
+go: 1.25                        # Match branch's go.mod version
 k3s_versions:
   - v1.35.0-k3s1
   - v1.37.0-k3s1
@@ -244,6 +245,8 @@ workflows:
   fossa: true
 description: "Release branch for BRO v11.x"
 ```
+
+**Important:** Set `go` to match the version in the target branch's `go.mod` file.
 
 **Step 3: Validate**
 ```bash
@@ -294,8 +297,9 @@ Then redeploy to the branch.
 
 **Common causes:**
 - Invalid YAML syntax
-- Missing required fields (`branch`, `k3s_versions`, `automation_core_ref`)
+- Missing required fields (`branch`, `go`, `k3s_versions`, `automation_core_ref`)
 - Wrong K3S version format (must be `vN.N.N-k3sN`)
+- Wrong Go version format (must be `N.N` or `{version: N.N.N, ci_image: goN.N}`)
 - Invalid branch name pattern
 
 **Fix:**

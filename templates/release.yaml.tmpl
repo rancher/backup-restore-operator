@@ -33,7 +33,7 @@ jobs:
 
       # SLSA attestation stays on release branch (OIDC binding requirement)
       - name: Attest build provenance
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: [[actionRef "actions/attest"]]
         with:
           subject-path: dist/backup-restore-operator_*, build/artifacts/*.tgz
 
@@ -46,11 +46,11 @@ jobs:
     runs-on: runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: [[actionRef "actions/checkout"]]
 
       # Vault secrets read on release branch
       - name: "Read vault secrets"
-        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        uses: [[actionRef "rancher-eio/read-vault-secrets"]]
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
@@ -61,7 +61,7 @@ jobs:
 
       # This encapsulates: login, qemu, build/push
       - name: Build and push BRO image (dockerhub and prime stg)
-        uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
+        uses: [[actionRef "rancher/ecm-distro-tools/actions/publish-image"]]
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
@@ -82,7 +82,7 @@ jobs:
 
       - name: "Read vault secrets"
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
-        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        uses: [[actionRef "rancher-eio/read-vault-secrets"]]
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/rancher-prime-registry/credentials registry | PRIME_REGISTRY ;
@@ -91,7 +91,7 @@ jobs:
 
       - name: Build and push BRO image (prime prod)
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
-        uses: rancher/ecm-distro-tools/actions/publish-image@4b93308a7a0a096e6001cda6a7b34f5bda215d13 # v0.74.2
+        uses: [[actionRef "rancher/ecm-distro-tools/actions/publish-image"]]
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
