@@ -29,7 +29,8 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write       # Needed to create branches and push commits
+  pull-requests: write  # Needed to open the pull request
 
 jobs:
   prepare:
@@ -63,9 +64,6 @@ jobs:
     strategy:
       matrix: ${{ fromJSON(needs.prepare.outputs.config_matrix) }}
       fail-fast: false
-    permissions:
-      contents: write       # Needed to create branches and push commits
-      pull-requests: write  # Needed to open the pull request
     steps:
       - name: Read App Credentials from Vault
         if: github.repository_owner == 'rancher'
