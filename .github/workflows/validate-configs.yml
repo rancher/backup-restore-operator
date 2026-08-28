@@ -1,0 +1,34 @@
+name: Validate Configs
+
+on:
+  pull_request:
+    paths:
+      - 'configs/**'
+      - '.github/scripts/validate-config.sh'
+  push:
+    branches:
+      - automation-core
+    paths:
+      - 'configs/**'
+      - '.github/scripts/validate-config.sh'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate all config files
+        run: |
+          set -e
+          echo "Validating all config files..."
+
+          for config in configs/*.yaml; do
+            echo ""
+            echo "=== $(basename "$config") ==="
+            bash .github/scripts/validate-config.sh "$config"
+          done
+
+          echo ""
+          echo "✓ All config files passed validation"
