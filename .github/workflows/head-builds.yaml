@@ -1,4 +1,4 @@
-name : Branch head Prerelease Images
+name: Branch head Prerelease Images
 
 on:
   push:
@@ -10,74 +10,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  REGISTRY: docker.io
-  REPO : rancher
-
-permissions:
-  contents: write
-
 jobs:
-  prebuild-env:
-    name: Prebuild needed Env vars
-    runs-on : runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
-    steps:
-      - name: Check out the repository to the runner
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Set Branch Tag and Other Variables
-        id: set-vars
-        run: bash ./.github/scripts/branch-tags.sh >> $GITHUB_OUTPUT
-    outputs:
-      branch_tag: ${{ steps.set-vars.outputs.branch_tag }}
-      branch_static_tag: ${{ steps.set-vars.outputs.branch_static_tag }}
-      prev_tag: ${{ steps.set-vars.outputs.prev_tag }}
-  push:
-    needs : [
-      prebuild-env,
-    ]
+  head-builds:
+    uses: rancher/backup-restore-operator/.github/workflows/head-builds.yaml@automation-core
     permissions:
-      contents : read
+      contents: write
       id-token: write
-    name : Build and push BRO images
-    runs-on : runs-on,image=ubuntu22-full-x64,runner=4cpu-linux-x64,run-id=${{ github.run_id }}
-    steps:
-      - name : "Read vault secrets"
-        uses : rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
-        if: ${{ github.repository_owner == 'rancher' }}
-        with:
-          secrets: |
-            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
-            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD
-      - name : Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
-      - name: Log in to the Container registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ env.DOCKER_USERNAME || vars.REPO }}
-          password: ${{ env.DOCKER_PASSWORD || secrets.DOCKER_PW }}
-      - name: Build and push BRO image
-        env:
-          FULL_IMAGE_URL: "${{ env.REGISTRY }}/${{ vars.REPO || env.REPO || github.repository_owner }}/backup-restore-operator"
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
-        with:
-          context: .
-          file: ./package/Dockerfile
-          build-args: |
-            TAG=${{ needs.prebuild-env.outputs.branch_static_tag }}
-          push: true
-          tags: ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_static_tag }}
-          platforms: linux/amd64,linux/arm64
-      - name: Update rolling tag to new static tag
-        env:
-          FULL_IMAGE_URL: ${{ env.REGISTRY }}/${{ vars.REPO || env.REPO || github.repository_owner }}/backup-restore-operator
-        run: |
-          source "${GITHUB_WORKSPACE}/.github/workflows/scripts/tool-versions.sh"
-          ORAS_VERSION_BARE="${ORAS_VERSION#v}"
-          curl -LO "https://github.com/oras-project/oras/releases/download/${ORAS_VERSION}/oras_${ORAS_VERSION_BARE}_linux_amd64.tar.gz"
-          echo "${ORAS_SHA256_amd64}  oras_${ORAS_VERSION_BARE}_linux_amd64.tar.gz" | sha256sum -c
-          mkdir -p oras-install/
-          tar -zxf "oras_${ORAS_VERSION_BARE}_linux_amd64.tar.gz" -C oras-install/
-          oras-install/oras copy ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_static_tag }} ${{ env.FULL_IMAGE_URL }}:${{ needs.prebuild-env.outputs.branch_tag }}
+    secrets: inherit
