@@ -62,9 +62,16 @@ jobs:
           done
           echo "✓ All rendered workflows are valid YAML"
 
+      - name: Set artifact name
+        id: artifact
+        run: |
+          # Convert configs/main.yaml -> main
+          CONFIG_NAME=$(basename "${{ matrix.config }}" .yaml)
+          echo "name=rendered-workflows-${CONFIG_NAME}" >> "$GITHUB_OUTPUT"
+
       - name: Upload rendered workflows
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: rendered-workflows-${{ matrix.config }}
+          name: ${{ steps.artifact.outputs.name }}
           path: /tmp/rendered/
           retention-days: 7
