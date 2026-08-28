@@ -28,6 +28,7 @@ jobs:
     uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@[[.AutomationCoreRef]]
     with:
       k3s_versions: '[[jsonArray .K3SVersions]]'
+      go_image: '[[goCIImage]]'
     permissions:
       contents: read
     secrets: inherit

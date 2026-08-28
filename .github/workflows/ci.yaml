@@ -10,13 +10,17 @@ on:
         description: JSON array of K3S versions to run integration tests against
         type: string
         required: true
+      go_image:
+        description: Go CI image tag (e.g., "go1.25") for container images
+        type: string
+        required: true
 
 jobs:
   golangci:
     name: lint (${{ matrix.module }})
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/rancher/ci-image/go1.26
+      image: ghcr.io/rancher/ci-image/${{ inputs.go_image }}
     strategy:
       matrix:
         module:
@@ -57,7 +61,7 @@ jobs:
           - arm64
     runs-on: runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     container:
-      image: ghcr.io/rancher/ci-image/go1.26
+      image: ghcr.io/rancher/ci-image/${{ inputs.go_image }}
     env:
       CI: true
     steps:

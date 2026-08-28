@@ -40,6 +40,47 @@ tag: ${{ github.ref_name }}  # No escaping needed
 token: ${{ secrets.GITHUB_TOKEN }}  # Works as-is
 ```
 
+## Config File Format
+
+Configuration files in `configs/` define branch-specific values rendered into templates.
+
+### Example Config
+```yaml
+branch: release/v9.x
+go: 1.25                        # Simple Go version (recommended)
+k3s_versions:
+  - v1.32.13-k3s1
+  - v1.34.6-k3s1
+automation_core_ref: automation-core
+workflows:
+  ci: true
+  release: true
+  head-builds: true
+  fossa: true
+description: "Release branch for BRO v9.x"
+```
+
+### Go Version Field
+
+The `go` field controls which Go version is used in CI workflows.
+
+**Simple format (recommended):**
+```yaml
+go: 1.25
+```
+Automatically expands to:
+- Full version: `1.25.0`
+- CI image tag: `go1.25`
+
+**Explicit format (edge cases):**
+```yaml
+go:
+  version: 1.25.0
+  ci_image: go1.25
+```
+
+Use explicit format when you need a specific patch version or custom image tag.
+
 ## Available Template Variables
 
 ### .AutomationCoreRef
@@ -51,6 +92,10 @@ token: ${{ secrets.GITHUB_TOKEN }}  # Works as-is
 - **Type:** Array of strings
 - **Usage:** K3S versions for integration tests
 - **Example:** `[[jsonArray .K3SVersions]]` → `["v1.33.8-k3s1", "v1.35.1-k3s1"]`
+
+### .Go
+- **Type:** GoConfig struct
+- **Usage:** Access via template functions (see below)
 
 ### .Branch
 - **Type:** String
@@ -68,6 +113,23 @@ Converts array to JSON array string for GitHub Actions inputs.
 ```yaml
 k3s_versions: '[[jsonArray .K3SVersions]]'
 # Renders to: '["v1.33.8-k3s1", "v1.35.1-k3s1"]'
+```
+
+### goVersion
+Returns full Go version with patch number.
+
+```yaml
+run: echo "Building with Go [[goVersion]]"
+# Renders to: echo "Building with Go 1.25.0"
+```
+
+### goCIImage
+Returns CI container image tag for Go.
+
+```yaml
+container:
+  image: ghcr.io/rancher/ci-image/[[goCIImage]]
+# Renders to: image: ghcr.io/rancher/ci-image/go1.25
 ```
 
 ## Testing Templates Locally

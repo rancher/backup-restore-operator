@@ -1,6 +1,9 @@
 # Configuration for release/v7.x branch
 branch: release/v7.x
 
+# Go version for CI (simple syntax: major.minor)
+go: 1.25
+
 # K3S versions for integration tests
 k3s_versions:
   - v1.30.14-k3s2
