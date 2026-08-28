@@ -7,7 +7,7 @@ k3s_versions:
   - v1.33.10-k3s1
 
 # Automation-core reference (branch/tag/sha)
-automation_core_ref: v1  # Pin to major version (stable with updates)
+automation_core_ref: automation-core  # Rolling release from latest
 
 # Workflow enablement
 workflows:
