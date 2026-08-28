@@ -9,19 +9,9 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/rancher/backup-restore-operator/automation-core/scripts/internal/actionindex"
 	"gopkg.in/yaml.v3"
 )
-
-// ActionVersion represents a GitHub Action version with SHA
-type ActionVersion struct {
-	Version string `yaml:"version"`
-	SHA     string `yaml:"sha"`
-}
-
-// ActionIndex contains all tracked GitHub Actions versions
-type ActionIndex struct {
-	Actions map[string]ActionVersion `yaml:"actions"`
-}
 
 // GoConfig represents Go version configuration
 // Supports two formats:
@@ -95,22 +85,12 @@ type Config struct {
 }
 
 // loadActionIndex reads and parses the action versions index
-func loadActionIndex(path string) (*ActionIndex, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read action index: %w", err)
-	}
-
-	var index ActionIndex
-	if err := yaml.Unmarshal(data, &index); err != nil {
-		return nil, fmt.Errorf("parse action index: %w", err)
-	}
-
-	return &index, nil
+func loadActionIndex(path string) (*actionindex.ActionIndex, error) {
+	return actionindex.Load(path)
 }
 
 // templateFuncs returns custom template functions
-func templateFuncs(cfg *Config, actionIndex *ActionIndex) template.FuncMap {
+func templateFuncs(cfg *Config, actionIndex *actionindex.ActionIndex) template.FuncMap {
 	return template.FuncMap{
 		"jsonArray": func(items []string) string {
 			// Convert []string to JSON array format: ["item1", "item2"]
@@ -156,7 +136,7 @@ func loadConfig(path string) (*Config, error) {
 }
 
 // renderTemplate processes a template file with the given config and action index
-func renderTemplate(templatePath string, cfg *Config, actionIndex *ActionIndex) (string, error) {
+func renderTemplate(templatePath string, cfg *Config, actionIndex *actionindex.ActionIndex) (string, error) {
 	// Use custom delimiters to avoid conflicts with GitHub Actions ${{ }}
 	tmpl, err := template.New(filepath.Base(templatePath)).
 		Delims("[[", "]]").

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rancher/backup-restore-operator/automation-core/scripts/internal/actionindex"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -721,8 +722,8 @@ func TestLoadActionIndex_InvalidYAML(t *testing.T) {
 }
 
 func TestTemplateFunctions_actionRef(t *testing.T) {
-	index := &ActionIndex{
-		Actions: map[string]ActionVersion{
+	index := &actionindex.ActionIndex{
+		Actions: map[string]actionindex.ActionVersion{
 			"actions/checkout": {
 				Version: "v7.0.1",
 				SHA:     "3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -766,8 +767,8 @@ steps:
 	require.NoError(t, err)
 
 	cfg := &Config{}
-	index := &ActionIndex{
-		Actions: map[string]ActionVersion{
+	index := &actionindex.ActionIndex{
+		Actions: map[string]actionindex.ActionVersion{
 			"actions/checkout": {
 				Version: "v7.0.1",
 				SHA:     "abc123",
