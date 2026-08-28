@@ -29,41 +29,12 @@ on:
 
 permissions:
   id-token: write
-  contents: write       # Needed to create branches and push commits
-  pull-requests: write  # Needed to open the pull request
+  contents: write
+  pull-requests: write
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      config_matrix: ${{ steps.build-matrix.outputs.matrix }}
-    steps:
-      - name: Checkout automation-core
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: automation-core
-
-      - name: Build deployment matrix
-        id: build-matrix
-        run: |
-          MATRIX=$(bash .github/scripts/prepare-deployment.sh \
-            "${{ inputs.mode }}" \
-            "${{ inputs.configFile }}" \
-            "${{ inputs.branches }}")
-
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
-
-          echo "## Deployment Matrix" >> "$GITHUB_STEP_SUMMARY"
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          echo "$MATRIX" | jq '.' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-
   deploy:
-    needs: prepare
     runs-on: ubuntu-latest
-    strategy:
-      matrix: ${{ fromJSON(needs.prepare.outputs.config_matrix) }}
-      fail-fast: false
     steps:
       - name: Read App Credentials from Vault
         if: github.repository_owner == 'rancher'
@@ -87,14 +58,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: automation-core
-          token: ${{ steps.get_token.outputs.token }}
           path: automation-core
           persist-credentials: false
 
-      - name: Checkout target branch
+      - name: Checkout target repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ matrix.branch }}
           token: ${{ steps.get_token.outputs.token }}
           path: target-repo
           persist-credentials: true
@@ -104,96 +73,16 @@ jobs:
         with:
           go-version: '1.23'
 
-      - name: Build template renderer
-        run: |
-          cd automation-core
-          CGO_ENABLED=0 go build -o render-templates ./render-templates.go
-
-      - name: Render templates
-        run: |
-          cd automation-core
-          ./render-templates \
-            -config "${{ matrix.config_file }}" \
-            -template-dir templates \
-            -output-dir ../staging
-
-      - name: Show diff preview (dry-run)
-        if: inputs.dryRun == true
-        run: |
-          echo "## Diff Preview for ${{ matrix.branch }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-
-          for workflow in staging/*.yaml staging/*.yml; do
-            if [ -f "$workflow" ]; then
-              filename=$(basename "$workflow")
-              echo "### $filename" >> "$GITHUB_STEP_SUMMARY"
-              echo '```diff' >> "$GITHUB_STEP_SUMMARY"
-              diff -u "target-repo/.github/workflows/$filename" "$workflow" >> "$GITHUB_STEP_SUMMARY" || true
-              echo '```' >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-
-      - name: Create PR
-        if: inputs.dryRun == false
+      - name: Run deployment workflow
         env:
-          GITHUB_TOKEN: ${{ steps.get_token.outputs.token }}
+          MODE: ${{ inputs.mode }}
+          CONFIG_FILE: ${{ inputs.configFile }}
+          BRANCHES: ${{ inputs.branches }}
+          TARGET_DIR: ${{ github.workspace }}/target-repo
+          DRY_RUN: ${{ inputs.dryRun }}
+          GH_TOKEN: ${{ steps.get_token.outputs.token }}
+          GIT_USER_NAME: ${{ steps.get_token.outputs.app-slug }}[bot]
+          GIT_USER_EMAIL: ${{ steps.get_token.outputs.app-slug }}[bot]@users.noreply.github.com
         run: |
-          set -euo pipefail
-
-          DEPLOY_BRANCH="deploy-workflows-$(date +%Y-%m-%d-%H-%M-%S)"
-
-          # Configure git identity
-          APP_USER="${{ steps.get_token.outputs.app-slug }}[bot]"
-          user_id=$(gh api "/users/$APP_USER" --jq .id)
-          git config --global user.name "$APP_USER"
-          git config --global user.email "${user_id}+${APP_USER}@users.noreply.github.com"
-
-          cd target-repo
-          git checkout -b "${DEPLOY_BRANCH}"
-
-          # Copy rendered workflows
-          mkdir -p .github/workflows
-          cp ../staging/*.yaml ../staging/*.yml .github/workflows/ 2>/dev/null || true
-          git add .github/workflows/
-
-          # Check if there are changes
-          if git diff --cached --quiet; then
-            echo "No changes to commit - workflows are already up to date"
-            exit 0
-          fi
-
-          # Generate commit message
-          bash ../automation-core/.github/scripts/generate-commit-msg.sh \
-            "${{ matrix.branch }}" \
-            "$(echo '${{ toJSON(matrix.k3s_versions) }}')" \
-            "${{ matrix.automation_core_ref }}" \
-            "${GITHUB_SHA}" > /tmp/commit_msg
-
-          # Commit and push
-          git commit -F /tmp/commit_msg
-          git push origin "${DEPLOY_BRANCH}"
-
-          # Generate PR body
-          bash ../automation-core/.github/scripts/generate-pr-body.sh \
-            "${{ matrix.branch }}" \
-            "$(echo '${{ toJSON(matrix.k3s_versions) }}')" \
-            "${{ matrix.automation_core_ref }}" \
-            "${GITHUB_SHA}" \
-            "${GITHUB_ACTOR}" > /tmp/pr_body
-
-          # Create PR
-          CREATED_PR=$(gh pr create \
-            -R "${{ github.repository }}" \
-            --title "Deploy automation-core workflows to ${{ matrix.branch }}" \
-            --body-file /tmp/pr_body \
-            --base "${{ matrix.branch }}" \
-            --head "${DEPLOY_BRANCH}")
-
-          {
-            echo "## Deployed to ${{ matrix.branch }}"
-            echo ""
-            echo "**K3S versions**: $(echo '${{ toJSON(matrix.k3s_versions) }}' | jq -r '. | join(", ")')"
-            echo "**Automation-core ref**: \`@${{ matrix.automation_core_ref }}\`"
-            echo ""
-            echo "**Created PR**: ${CREATED_PR}"
-          } >> "$GITHUB_STEP_SUMMARY"
+          cd automation-core
+          bash .github/workflows/deploy-workflows/run-gha.sh
