@@ -16,9 +16,9 @@ permissions:
 
 jobs:
   ci:
-    uses: rancher/backup-restore-operator/.github/workflows/ci.yaml{{AUTOMATION_CORE_REF}}
+    uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@[[.AutomationCoreRef]]
     with:
-      k3s_versions: '{{K3S_VERSIONS}}'
+      k3s_versions: '[[jsonArray .K3SVersions]]'
     permissions:
       contents: read
 
@@ -26,7 +26,7 @@ jobs:
     needs: [ci]
     runs-on: ubuntu-latest
     steps:
-      - uses: rancher/backup-restore-operator/actions/run-goreleaser{{AUTOMATION_CORE_REF}}
+      - uses: rancher/backup-restore-operator/actions/run-goreleaser@[[.AutomationCoreRef]]
         id: goreleaser
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -75,7 +75,7 @@ jobs:
           prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
           prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
 
-      - uses: rancher/backup-restore-operator/actions/check-semver{{AUTOMATION_CORE_REF}}
+      - uses: rancher/backup-restore-operator/actions/check-semver@[[.AutomationCoreRef]]
         id: semver_check
         with:
           tag: ${{ github.ref_name }}
@@ -109,6 +109,6 @@ jobs:
       contents: write
     name: Un-draft release
     steps:
-      - uses: rancher/backup-restore-operator/actions/undraft-release{{AUTOMATION_CORE_REF}}
+      - uses: rancher/backup-restore-operator/actions/undraft-release@[[.AutomationCoreRef]]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

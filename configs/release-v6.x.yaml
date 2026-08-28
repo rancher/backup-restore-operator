@@ -1,0 +1,20 @@
+# Configuration for release/v6.x branch
+branch: release/v6.x
+
+# K3S versions for integration tests
+k3s_versions:
+  - v1.28.15-k3s1
+  - v1.31.14-k3s1
+
+# Automation-core reference (branch/tag/sha)
+automation_core_ref: automation-core  # Rolling release from latest
+
+# Workflow enablement
+workflows:
+  ci: true
+  release: true
+  head-builds: true
+  fossa: true
+
+# Metadata
+description: "Release branch for BRO v6.x"

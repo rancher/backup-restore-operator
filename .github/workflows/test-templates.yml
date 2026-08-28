@@ -1,0 +1,77 @@
+name: Test Templates
+
+on:
+  pull_request:
+    paths:
+      - 'templates/**'
+      - 'render-templates.go'
+      - 'configs/**'
+  push:
+    branches:
+      - automation-core
+    paths:
+      - 'templates/**'
+      - 'render-templates.go'
+      - 'configs/**'
+
+jobs:
+  test-render:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config:
+          - configs/main.yaml
+          - configs/release-v10.x.yaml
+          - configs/release-v9.x.yaml
+          - configs/release-v8.x.yaml
+          - configs/release-v7.x.yaml
+          - configs/release-v6.x.yaml
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.23'
+
+      - name: Validate config
+        run: |
+          bash .github/scripts/validate-config.sh ${{ matrix.config }}
+
+      - name: Build renderer
+        run: |
+          CGO_ENABLED=0 go build -o render-templates ./render-templates.go
+
+      - name: Render templates
+        run: |
+          ./render-templates \
+            -config ${{ matrix.config }} \
+            -template-dir templates \
+            -output-dir /tmp/rendered
+
+      - name: Validate rendered YAML
+        run: |
+          echo "Validating rendered workflow files..."
+          for workflow in /tmp/rendered/*.yaml /tmp/rendered/*.yml; do
+            if [ -f "$workflow" ]; then
+              echo "  Validating $(basename "$workflow")..."
+              yq eval '.' "$workflow" > /dev/null
+            fi
+          done
+          echo "✓ All rendered workflows are valid YAML"
+
+      - name: Set artifact name
+        id: artifact
+        run: |
+          # Convert configs/main.yaml -> main
+          CONFIG_NAME=$(basename "${{ matrix.config }}" .yaml)
+          echo "name=rendered-workflows-${CONFIG_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload rendered workflows
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: /tmp/rendered/
+          retention-days: 7

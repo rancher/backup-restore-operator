@@ -1,0 +1,20 @@
+# Configuration for main branch
+branch: main
+
+# K3S versions for integration tests
+k3s_versions:
+  - v1.34.5-k3s1
+  - v1.36.1-k3s1
+
+# Automation-core reference (branch/tag/sha)
+automation_core_ref: automation-core  # Always latest for development
+
+# Workflow enablement
+workflows:
+  ci: true
+  release: true
+  head-builds: true
+  fossa: true
+
+# Metadata
+description: "Main development branch"
