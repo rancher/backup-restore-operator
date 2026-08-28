@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   head-builds:
-    uses: rancher/backup-restore-operator/.github/workflows/head-builds.yaml{{AUTOMATION_CORE_REF}}
+    uses: rancher/backup-restore-operator/.github/workflows/head-builds.yaml@[[.AutomationCoreRef]]
     permissions:
       contents: write
       id-token: write

@@ -24,20 +24,26 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write       # Needed to create branches and push commits containing code/workflow edits
+      pull-requests: write  # Needed to open the pull request via the GitHub API
     steps:
       - name: Read App Credentials from Vault
+        if: github.repository_owner == 'rancher'
         uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
           secrets: |
-            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APPID;
-            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATEKEY
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
 
-      - name: Get GitHub App token
+      # Fetch github token for local repo
+      - name: Generate GitHub App Token
+        if: github.repository_owner == 'rancher'
         id: get_token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ env.APPID }}
-          private-key: ${{ env.PRIVATEKEY }}
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
 
@@ -55,22 +61,24 @@ jobs:
           ref: ${{ inputs.targetBranch }}
           token: ${{ steps.get_token.outputs.token }}
           path: target-repo
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Create branch, apply templates, and create PR
         env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+          APP_USER: "${{ steps.generate_token.outputs.app-slug }}[bot]"
           TARGET_BRANCH: ${{ inputs.targetBranch }}
           K3S_VERSIONS: ${{ inputs.k3sVersions }}
           AUTOMATION_CORE_REF: ${{ inputs.automationCoreRef }}
-          GITHUB_TOKEN: ${{ steps.get_token.outputs.token }}
         run: |
           set -euo pipefail
 
           DEPLOY_BRANCH="deploy-workflows-$(date +%Y-%m-%d-%H-%M-%S)"
 
-          git config --global user.email "119870437+renovate-rancher[bot]@users.noreply.github.com"
-          git config --global user.name "renovate-rancher[bot]"
-          gh auth setup-git
+          # Configure git identity for commits (GHA only - fresh clone deleted at workflow end)
+          user_id=$(gh api "/users/$APP_USER" --jq .id)
+          git config --global user.name "$APP_USER"
+          git config --global user.email "${user_id}+${APP_USER}@users.noreply.github.com"
 
           # Create staging directory for templates
           STAGING_DIR=$(mktemp -d)

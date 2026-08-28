@@ -25,9 +25,9 @@ on:
 
 jobs:
   ci:
-    uses: rancher/backup-restore-operator/.github/workflows/ci.yaml{{AUTOMATION_CORE_REF}}
+    uses: rancher/backup-restore-operator/.github/workflows/ci.yaml@[[.AutomationCoreRef]]
     with:
-      k3s_versions: '{{K3S_VERSIONS}}'
+      k3s_versions: '[[jsonArray .K3SVersions]]'
     permissions:
       contents: read
     secrets: inherit

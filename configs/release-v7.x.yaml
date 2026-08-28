@@ -1,0 +1,20 @@
+# Configuration for release/v7.x branch
+branch: release/v7.x
+
+# K3S versions for integration tests
+k3s_versions:
+  - v1.30.14-k3s2
+  - v1.32.12-k3s1
+
+# Automation-core reference (branch/tag/sha)
+automation_core_ref: v1  # Pin to major version (stable with updates)
+
+# Workflow enablement
+workflows:
+  ci: true
+  release: true
+  head-builds: true
+  fossa: true
+
+# Metadata
+description: "Release branch for BRO v7.x"
