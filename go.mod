@@ -2,7 +2,7 @@ module github.com/rancher/backup-restore-operator
 
 go 1.25.0
 
-toolchain go1.25.12
+toolchain go1.25.13
 
 replace (
 	github.com/google/cel-go => github.com/google/cel-go v0.30.0
