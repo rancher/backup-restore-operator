@@ -5,7 +5,7 @@ go 1.26.0
 toolchain go1.26.5
 
 replace (
-	golang.org/x/crypto => golang.org/x/crypto v0.55.0
+	golang.org/x/crypto => golang.org/x/crypto v0.56.0
 	google.golang.org/grpc => google.golang.org/grpc v1.83.1
 )
 
@@ -76,7 +76,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
