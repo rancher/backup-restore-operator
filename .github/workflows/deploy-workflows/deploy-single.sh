@@ -50,6 +50,20 @@ if [[ "$DRY_RUN" == "true" ]]; then
     diff -u ".github/workflows/$filename" "$workflow" || true
   done
   shopt -u nullglob
+
+  # Show renovate.json diff
+  if [[ -f "$AUTOMATION_CORE_DIR/.github/renovate.json" ]]; then
+    summary "#### renovate.json"
+    summary '```diff'
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+      diff -u ".github/renovate.json" "$AUTOMATION_CORE_DIR/.github/renovate.json" >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+    fi
+    summary '```'
+
+    echo "=== renovate.json ==="
+    diff -u ".github/renovate.json" "$AUTOMATION_CORE_DIR/.github/renovate.json" || true
+  fi
+
   summary ""
   exit 0
 fi
@@ -63,7 +77,15 @@ mkdir -p .github/workflows
 shopt -s nullglob
 cp "$STAGING_DIR"/*.yaml "$STAGING_DIR"/*.yml .github/workflows/ 2>/dev/null || true
 shopt -u nullglob
-git add .github/workflows/
+
+# Copy renovate.json from automation-core
+if [[ -f "$AUTOMATION_CORE_DIR/.github/renovate.json" ]]; then
+  mkdir -p .github
+  cp "$AUTOMATION_CORE_DIR/.github/renovate.json" .github/renovate.json
+  echo "Copied renovate.json from automation-core"
+fi
+
+git add .github/workflows/ .github/renovate.json
 
 # Check for changes
 if git diff --cached --quiet; then

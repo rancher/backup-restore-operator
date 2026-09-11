@@ -7,8 +7,8 @@ go: 1.25
 
 # K3S versions for integration tests
 k3s_versions:
-  - v1.34.5-k3s1
-  - v1.36.1-k3s1
+  - v1.35.7-k3s1
+  - v1.36.3-k3s1 # update to 1.37 when released
 
 # Automation-core reference (branch/tag/sha)
 automation_core_ref: automation-core  # Always latest for development
