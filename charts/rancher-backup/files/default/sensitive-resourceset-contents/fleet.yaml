@@ -10,3 +10,13 @@
       - key: "fleet.cattle.io/managed"
         operator: "In"
         values: ["true"]
+- apiVersion: "v1"
+  kindsRegexp: "^secrets$"
+  namespaceRegexp: "^cattle-fleet-|^fleet-"
+  fieldSelectors:
+    "type": "fleet.cattle.io/bundle-values/v1alpha1"
+- apiVersion: "v1"
+  kindsRegexp: "^secrets$"
+  namespaceRegexp: "^cattle-fleet-|^fleet-"
+  fieldSelectors:
+    "type": "fleet.cattle.io/bundle-oci-storage/v1alpha1"
