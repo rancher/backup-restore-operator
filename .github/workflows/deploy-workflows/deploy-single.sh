@@ -70,7 +70,7 @@ if git diff --cached --quiet; then
   echo "No changes - workflows already up to date"
   summary "- ✓ No changes needed"
   summary ""
-  return 0
+  exit 0
 fi
 
 # Generate commit message
@@ -85,38 +85,35 @@ bash "$AUTOMATION_CORE_DIR/.github/scripts/generate-commit-msg.sh" \
 git commit -F "$COMMIT_MSG_FILE"
 rm "$COMMIT_MSG_FILE"
 
-# Push (unless in GHA where PR creation handles it)
-if [[ -z "${GITHUB_ACTIONS:-}" ]]; then
-  echo "Pushing to $REMOTE/$DEPLOY_BRANCH..."
-  git push "$REMOTE" "$DEPLOY_BRANCH"
-  
-  # Generate PR body
-  PR_BODY_FILE=$(mktemp)
-  bash "$AUTOMATION_CORE_DIR/.github/scripts/generate-pr-body.sh" \
-    "$BRANCH" \
-    "$K3S_VERSIONS" \
-    "$AUTOMATION_CORE_REF" \
-    "$(git -C "$AUTOMATION_CORE_DIR" rev-parse HEAD)" \
-    "${USER:-unknown}" > "$PR_BODY_FILE"
-  
-  # Create PR with gh CLI
-  if command -v gh &> /dev/null; then
-    echo "Creating PR..."
-    PR_URL=$(gh pr create \
-      --base "$BRANCH" \
-      --head "$DEPLOY_BRANCH" \
-      --title "Deploy automation-core workflows to $BRANCH" \
-      --body-file "$PR_BODY_FILE")
-    
-    summary "- ✓ Created PR: $PR_URL"
-    echo "PR created: $PR_URL"
-  else
-    echo "gh CLI not found - branch pushed but PR not created"
-    echo "Create PR manually from branch: $DEPLOY_BRANCH"
-    summary "- ✓ Branch pushed: $DEPLOY_BRANCH (create PR manually)"
-  fi
-  
-  rm "$PR_BODY_FILE"
+echo "Pushing to $REMOTE/$DEPLOY_BRANCH..."
+git push "$REMOTE" "$DEPLOY_BRANCH"
+
+# Generate PR body
+PR_BODY_FILE=$(mktemp)
+bash "$AUTOMATION_CORE_DIR/.github/scripts/generate-pr-body.sh" \
+  "$BRANCH" \
+  "$K3S_VERSIONS" \
+  "$AUTOMATION_CORE_REF" \
+  "$(git -C "$AUTOMATION_CORE_DIR" rev-parse HEAD)" \
+  "${USER:-unknown}" > "$PR_BODY_FILE"
+
+# Create PR with gh CLI
+if command -v gh &> /dev/null; then
+  echo "Creating PR..."
+  PR_URL=$(gh pr create \
+    --base "$BRANCH" \
+    --head "$DEPLOY_BRANCH" \
+    --title "Deploy automation-core workflows to $BRANCH" \
+    --body-file "$PR_BODY_FILE")
+
+  summary "- ✓ Created PR: $PR_URL"
+  echo "PR created: $PR_URL"
+else
+  echo "gh CLI not found - branch pushed but PR not created"
+  echo "Create PR manually from branch: $DEPLOY_BRANCH"
+  summary "- ✓ Branch pushed: $DEPLOY_BRANCH (create PR manually)"
 fi
+
+rm "$PR_BODY_FILE"
 
 summary ""
