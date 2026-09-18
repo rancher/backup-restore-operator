@@ -1,0 +1,77 @@
+name: UnRC
+
+on:
+  workflow_dispatch:
+    inputs:
+      chart:
+        description: 'Chart that triggered the dispatch'
+        required: true
+        type: string
+      version:
+        description: 'Chart version, e.g. 110.0.2+up11.0.3'
+        required: true
+        type: string
+
+jobs:
+  unrc:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Read App Credentials from Vault
+        uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APPID;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATEKEY
+
+      - name: Generate GitHub App Token
+        id: generate_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ env.APPID }}
+          private-key: ${{ env.PRIVATEKEY }}
+
+      - name: Create final tag from latest RC
+        env:
+          CHART: ${{ inputs.chart }}
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$VERSION" != *"+up"* ]]; then
+            echo "::error::Invalid version '${VERSION}'"
+            exit 1
+          fi
+          
+          app_version="${VERSION#*+up}"
+          base_version="${app_version%-rc.*}"
+          new_tag="v${base_version}"
+
+          echo "::notice::UnRC requested for ${CHART} chart version ${VERSION}"
+
+          if git rev-parse -q --verify "refs/tags/${new_tag}" >/dev/null; then
+            echo "::error::Tag ${new_tag} already exists"
+            exit 1
+          fi
+
+          latest_rc=$(git tag -l "${new_tag}-rc.*" | sort -V | tail -n1)
+
+          if [[ -z "$latest_rc" ]]; then
+            echo "::error::No RC tag found matching ${new_tag}-rc.*"
+            exit 1
+          fi
+
+          commit=$(git rev-list -n1 "$latest_rc")
+
+          echo "Creating ${new_tag} from ${latest_rc} (${commit})"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          git tag "${new_tag}" "${commit}"
+          git push origin "${new_tag}"
