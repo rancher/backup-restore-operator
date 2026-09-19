@@ -1,8 +1,8 @@
 module github.com/rancher/backup-restore-operator
 
-go 1.26.0
+go 1.27.0
 
-toolchain go1.26.8
+toolchain go1.27.1
 
 replace (
 	golang.org/x/crypto => golang.org/x/crypto v0.56.0
