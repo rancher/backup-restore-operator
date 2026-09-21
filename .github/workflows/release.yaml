@@ -62,7 +62,7 @@ jobs:
 
       # This encapsulates: login, qemu, build/push
       - name: Build and push BRO image (dockerhub and prime stg)
-        uses: rancher/ecm-distro-tools/actions/publish-image@086cd2f90ed82712e45701441a00e59b95b578c1 # v0.77.1
+        uses: rancher/ecm-distro-tools/actions/publish-image@fdf1c26ea7f6c61b1cc8496a393788d9e9246b98 # v0.77.3
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
@@ -92,7 +92,7 @@ jobs:
 
       - name: Build and push BRO image (prime prod)
         if: ${{ steps.semver_check.outputs.HAS_PRERELEASE == 'false' }}
-        uses: rancher/ecm-distro-tools/actions/publish-image@086cd2f90ed82712e45701441a00e59b95b578c1 # v0.77.1
+        uses: rancher/ecm-distro-tools/actions/publish-image@fdf1c26ea7f6c61b1cc8496a393788d9e9246b98 # v0.77.3
         with:
           image: "backup-restore-operator"
           tag: ${{ github.ref_name }}
