@@ -7,7 +7,7 @@ replace github.com/rancher/backup-restore-operator => ../../
 require (
 	github.com/rancher/backup-restore-operator v0.0.0
 	github.com/sirupsen/logrus v1.9.4
-	helm.sh/helm/v3 v3.20.0
+	helm.sh/helm/v3 v3.20.2
 	k8s.io/apimachinery v0.35.7
 	k8s.io/client-go v0.35.7
 	sigs.k8s.io/yaml v1.6.0
@@ -27,7 +27,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/evanphx/json-patch v5.9.11+incompatible // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
-	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
