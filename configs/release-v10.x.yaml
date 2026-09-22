@@ -2,7 +2,7 @@
 branch: release/v10.x
 
 # Go version for CI (simple syntax: major.minor)
-go: 1.25
+go: 1.26
 
 # K3S versions for integration tests
 k3s_versions:
