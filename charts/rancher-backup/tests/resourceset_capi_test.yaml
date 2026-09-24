@@ -53,12 +53,6 @@ tests:
           path: resourceSelectors
           any: true
           content:
-            apiVersion: "addons.cluster.x-k8s.io/v1alpha1"
-            kindsRegexp: "."
-      - contains:
-          path: resourceSelectors
-          any: true
-          content:
             apiVersion: "ipam.cluster.x-k8s.io/v1beta2"
             kindsRegexp: "."
       - contains:
