@@ -21,13 +21,13 @@ Before diving in, a few facts that apply to every BRO backup and restore:
 
 ### The `resources.cattle.io/backup` Opt-In Label
 
-The fastest way to include a Secret in a full backup without touching BRO's chart is to label it:
+The fastest way to include a Secret, ConfigMap or Namespace in a backup without touching BRO's chart is to label it:
 
 ```
 resources.cattle.io/backup=true
 ```
 
-Any Secret in any namespace carrying this label is automatically included in `rancher-resource-set-full` backups. Example:
+Any Secret, ConfigMap or Namespace in any namespace carrying this label is picked up automatically. Example:
 
 ```yaml
 apiVersion: v1
@@ -41,7 +41,7 @@ data:
   ...
 ```
 
-This works because the full ResourceSet already contains a catch-all selector in `files/default/sensitive-resourceset-contents/rancher.yaml`:
+This works because the ResourceSets already contain catch-all selectors for these three kinds. Secrets, in `files/default/sensitive-resourceset-contents/rancher.yaml`:
 
 ```yaml
 - apiVersion: "v1"
@@ -54,7 +54,29 @@ This works because the full ResourceSet already contains a catch-all selector in
         values: ["true"]
 ```
 
-> **Scope:** this label applies only to Secrets, and only in `rancher-resource-set-full`. For non-secret resources, add a `ResourceSelector` rule in a chart file (see below).
+ConfigMaps and Namespaces, in `files/default/basic-resourceset-contents/rancher.yaml`:
+
+```yaml
+- apiVersion: "v1"
+  kindsRegexp: "^namespaces$"
+  labelSelectors:
+    matchExpressions:
+      - key: "resources.cattle.io/backup"
+        operator: "In"
+        values: ["true"]
+- apiVersion: "v1"
+  kindsRegexp: "^configmaps$"
+  namespaceRegexp: "^.*$"
+  labelSelectors:
+    matchExpressions:
+      - key: "resources.cattle.io/backup"
+        operator: "In"
+        values: ["true"]
+```
+
+> **Scope:** the label works for Secrets, ConfigMaps and Namespaces only. Secrets are in `rancher-resource-set-full` only; ConfigMaps and Namespaces are in both ResourceSets. For any other kind, add a `ResourceSelector` rule in a chart file (see below).
+
+> **Namespaces matter.** A restore does not create namespaces — it only restores the Namespace objects that are in the backup. If your feature puts resources in a namespace whose name this chart cannot predict (a user-chosen namespace, for example), label that Namespace or nothing inside it will restore.
 
 ---
 
@@ -62,41 +84,46 @@ This works because the full ResourceSet already contains a catch-all selector in
 
 The typical workflow for a Rancher feature team:
 
-1. Identify the API group(s) your feature introduces (e.g. `turtles.rancher.io/v1`, `cluster.x-k8s.io/v1beta2`).
+1. Identify the API group(s) your feature introduces (e.g. `turtles-capi.cattle.io/v1alpha1`, `cluster.x-k8s.io/v1beta2`).
 2. Decide which resources are non-secret (config, CRD definitions, CR instances) and which are secret (credentials, kubeconfigs, tokens).
 3. Create or update the appropriate YAML file:
    - `charts/rancher-backup/files/default/basic-resourceset-contents/<feature>.yaml` — non-secrets, included in both ResourceSets
    - `charts/rancher-backup/files/default/sensitive-resourceset-contents/<feature>.yaml` — secrets, included in the full ResourceSet only
-4. Open a PR against the BRO repository targeting the `fix-gha` branch.
+4. Open a PR against the BRO repository targeting the `main` branch.
+
+> **Pin exactly one API version per group.** A selector's `apiVersion` is used verbatim: BRO asks discovery for that literal group-version and does not resolve the CRD's storage version. Two consequences follow. A group-version that does not exist on the cluster is skipped silently, so listing a group that may be absent is harmless — but a group-version that is merely *wrong* (say `v1beta1` when the cluster serves `v1beta2`) matches nothing, also silently. And if you list two versions of the same CRD, every object is written to the archive twice, under `<resource>.<group>#v1beta1/` and `<resource>.<group>#v1beta2/`, then restored twice through two conversion paths. When your group's API version changes, update the chart.
 
 #### Example: backing up all CAPI resources
 
-`charts/rancher-backup/files/default/basic-resourceset-contents/turtles.yaml`
+`charts/rancher-backup/files/default/basic-resourceset-contents/capi.yaml`
 
 ```yaml
-# Back up all CRDs registered by CAPI / Turtles
+# Back up all CRDs registered by Turtles. The *.cluster.x-k8s.io CRDs are matched
+# separately in provisioningv2.yaml.
 - apiVersion: "apiextensions.k8s.io/v1"
   kindsRegexp: "."
-  resourceNameRegexp: "cluster.x-k8s.io$|turtles.rancher.io$"
+  resourceNameRegexp: "turtles-capi.cattle.io$"
 
-# Back up all CAPI cluster objects
-- apiVersion: "cluster.x-k8s.io/v1beta1"
+# Back up all core CAPI objects
+- apiVersion: "cluster.x-k8s.io/v1beta2"
   kindsRegexp: "."
 
-# Back up all Turtles-managed objects
-- apiVersion: "turtles.rancher.io/v1"
+# Back up all Turtles objects: CAPIProvider, ClusterctlConfig
+- apiVersion: "turtles-capi.cattle.io/v1alpha1"
   kindsRegexp: "."
 ```
 
+Note that CAPI's sub-groups (`infrastructure.`, `bootstrap.`, `controlplane.`, `addons.`, `ipam.`, `runtime.`) each need their own selector — matching `cluster.x-k8s.io` does not walk sub-groups.
+
 #### Example: backing up CAPI secrets
 
-`charts/rancher-backup/files/default/sensitive-resourceset-contents/turtles.yaml`
+`charts/rancher-backup/files/default/sensitive-resourceset-contents/capi.yaml`
 
 ```yaml
-# Machine credentials created by the CAPI infrastructure provider
+# Cluster credentials created by CAPI. Not namespace-scoped, because CAPI clusters
+# can live in any namespace.
 - apiVersion: "v1"
   kindsRegexp: "^secrets$"
-  namespaceRegexp: "^rancher-turtles-"
   labelSelectors:
     matchExpressions:
       - key: "cluster.x-k8s.io/cluster-name"
@@ -106,7 +133,7 @@ The typical workflow for a Rancher feature team:
 #### Example: excluding a noisy resource type
 
 ```yaml
-- apiVersion: "turtles.rancher.io/v1"
+- apiVersion: "turtles-capi.cattle.io/v1alpha1"
   kindsRegexp: "."
   excludeKinds:
     - "capiproviders"     # runtime-derived, no need to back up
@@ -115,7 +142,7 @@ The typical workflow for a Rancher feature team:
 #### Example: backing up only specific named resources
 
 ```yaml
-- apiVersion: "turtles.rancher.io/v1"
+- apiVersion: "turtles-capi.cattle.io/v1alpha1"
   kindsRegexp: "^capiprovidertemplates$"
   resourceNames:
     - "aws-provider"
@@ -301,7 +328,8 @@ charts/rancher-backup/files/
 │   ├── basic-resourceset-contents/     # non-secret selectors for both ResourceSets
 │   │   ├── rancher.yaml                # core Rancher management resources
 │   │   ├── fleet.yaml                  # Fleet / GitOps resources
-│   │   ├── provisioningv2.yaml         # CAPI / RKEv2 CRDs and objects
+│   │   ├── provisioningv2.yaml         # Provisioning v2 / RKEv2 CRDs and core CAPI objects
+│   │   ├── capi.yaml                   # CAPI providers (CAPV, CAPRKE2, ...) and Rancher Turtles
 │   │   ├── eks.yaml                    # EKS cloud-provider resources
 │   │   ├── aks.yaml                    # AKS cloud-provider resources
 │   │   ├── ali.yaml                    # Alibaba Cloud provider resources
@@ -310,8 +338,9 @@ charts/rancher-backup/files/
 │   │   └── elemental.yaml
 │   └── sensitive-resourceset-contents/ # secret selectors — full ResourceSet only
 │       ├── rancher.yaml                # Rancher-owned secrets (+ opt-in label selector)
-│       ├── fleet.yaml                  # Fleet secrets
+│       ├── fleet.yaml                  # Fleet secrets, incl. bundle-values and OCI storage
 │       ├── provisioningv2.yaml         # Machine-plan, cluster-state, machine-state secrets
+│       ├── capi.yaml                   # CAPI cluster credentials and provider secrets
 │       └── elemental.yaml
 └── optional/                           # feature-gated; enabled via values.optionalResources
     ├── basic-resourceset-contents/
