@@ -338,7 +338,7 @@ charts/rancher-backup/files/
 │   │   └── elemental.yaml
 │   └── sensitive-resourceset-contents/ # secret selectors — full ResourceSet only
 │       ├── rancher.yaml                # Rancher-owned secrets (+ opt-in label selector)
-│       ├── fleet.yaml                  # Fleet secrets, incl. bundle-values and OCI storage
+│       ├── fleet.yaml                  # Fleet secrets
 │       ├── provisioningv2.yaml         # Machine-plan, cluster-state, machine-state secrets
 │       ├── capi.yaml                   # CAPI cluster credentials and provider secrets
 │       └── elemental.yaml
