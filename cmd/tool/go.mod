@@ -1,8 +1,6 @@
 module github.com/rancher/backup-restore-operator/cmd/tool
 
-go 1.26.0
-
-toolchain go1.26.8
+go 1.27.0
 
 replace github.com/rancher/backup-restore-operator => ../../
 
