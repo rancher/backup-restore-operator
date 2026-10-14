@@ -64,7 +64,7 @@ func SetupMinio(o *ObjectTracker) (client *minio.Client, minioEndpoint string) {
 	By("deploying minio locally")
 
 	req := testcontainers.ContainerRequest{
-		Image: "quay.io/minio/minio",
+		Image: "pgsty/minio",
 		Env: map[string]string{
 			"MINIO_ROOT_USER":     accessKey,
 			"MINIO_ROOT_PASSWORD": secretKey,
