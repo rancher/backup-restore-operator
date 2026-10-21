@@ -2,6 +2,8 @@ module github.com/rancher/backup-restore-operator/gotools/controller-gen
 
 go 1.26.0
 
+toolchain go1.26.9
+
 tool sigs.k8s.io/controller-tools/cmd/controller-gen
 
 require (
