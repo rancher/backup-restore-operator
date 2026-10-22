@@ -1,4 +1,4 @@
-ARG GO_IMAGE=rancher/hardened-build-base:v1.26.9b3
+ARG GO_IMAGE=rancher/hardened-build-base:v1.26.10b1
 FROM ${GO_IMAGE} AS builder
 
 ARG TAG=''
