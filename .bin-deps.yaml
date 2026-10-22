@@ -17,12 +17,12 @@ tools:
     mode: pinned
     source: golangci/golangci-lint
     # renovate: datasource=github-releases depName=golangci/golangci-lint
-    version: v2.11.4
+    version: v2.15.0
     checksums:
-      linux/amd64:  "200c5b7503f67b59a6743ccf32133026c174e272b930ee79aa2aa6f37aca7ef1"  # renovate-local: golangci-lint=v2.11.4
-      linux/arm64:  "3bcfa2e6f3d32b2bf5cd75eaa876447507025e0303698633f722a05331988db4"  # renovate-local: golangci-lint=v2.11.4
-      darwin/amd64: "c900d4048db75d1edfd550fd11cf6a9b3008e7caa8e119fcddbc700412d63e60"  # renovate-local: golangci-lint=v2.11.4
-      darwin/arm64: "02db2a2dae8b26812e53b0688a6f617e3ef1f489790e829ea22862cf76945675"  # renovate-local: golangci-lint=v2.11.4
+      linux/amd64:  "9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea"  # renovate-local: golangci-lint=v2.15.0
+      linux/arm64:  "b4d8f17068b35ee6060cc2f69a16fb48740d706fbba81661c318649c114a6998"  # renovate-local: golangci-lint=v2.15.0
+      darwin/amd64: "767b899a28285e88ded2823d5dcc4bc5ef681173eb2d80f029a7b17ee4ece3b8"  # renovate-local: golangci-lint=v2.15.0
+      darwin/arm64: "d1e409481a8ca846c4bc97e781eb5cb1bd5c23353a0b3977a1cbda1b1b6447d5"  # renovate-local: golangci-lint=v2.15.0
     release:
       download_template: "golangci-lint-{version|trimprefix:v}-{os}-{arch}.tar.gz"
       extract: "golangci-lint-{version|trimprefix:v}-{os}-{arch}/golangci-lint"
