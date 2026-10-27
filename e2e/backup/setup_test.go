@@ -8,7 +8,6 @@ import (
 
 	"github.com/rancher/backup-restore-operator/pkg/util/encryptionconfig"
 
-	. "github.com/kralicky/kmatch"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	. "github.com/onsi/ginkgo/v2"
@@ -16,6 +15,7 @@ import (
 	"github.com/rancher/backup-restore-operator/e2e/test"
 	backupv1 "github.com/rancher/backup-restore-operator/pkg/apis/resources.cattle.io/v1"
 	"github.com/rancher/backup-restore-operator/pkg/operator"
+	. "github.com/rancher/backup-restore-operator/tests/k8smatch"
 	"github.com/testcontainers/testcontainers-go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

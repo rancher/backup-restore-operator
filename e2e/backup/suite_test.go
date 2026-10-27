@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/rancher/backup-restore-operator/pkg/operator"
 	backuputil "github.com/rancher/backup-restore-operator/pkg/util"
+	"github.com/rancher/backup-restore-operator/tests/k8smatch"
 	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -25,8 +26,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	env "github.com/caarlos0/env/v11"
-	"github.com/kralicky/kmatch"
-	. "github.com/kralicky/kmatch"
+	. "github.com/rancher/backup-restore-operator/tests/k8smatch"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -118,7 +118,7 @@ var _ = BeforeSuite(func() {
 
 	apiextensionsv1.AddToScheme(k8sClient.Scheme())
 	backupv1.AddToScheme(k8sClient.Scheme())
-	kmatch.SetDefaultObjectClient(k8sClient)
+	k8smatch.SetDefaultObjectClient(k8sClient)
 
 	o := &ObjectTracker{
 		arr: []client.Object{},
