@@ -64,7 +64,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKeyID, secretKey string, useSSL bo
 	var err error
 	var client = &minio.Client{}
 	var cred credentials.Credentials
-	var tr = http.DefaultTransport
+	var tr *http.Transport
 	bucketLookup := getBucketLookupType(bc)
 	for retries := 0; retries <= s3ServerRetries; retries++ {
 		// if the s3 access key and secret is not set use iam role
@@ -78,7 +78,7 @@ func SetS3Service(bc *v1.S3ObjectStore, accessKeyID, secretKey string, useSSL bo
 		} else {
 			cred = *credentials.NewStatic(accessKeyID, secretKey, "", credentials.SignatureDefault)
 		}
-		tr, err = setTransport(tr, bc.EndpointCA, bc.InsecureTLSSkipVerify)
+		tr, err = setTransport(bc.EndpointCA, bc.InsecureTLSSkipVerify)
 		if err != nil {
 			return nil, err
 		}
@@ -282,22 +282,32 @@ func DownloadFromS3WithPrefix(client *minio.Client, prefix, bucket string) (stri
 	return targetFileLocation, nil
 }
 
-func setTransport(tr http.RoundTripper, endpointCA string, insecureSkipVerify bool) (http.RoundTripper, error) {
+// setTransport returns the transport for one object store, with the CA and
+// verification setting of that store. It is a copy of the default transport,
+// never the default transport itself: changing the shared one would make the
+// settings of one store apply to every client created afterwards.
+func setTransport(endpointCA string, insecureSkipVerify bool) (*http.Transport, error) {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return nil, fmt.Errorf("default transport is %T, expected *http.Transport", http.DefaultTransport)
+	}
+	tr := base.Clone()
+
 	certPool := x509.NewCertPool()
 	tlsConfig := &tls.Config{}
 	if endpointCA != "" {
 		ca, err := readS3EndpointCA(endpointCA)
 		if err != nil {
-			return tr, err
+			return nil, err
 		}
 		if !isValidCertificate(ca) {
-			return tr, fmt.Errorf("s3-endpoint-ca is not a valid x509 certificate")
+			return nil, fmt.Errorf("s3-endpoint-ca is not a valid x509 certificate")
 		}
 		certPool.AppendCertsFromPEM(ca)
 		tlsConfig.RootCAs = certPool
 	}
 	tlsConfig.InsecureSkipVerify = insecureSkipVerify
-	tr.(*http.Transport).TLSClientConfig = tlsConfig
+	tr.TLSClientConfig = tlsConfig
 
 	return tr, nil
 }
