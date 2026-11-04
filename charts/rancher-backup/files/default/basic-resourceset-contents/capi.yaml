@@ -1,8 +1,3 @@
-- apiVersion: "apiextensions.k8s.io/v1"
-  kindsRegexp: "."
-  resourceNameRegexp: "turtles-capi.cattle.io$"
-- apiVersion: "turtles-capi.cattle.io/v1alpha1"
-  kindsRegexp: "."
 - apiVersion: "infrastructure.cluster.x-k8s.io/v1beta2"
   kindsRegexp: "^AWS|^ROSA"
 - apiVersion: "infrastructure.cluster.x-k8s.io/v1beta1"
@@ -35,17 +30,3 @@
   kindsRegexp: "."
 - apiVersion: "runtime.cluster.x-k8s.io/v1beta2"
   kindsRegexp: "."
-- apiVersion: "v1"
-  kindsRegexp: "^namespaces$"
-  resourceNameRegexp: "^capi-system$|^capi-providers$|^capi-kubeadm-bootstrap-system$|^capi-kubeadm-control-plane-system$|^capa-system$|^capd-system$|^capg-system$|^capv-system$|^capz-system$|^rke2-bootstrap-system$|^rke2-control-plane-system$|^rke2-extension-system$"
-- apiVersion: "v1"
-  kindsRegexp: "^configmaps$"
-  namespaceRegexp: "^capi-|^capa-|^capd-|^capg-|^capv-|^capz-|^rke2-bootstrap-system$|^rke2-control-plane-system$|^rke2-extension-system$|^cattle-turtles-|^cattle-capi-"
-  excludeResourceNameRegexp: "^kube-root-ca.crt$"
-- apiVersion: "v1"
-  kindsRegexp: "^configmaps$"
-  labelSelectors:
-    matchExpressions:
-      - key: "managed-by.turtles.cattle.io"
-        operator: "In"
-        values: ["true"]
