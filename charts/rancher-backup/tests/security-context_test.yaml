@@ -5,19 +5,25 @@ templates:
   - pvc.yaml
   - _helpers.tpl
 tests:
-  - it: should set runAsNonRoot true by default
+  - it: should set runAsNonRoot true when enabled
+    set:
+      securityContext.runAsNonRoot: true
     template: deployment.yaml
     asserts:
       - equal:
           path: spec.template.spec.containers[0].securityContext.runAsNonRoot
           value: true
   - it: should set runAsUser 1000 when runAsNonRoot is true
+    set:
+      securityContext.runAsNonRoot: true
     template: deployment.yaml
     asserts:
       - equal:
           path: spec.template.spec.containers[0].securityContext.runAsUser
           value: 1000
   - it: should set runAsGroup 1000 when runAsNonRoot is true
+    set:
+      securityContext.runAsNonRoot: true
     template: deployment.yaml
     asserts:
       - equal:

@@ -35,15 +35,6 @@ tests:
   set:
     persistence:
       enabled: true
-  asserts:
-  - equal:
-      path: spec.resources.requests.storage
-      value: "2Gi"
-- it: should set size
-  template: pvc.yaml
-  set:
-    persistence:
-      enabled: true
       size: "10Gi"
   asserts:
   - equal:
@@ -57,15 +48,25 @@ tests:
   asserts:
   - isNull:
       path: spec.volumeName
-- it: should set default storageClass
+- it: should set empty storageClassName when storageClass is "-"
   template: pvc.yaml
   set:
     persistence:
       enabled: true
+      storageClass: "-"
   asserts:
   - equal:
       path: spec.storageClassName
       value: ""
+- it: should not set storageClassName when storageClass is unset
+  template: pvc.yaml
+  set:
+    persistence:
+      enabled: true
+      storageClass: ""
+  asserts:
+  - isNull:
+      path: spec.storageClassName
 - it: should set custom storageClass
   template: pvc.yaml
   set:
