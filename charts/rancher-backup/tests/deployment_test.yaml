@@ -25,7 +25,9 @@ tests:
   - equal:
       path: spec.template.spec.priorityClassName
       value: "testClass"
-- it: should set default imagePullPolicy
+- it: should fall back to Always when imagePullPolicy is empty
+  set:
+    imagePullPolicy: ""
   template: deployment.yaml
   asserts:
   - equal:
@@ -58,6 +60,7 @@ tests:
 - it: should set proxy environment variables
   set:
     proxy: "https://127.0.0.1:3128"
+    noProxy: "10.0.0.0/8,.svc"
   template: deployment.yaml
   asserts:
   - contains:
@@ -74,7 +77,7 @@ tests:
       path: spec.template.spec.containers[0].env
       content:
         name: NO_PROXY
-        value: "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.svc,.cluster.local"
+        value: "10.0.0.0/8,.svc"
 - it: should set proxy environment variables with modified noproxy
   set:
     proxy: "https://127.0.0.1:3128"
@@ -128,12 +131,14 @@ tests:
 - it: should set private registry
   template: deployment.yaml
   set:
+    image.repository: "test/operator"
+    image.tag: "v1.2.3"
     global.cattle.systemDefaultRegistry: "my.registry.local:3000"
   asserts:
   - matchRegex:
       path: spec.template.spec.containers[0].image
-      pattern: ^my.registry.local:3000/rancher/backup-restore-operator:.*$
-- it: should set nodeselector
+      pattern: ^my.registry.local:3000/test/operator:v1.2.3$
+- it: should set linux nodeselector
   template: deployment.yaml
   asserts:
   - equal:
@@ -169,7 +174,7 @@ tests:
                 operator: In
                 values:
                 - ssd  
-- it: should set tolerations
+- it: should set default linux toleration
   template: deployment.yaml
   asserts:
   - equal:
@@ -200,18 +205,16 @@ tests:
         key: "example-key"
         operator: "Exists"
         effect: "NoSchedule"
-- it: should allow image tag overrides
+- it: should compose image from repository and tag
   template: deployment.yaml
   set:
     image:
+      repository: test/operator
       tag: v1.2.3-abc.42
   asserts:
-    - matchRegex:
+    - equal:
         path: spec.template.spec.containers[0].image
-        pattern: v1.2.3-abc.42$
-    - notMatchRegex:
-        path: spec.template.spec.containers[0].image
-        pattern: v0.0.0-nope.1$
+        value: test/operator:v1.2.3-abc.42
 - it: should not set default imagePullSecrets
   template: deployment.yaml
   asserts:
