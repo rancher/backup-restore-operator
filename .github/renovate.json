@@ -11,20 +11,8 @@
       "versioningTemplate": "{{versioning}}"
     }
   ],
-  "extends": [
-    "github>rancher/renovate-config#release",
-    "group:allNonMajor"
-  ],
-  "baseBranches": [
-    "main",
-    "release/v11.x",
-    "release/v10.x",
-    "release/v9.x",
-    "release/v8.x",
-    "release/v7.x",
-    "release/v6.x",
-    "release/v5.0"
-  ],
+  "extends": ["github>rancher/renovate-config//default#release", "group:allNonMajor"],
+  "baseBranchPatterns": ["main", "release/v11.x", "release/v10.x", "release/v9.x", "release/v8.x"],
   "ignoreDeps": [
     "github.com/rancher/lasso",
     "github.com/rancher/wrangler",
@@ -35,35 +23,23 @@
   "packageRules": [
     {
       "matchBaseBranches": ["main"],
-      "extends": ["github>rancher/renovate-config:rancher-main#main"]
+      "extends": ["github>rancher/renovate-config:rancher-main#release"]
     },
     {
       "matchBaseBranches": ["release/v11.x"],
-      "extends": ["github>rancher/renovate-config:rancher-2.15#main"]
+      "extends": ["github>rancher/renovate-config:rancher-2.15#release"]
     },
     {
       "matchBaseBranches": ["release/v10.x"],
-      "extends": ["github>rancher/renovate-config:rancher-2.14#main"]
+      "extends": ["github>rancher/renovate-config:rancher-2.14#release"]
     },
     {
       "matchBaseBranches": ["release/v9.x"],
-      "extends": ["github>rancher/renovate-config:rancher-2.13#main"]
+      "extends": ["github>rancher/renovate-config:rancher-2.13#release"]
     },
     {
       "matchBaseBranches": ["release/v8.x"],
-      "extends": ["github>rancher/renovate-config:rancher-2.12#main"]
-    },
-    {
-      "matchBaseBranches": ["release/v7.x"],
-      "extends": ["github>rancher/renovate-config:rancher-2.11#main"]
-    },
-    {
-      "matchBaseBranches": ["release/v6.x"],
-      "extends": ["github>rancher/renovate-config:rancher-2.10#main"]
-    },
-    {
-      "matchBaseBranches": ["release/v5.0"],
-      "extends": ["github>rancher/renovate-config:rancher-2.9#main"]
+      "extends": ["github>rancher/renovate-config:rancher-2.12#release"]
     },
     {
       "groupName": "GitHub Workflow Actions",
