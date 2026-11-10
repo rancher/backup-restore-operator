@@ -8,7 +8,7 @@ replace github.com/rancher/backup-restore-operator => ../../
 
 require (
 	github.com/rancher/backup-restore-operator v0.0.0
-	github.com/sirupsen/logrus v1.9.4
+	github.com/sirupsen/logrus v1.10.0
 	helm.sh/helm/v4 v4.2.0
 	k8s.io/apimachinery v0.36.0
 	k8s.io/client-go v0.36.0
@@ -50,7 +50,7 @@ require (
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/rancher/lasso v0.2.9 // indirect
-	github.com/rancher/wrangler/v3 v3.7.0 // indirect
+	github.com/rancher/wrangler/v3 v3.7.2 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
