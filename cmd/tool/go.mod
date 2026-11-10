@@ -59,7 +59,7 @@ require (
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/rancher/lasso v0.2.10 // indirect
-	github.com/rancher/wrangler/v3 v3.7.2 // indirect
+	github.com/rancher/wrangler/v3 v3.8.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect

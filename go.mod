@@ -16,7 +16,7 @@ require (
 	github.com/onsi/gomega v1.44.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/rancher/lasso v0.2.10
-	github.com/rancher/wrangler/v3 v3.7.2
+	github.com/rancher/wrangler/v3 v3.8.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/samber/lo v1.49.1
 	github.com/sirupsen/logrus v1.10.2
