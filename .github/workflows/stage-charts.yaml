@@ -70,7 +70,7 @@ jobs:
         run: ./.github/workflows/scripts/prepare-charts.sh "$TAG" release "$RUNNER_TEMP/charts"
 
       - name: Stage the charts and notify rancher/charts
-        uses: rancher/charts/.github/actions/ship-family-staged@dcb7e8d0d9d0ce76847f751b7f224db5b192ae0d # chart-owners
+        uses: rancher/charts/.github/actions/ship-family-staged@chart-owners # chart-owners
         with:
           family: rancher-backup
           chart-dirs: |
