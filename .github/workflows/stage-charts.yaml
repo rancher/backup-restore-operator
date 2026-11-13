@@ -1,0 +1,75 @@
+name: Stage charts
+
+# Charts v2: stages the rancher-backup charts as OCI artifacts in the staging
+# catalog registry with cargueiro, and starts their release in rancher/charts.
+# It runs next to the push-to-charts workflow, which stays as it is, so both
+# release paths work at the same time.
+#
+# It is started by hand, for a release tag that already exists, so nothing has to
+# be tagged to stage the charts of a release:
+#
+#   gh workflow run stage-charts.yaml --ref main -f tag=v12.0.0-rc.4
+#
+# The charts are the ones in the repository at the tag. The script of the branch
+# that is run prepares them, so a tag that is older than the script can be staged.
+# The ship-family-staged action of rancher/charts stamps, checks, packages and
+# pushes them, and then starts the chart-staged workflow of rancher/charts, which
+# ships the charts and opens a pull request that adds them to the index.yaml of
+# its staging branch.
+#
+# The action is pinned to a commit of the chart-owners branch of rancher/charts,
+# which holds only the shared actions, so it moves only when they change.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag whose charts are staged, e.g. v12.0.0-rc.4"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  stage-charts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for vault
+    steps:
+      # The tag goes through the environment, never into a script, and is checked
+      # before anything uses it.
+      - name: Check the tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::The tag '$TAG' must look like vX.Y.Z or vX.Y.Z-rc.N"
+            exit 1
+          fi
+
+      # The branch the workflow runs from has the script.
+      - name: Check out the branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          path: release
+          persist-credentials: false
+
+      - name: Prepare the charts
+        env:
+          TAG: ${{ inputs.tag }}
+        run: ./.github/workflows/scripts/prepare-charts.sh "$TAG" release "$RUNNER_TEMP/charts"
+
+      - name: Stage the charts and notify rancher/charts
+        uses: rancher/charts/.github/actions/ship-family-staged@dcb7e8d0d9d0ce76847f751b7f224db5b192ae0d # chart-owners
+        with:
+          family: rancher-backup
+          chart-dirs: |
+            ${{ runner.temp }}/charts/rancher-backup
+            ${{ runner.temp }}/charts/rancher-backup-crd
