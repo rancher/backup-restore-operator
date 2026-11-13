@@ -5,13 +5,16 @@ name: Stage charts
 # It runs next to the push-to-charts workflow, which stays as it is, so both
 # release paths work at the same time.
 #
-# It is started by hand, for a release tag that already exists, so nothing has to
-# be tagged to stage the charts of a release:
+# It is started by hand, for a release that already exists, so nothing has to be
+# tagged to stage the charts of a release:
 #
 #   gh workflow run stage-charts.yaml --ref main -f tag=v12.0.0-rc.4
 #
-# The charts are the ones in the repository at the tag. The script of the branch
-# that is run prepares them, so a tag that is older than the script can be staged.
+# The version comes from the GitHub release of the tag, which must be published
+# and have its chart archives: the release is made public after the images are
+# pushed, so the charts are never staged for an image that is not there. The
+# charts are the ones in the repository at the tag. The script of the branch that
+# is run prepares them, so a tag that is older than the script can be staged.
 # The ship-family-staged action of rancher/charts stamps, checks, packages and
 # pushes them, and then starts the chart-staged workflow of rancher/charts, which
 # ships the charts and opens a pull request that adds them to the index.yaml of
@@ -37,33 +40,33 @@ jobs:
       contents: read
       id-token: write # Required for vault
     steps:
-      # The tag goes through the environment, never into a script, and is checked
-      # before anything uses it.
-      - name: Check the tag
-        env:
-          TAG: ${{ inputs.tag }}
-        run: |
-          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
-            echo "::error::The tag '$TAG' must look like vX.Y.Z or vX.Y.Z-rc.N"
-            exit 1
-          fi
-
-      # The branch the workflow runs from has the script.
+      # The branch the workflow runs from has the scripts.
       - name: Check out the branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      # The tag goes through the environment, never into a script, and is the one
+      # of the release from here on.
+      - name: Read the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          tag=$(./.github/workflows/scripts/read-release.sh "$TAG")
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Check out the release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/tags/${{ inputs.tag }}
+          ref: refs/tags/${{ steps.release.outputs.tag }}
           path: release
           persist-credentials: false
 
       - name: Prepare the charts
         env:
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ steps.release.outputs.tag }}
         run: ./.github/workflows/scripts/prepare-charts.sh "$TAG" release "$RUNNER_TEMP/charts"
 
       - name: Stage the charts and notify rancher/charts
