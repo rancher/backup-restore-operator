@@ -65,5 +65,12 @@ runs:
       run: |
         helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
 
+    - name: Alias python3 to python
+      shell: bash
+      run: |
+        # the image only ships `python`; chart-testing needs `python3`
+        ln -sf "$(command -v python)" /usr/local/bin/python3
+        python3 --version
+
     - name: Set up chart-testing
       uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b # v2.7.0
