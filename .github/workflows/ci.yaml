@@ -56,14 +56,11 @@ jobs:
     name: CI Build
     strategy:
       matrix:
-          include:
-            - platform: linux/amd64
-            - platform: linux/arm64
-    runs-on : ubuntu-latest
-    container:
-      image: ghcr.io/rancher/ci-image/${{ inputs.go_image }}
+        arch:
+          - x64
+          - arm64
+    runs-on : runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     env:
-      USE_DOCKER_BUILDX: 1
       CI: true
     steps:
       - name: Checkout repository
@@ -72,9 +69,7 @@ jobs:
           fetch-depth: 0
       - uses: rancher/backup-restore-operator/actions/build-deps@automation-core
       - name: CI
-        run: |
-          ci-select helm helmv4 && \
-          make ci
+        run: make ci
   test:
     name: integration-test
     runs-on: runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
