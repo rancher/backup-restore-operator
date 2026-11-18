@@ -4,6 +4,11 @@ description: Install the tooling needed to run the CI build job
 runs:
   using: composite
   steps:
+    - name: Install go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version-file: go.mod
+
     - name: Checkout bin-deps config to local branch
       shell: bash
       run: |
@@ -38,6 +43,22 @@ runs:
         install "${TMP_DIR}/linux-${ARCH}/helm" /usr/local/bin/helm
         rm -rf "${TMP_DIR}"
         helm version
+
+    - name: Install yq
+      shell: bash
+      run: |
+        # yq v4.54.1
+        case "$(uname -m)" in
+          x86_64)  ARCH=amd64; CHECKSUM="8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f" ;;
+          aarch64) ARCH=arm64; CHECKSUM="189088da0c6429ec5178dfaab1a114805f6cab0b61b165ab236efedf1d57a71b" ;;
+          *) echo "Unsupported: $(uname -m)"; exit 1 ;;
+        esac
+        TMP_DIR=$(mktemp -d)
+        curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+          "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_${ARCH}" > "${TMP_DIR}/yq"
+        printf "%s  %s\n" "${CHECKSUM}" "${TMP_DIR}/yq" | sha256sum -c -
+        install "${TMP_DIR}/yq" /usr/local/bin/yq
+        rm -rf "${TMP_DIR}"
 
     - name: Install Helm-unittest
       shell: bash
