@@ -27,11 +27,8 @@ runs:
       run: |
         rm .bin-deps.yaml
 
-    - name: Install helm
-      uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
-      with:
-        token: ${{ inputs.github-token }}
+    - uses: rancher/backup-restore-operator/actions/install-tools@automation-core
 
     - name: Install Helm-unittest
       shell: bash
-      run: helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false
+      run: helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
