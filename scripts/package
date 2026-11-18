@@ -1,25 +1,21 @@
 #!/bin/bash
 set -e
 
-source $(dirname $0)/version
+source "$(dirname "$0")/version"
+cd "$(dirname "$0")/.."
+mkdir -p {dist,build}/artifacts
 
-cd $(dirname $0)/..
-
-mkdir -p dist/artifacts
-
-IMAGE=${REPO}/backup-restore-operator:${TAG}
+IMAGE="${REPO}/backup-restore-operator:${TAG}"
 DOCKERFILE=./package/Dockerfile
-if [ -e ${DOCKERFILE}.${ARCH} ]; then
-    DOCKERFILE=${DOCKERFILE}.${ARCH}
-fi
+BUILDX_INSTANCE=rancher
 
-if [[ ${USE_DOCKER_BUILDX} -eq 1 ]]; then
-    docker buildx build --platform linux/amd64 -f ${DOCKERFILE} . -t ${IMAGE} 
+if [[ ${DOCKER_BUILDX} -eq 1 ]]; then
+  docker buildx ls | grep "${BUILDX_INSTANCE}" || docker buildx create --name="${BUILDX_INSTANCE}" --platform=linux/amd64,linux/arm64
+  docker buildx build --builder "${BUILDX_INSTANCE}" --platform linux/amd64,linux/arm64 -f "${DOCKERFILE}" -t "${IMAGE}" --load .
+  docker buildx rm "${BUILDX_INSTANCE}"
 else
-    docker build -f ${DOCKERFILE} -t ${IMAGE} .
+  docker build -f "${DOCKERFILE}" -t "${IMAGE}" .
 fi
 
-echo Built ${IMAGE}
-mkdir -p ./build/artifacts
-docker image save ${IMAGE} -o ./build/artifacts/backup-restore-operator.img
-
+echo Built "${IMAGE}"
+docker image save "${IMAGE}" -o ./build/artifacts/backup-restore-operator.img
