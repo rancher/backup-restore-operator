@@ -63,7 +63,7 @@ jobs:
     container:
       image: ghcr.io/rancher/ci-image/${{ inputs.go_image }}
     env:
-      DOCKER_BUILDKIT: 1
+      USE_DOCKER_BUILDX: 1
       CI: true
     steps:
       - name: Checkout repository
