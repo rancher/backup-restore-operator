@@ -70,9 +70,7 @@ jobs:
           fetch-depth: 0
       - uses: rancher/backup-restore-operator/actions/build-deps@automation-core
       - name: CI
-        run: |
-          ci-select helm helmv4 && \
-          make ci
+        run: make ci
   test:
     name: integration-test
     runs-on: runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
