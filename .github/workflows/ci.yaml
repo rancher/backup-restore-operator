@@ -61,7 +61,6 @@ jobs:
           - arm64
     runs-on : runs-on,image=ubuntu22-full-${{ matrix.arch }},runner=4cpu-linux-${{ matrix.arch }},run-id=${{ github.run_id }}
     env:
-      USE_DOCKER_BUILDX: 1
       CI: true
     steps:
       - name: Checkout repository
