@@ -1,0 +1,34 @@
+suite: ResourceSet Fleet selectors
+tests:
+  - it: full ResourceSet should include Fleet bundle-values and OCI storage secrets
+    template: rancher-resourceset-full.yaml
+    asserts:
+      - contains:
+          path: resourceSelectors
+          any: true
+          content:
+            apiVersion: "v1"
+            kindsRegexp: "^secrets$"
+            namespaceRegexp: "^cattle-fleet-|^fleet-"
+            fieldSelectors:
+              type: "fleet.cattle.io/bundle-values/v1alpha1"
+      - contains:
+          path: resourceSelectors
+          any: true
+          content:
+            apiVersion: "v1"
+            kindsRegexp: "^secrets$"
+            namespaceRegexp: "^cattle-fleet-|^fleet-"
+            fieldSelectors:
+              type: "fleet.cattle.io/bundle-oci-storage/v1alpha1"
+
+  - it: basic ResourceSet should not include Fleet bundle-values secrets
+    template: rancher-resourceset-basic.yaml
+    asserts:
+      - notContains:
+          path: resourceSelectors
+          any: true
+          content:
+            kindsRegexp: "^secrets$"
+            fieldSelectors:
+              type: "fleet.cattle.io/bundle-values/v1alpha1"
