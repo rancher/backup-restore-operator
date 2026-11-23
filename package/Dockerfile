@@ -49,7 +49,7 @@ COPY --from=builder /usr/src/app/bin/backup-restore-operator /usr/bin/
 COPY --from=user-setup /etc/passwd /etc/passwd
 COPY --from=user-setup /etc/group /etc/group
 COPY --from=user-setup /etc/shadow /etc/shadow
-COPY --from=user-setup /encryption /encryption
+COPY --from=user-setup --chown=1000:1000 /encryption /encryption
 COPY --from=user-setup --chown=1000:1000 /home/bro /home/bro
 
 USER 1000
