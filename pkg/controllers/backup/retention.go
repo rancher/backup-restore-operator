@@ -109,34 +109,22 @@ func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *
 	// default-backup-([a-z0-9-]).*([tar]).gz
 	// default-test-ecm-backup-24e1b8ce-1f00-4bbe-94bb-248ad7606dc8-([0-9-#]).*tar.gz$ OR
 	// default-test-ecm-backup-24e1b8ce-1f00-4bbe-94bb-248ad7606dc8-([0-9-#]).*tar.gz.enc$
-	var re *regexp.Regexp
-	if encrypted {
-		re = regexp.MustCompile(fmt.Sprintf("%s-%s-([0-9-#]).*tar.gz.enc$", backup.Name, h.kubeSystemNS))
-	} else {
-		re = regexp.MustCompile(fmt.Sprintf("%s-%s-([0-9-#]).*tar.gz$", backup.Name, h.kubeSystemNS))
-	}
+	re := backupFileRegexp(backup.Name, h.kubeSystemNS, encrypted)
 	var backupFiles []backupInfo
 	for object := range objectCh {
 		if object.Err != nil {
 			logrus.Error("error to fetch s3 file:", object.Err)
 			return object.Err
 		}
-		// only parse backup file names that matches backup format
-		if re.MatchString(object.Key) {
-			filename := object.Key
-
-			if len(s3.Folder) != 0 {
-				// example object.Key with folder: folder/timestamp_etcd.zip
-				// folder and separator needs to be stripped so time can be parsed below
-				logrus.Debugf("Stripping [%s] from [%s]", fmt.Sprintf("%s/", prefix), filename)
-				filename = strings.TrimPrefix(filename, fmt.Sprintf("%s/", prefix))
-			}
-			b := backupInfo{
-				filename:          object.Key,
-				creationTimestamp: object.LastModified,
-			}
-			backupFiles = append(backupFiles, b)
+		// only keep the files of this backup
+		if !re.MatchString(backupFileName(object.Key, prefix)) {
+			continue
 		}
+		b := backupInfo{
+			filename:          object.Key,
+			creationTimestamp: object.LastModified,
+		}
+		backupFiles = append(backupFiles, b)
 	}
 	if len(backupFiles) <= retentionCount {
 		return nil
@@ -154,4 +142,29 @@ func (h *handler) deleteS3Backups(backup *v1.Backup, s3 *v1.S3ObjectStore, svc *
 		logrus.Infof("Success delete s3 backup file [%s]", backupFile.filename)
 	}
 	return nil
+}
+
+// backupFileRegexp matches the files of one backup, which are named
+// <backup name>-<kube-system namespace uid>-<timestamp>.tar.gz, with .enc
+// appended when the backup is encrypted. The name is quoted and the match
+// is anchored at the start, so a backup whose name is a suffix of another
+// backup's name, or contains regular expression characters, only sees its
+// own files.
+func backupFileRegexp(backupName, kubeSystemNS string, encrypted bool) *regexp.Regexp {
+	suffix := `[0-9-#].*\.tar\.gz$`
+	if encrypted {
+		suffix = `[0-9-#].*\.tar\.gz\.enc$`
+	}
+	return regexp.MustCompile("^" + regexp.QuoteMeta(backupName+"-"+kubeSystemNS+"-") + suffix)
+}
+
+// backupFileName strips the configured folder from an object key so the file
+// name can be matched from its start. Keys outside that folder, including
+// nested folders and folders that merely share the prefix, keep their path
+// and therefore do not match.
+func backupFileName(key, folder string) string {
+	if folder == "" {
+		return key
+	}
+	return strings.TrimPrefix(key, folder+"/")
 }
